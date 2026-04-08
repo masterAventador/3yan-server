@@ -11,6 +11,7 @@ import com.sanyan.repository.MessageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -27,6 +28,7 @@ public class MessageService {
     private final ConversationRepository conversationRepository;
     private final AiCharacterRepository characterRepository;
     private final AiService aiService;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * Handle user message: save user msg, call AI, save AI reply, return AI Message
@@ -62,6 +64,13 @@ public class MessageService {
         conv.setLastMessageAt(LocalDateTime.now());
         conv.setUnreadCount(conv.getUnreadCount() + 1);
         conversationRepository.save(conv);
+
+        // Track message IDs in Redis for memory round detection
+        String roundKey = "conv:round:" + conversationId;
+        String roundTsKey = "conv:round:" + conversationId + ":ts";
+        redisTemplate.opsForList().rightPush(roundKey, String.valueOf(userMsg.getId()));
+        redisTemplate.opsForList().rightPush(roundKey, String.valueOf(aiMsg.getId()));
+        redisTemplate.opsForValue().set(roundTsKey, String.valueOf(System.currentTimeMillis()));
 
         return aiMsg;
     }
