@@ -121,7 +121,7 @@ public class ProactiveService {
                 if (session.isPresent()) {
                     deliverOnline(session.get(), conv, proactiveMsg);
                 } else {
-                    pushService.sendPush(userId, character.getName(), content);
+                    pushService.sendPush(userId, character.getName() + "：" + content);
                 }
 
             } catch (Exception e) {
