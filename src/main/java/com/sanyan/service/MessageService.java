@@ -44,10 +44,6 @@ public class MessageService {
         userMsg.setSource("reply");
         messageRepository.save(userMsg);
 
-        // Update conversation last message time
-        conv.setLastMessageAt(LocalDateTime.now());
-        conversationRepository.save(conv);
-
         // Call AI
         AiCharacter character = characterRepository.findById(conv.getCharacterId())
                 .orElseThrow(() -> new RuntimeException("角色不存在"));

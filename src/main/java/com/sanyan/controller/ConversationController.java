@@ -34,17 +34,26 @@ public class ConversationController {
     public ApiResponse<List<MessageData>> messages(
             @PathVariable Long id,
             @RequestParam(required = false) Long beforeId,
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(defaultValue = "20") int limit,
+            HttpServletRequest request) {
+        Long userId = getUserId(request);
+        Conversation conv = conversationRepository.findById(id).orElse(null);
+        if (conv == null || !conv.getUserId().equals(userId)) {
+            return ApiResponse.fail("会话不存在");
+        }
         List<Message> messages = messageService.getHistoryMessages(id, beforeId, limit);
         List<MessageData> data = messages.stream().map(messageService::toData).toList();
         return ApiResponse.ok(data);
     }
 
     @PostMapping("/{id}/read")
-    public ApiResponse<Void> markRead(@PathVariable Long id) {
+    public ApiResponse<Void> markRead(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = getUserId(request);
         conversationRepository.findById(id).ifPresent(conv -> {
-            conv.setUnreadCount(0);
-            conversationRepository.save(conv);
+            if (conv.getUserId().equals(userId)) {
+                conv.setUnreadCount(0);
+                conversationRepository.save(conv);
+            }
         });
         return ApiResponse.ok();
     }

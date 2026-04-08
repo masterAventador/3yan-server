@@ -102,8 +102,10 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
     public void sendToSession(WebSocketSession session, String payload) {
         try {
-            if (session.isOpen()) {
-                session.sendMessage(new TextMessage(payload));
+            synchronized (session) {
+                if (session.isOpen()) {
+                    session.sendMessage(new TextMessage(payload));
+                }
             }
         } catch (Exception e) {
             log.error("WebSocket 发送失败", e);
