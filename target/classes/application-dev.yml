@@ -1,0 +1,34 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/sanyan?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
+    username: root
+    password: ${MYSQL_PASSWORD:root}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: always
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 8080
+
+sanyan:
+  doubao:
+    api-key: ${DOUBAO_API_KEY:}
+    model: doubao-seed-character
+    endpoint: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+  sms:
+    access-key-id: ${SMS_ACCESS_KEY_ID:}
+    access-key-secret: ${SMS_ACCESS_KEY_SECRET:}
+    sign-name: 三言
+    template-code: ${SMS_TEMPLATE_CODE:}
+  push:
+    app-key: ${JPUSH_APP_KEY:}
+    master-secret: ${JPUSH_MASTER_SECRET:}

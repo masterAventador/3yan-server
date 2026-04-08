@@ -1,0 +1,17 @@
+com/sanyan/repository/ConversationRepository.class
+com/sanyan/entity/Conversation.class
+com/sanyan/repository/UserRepository.class
+com/sanyan/entity/AiCharacter.class
+com/sanyan/repository/MessageRepository.class
+com/sanyan/dto/ApiResponse.class
+com/sanyan/SanyanApplication.class
+com/sanyan/repository/MemoryProfileRepository.class
+com/sanyan/repository/UserTokenRepository.class
+com/sanyan/entity/MemoryProfile.class
+com/sanyan/repository/MemorySummaryRepository.class
+com/sanyan/entity/Message.class
+com/sanyan/entity/UserToken.class
+com/sanyan/entity/MemorySummary.class
+com/sanyan/controller/HealthController.class
+com/sanyan/entity/User.class
+com/sanyan/repository/AiCharacterRepository.class

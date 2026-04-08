@@ -1,0 +1,17 @@
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/repository/ConversationRepository.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/repository/MessageRepository.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/entity/User.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/repository/MemoryProfileRepository.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/entity/UserToken.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/entity/Conversation.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/entity/AiCharacter.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/repository/UserTokenRepository.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/controller/HealthController.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/dto/ApiResponse.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/entity/MemorySummary.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/entity/MemoryProfile.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/repository/UserRepository.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/SanyanApplication.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/repository/AiCharacterRepository.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/repository/MemorySummaryRepository.java
+/Users/aventador/sourceCode/3yan/server/src/main/java/com/sanyan/entity/Message.java
