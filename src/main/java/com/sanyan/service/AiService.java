@@ -124,7 +124,11 @@ public class AiService {
             String body = objectMapper.writeValueAsString(requestBody);
             HttpEntity<String> entity = new HttpEntity<>(body, headers);
 
+            log.info("豆包 API 请求: model={}, messagesCount={}", model, chatMessages.size());
+            long start = System.currentTimeMillis();
             ResponseEntity<String> response = restTemplate.exchange(endpoint, HttpMethod.POST, entity, String.class);
+            long elapsed = System.currentTimeMillis() - start;
+            log.info("豆包 API 响应: status={}, 耗时={}ms", response.getStatusCode(), elapsed);
 
             @SuppressWarnings("unchecked")
             Map<String, Object> responseMap = objectMapper.readValue(response.getBody(), Map.class);

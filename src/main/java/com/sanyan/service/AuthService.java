@@ -8,9 +8,11 @@ import com.sanyan.entity.User;
 import com.sanyan.repository.UserRepository;
 import com.sanyan.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -33,16 +35,22 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(req.getPassword()));
         user.setNickname(req.getNickname() != null ? req.getNickname() : "用户" + req.getPhone().substring(7));
         userRepository.save(user);
+        log.info("用户注册成功: phone={}, userId={}", user.getPhone(), user.getId());
 
         return buildLoginData(user);
     }
 
     public LoginData login(LoginReq req) {
         User user = userRepository.findByPhone(req.getPhone())
-                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+                .orElseThrow(() -> {
+                    log.warn("登录失败，用户不存在: phone={}", req.getPhone());
+                    return new IllegalArgumentException("用户不存在");
+                });
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
+            log.warn("登录失败，密码错误: phone={}", req.getPhone());
             throw new IllegalArgumentException("密码错误");
         }
+        log.info("用户登录成功: userId={}, phone={}", user.getId(), user.getPhone());
         return buildLoginData(user);
     }
 
@@ -54,6 +62,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         user.setPassword(passwordEncoder.encode(req.getNewPassword()));
         userRepository.save(user);
+        log.info("密码重置成功: userId={}, phone={}", user.getId(), user.getPhone());
     }
 
     private LoginData buildLoginData(User user) {

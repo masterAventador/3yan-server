@@ -56,9 +56,15 @@ public class WebSocketHandler extends TextWebSocketHandler {
     }
 
     private void handleSendMessage(Long userId, WsMessage wsMsg, WebSocketSession session) {
+        log.info("收到用户消息: userId={}, convId={}, clientMsgId={}, content={}",
+                userId, wsMsg.getConversationId(), wsMsg.getClientMsgId(),
+                wsMsg.getContent() != null && wsMsg.getContent().length() > 50
+                        ? wsMsg.getContent().substring(0, 50) + "..." : wsMsg.getContent());
+
         // 1. Send ACK
         WsAck ack = new WsAck(wsMsg.getClientMsgId());
         sendObject(session, ack);
+        log.debug("ACK 已发送: clientMsgId={}", wsMsg.getClientMsgId());
 
         // 2. Send typing status
         WsTyping typing = new WsTyping(wsMsg.getConversationId());
@@ -71,11 +77,13 @@ public class WebSocketHandler extends TextWebSocketHandler {
                         userId, wsMsg.getConversationId(), wsMsg.getContentType(), wsMsg.getContent());
 
                 long delay = messageService.calculateTypingDelay(aiMsg.getContent());
+                log.info("模拟打字延迟: {}ms, convId={}", delay, wsMsg.getConversationId());
                 Thread.sleep(delay);
 
                 MessageData data = messageService.toData(aiMsg);
                 WsNewMessage newMsg = new WsNewMessage(data);
                 sendObject(session, newMsg);
+                log.info("AI 回复已推送: userId={}, convId={}, msgId={}", userId, wsMsg.getConversationId(), aiMsg.getId());
 
             } catch (Exception e) {
                 log.error("处理用户消息失败, userId={}", userId, e);
@@ -84,6 +92,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
     }
 
     private void handleSync(Long userId, WsMessage wsMsg, WebSocketSession session) {
+        log.info("消息同步请求: userId={}, lastMsgId={}", userId, wsMsg.getLastMsgId());
         List<ConversationData> conversations = messageService.getUserConversations(userId);
 
         Map<Long, List<MessageData>> conversationMessages = new LinkedHashMap<>();
@@ -98,6 +107,8 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
         WsSyncResult syncResult = new WsSyncResult(conversationMessages);
         sendObject(session, syncResult);
+        log.info("消息同步完成: userId={}, 会话数={}, 总消息数={}", userId, conversationMessages.size(),
+                conversationMessages.values().stream().mapToInt(List::size).sum());
     }
 
     public void sendToSession(WebSocketSession session, String payload) {

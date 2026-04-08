@@ -45,11 +45,14 @@ public class MessageService {
         userMsg.setContent(content);
         userMsg.setSource("reply");
         messageRepository.save(userMsg);
+        log.info("用户消息已保存: userId={}, convId={}, msgId={}", userId, conversationId, userMsg.getId());
 
         // Call AI
         AiCharacter character = characterRepository.findById(conv.getCharacterId())
                 .orElseThrow(() -> new RuntimeException("角色不存在"));
+        log.info("调用豆包 AI: convId={}, character={}", conversationId, character.getName());
         String aiReply = aiService.chat(character, conversationId);
+        log.info("豆包 AI 回复: convId={}, replyLength={}", conversationId, aiReply.length());
 
         // Save AI reply
         Message aiMsg = new Message();
@@ -59,6 +62,7 @@ public class MessageService {
         aiMsg.setContent(aiReply);
         aiMsg.setSource("reply");
         messageRepository.save(aiMsg);
+        log.info("AI 回复已保存: convId={}, msgId={}", conversationId, aiMsg.getId());
 
         // Update conversation
         conv.setLastMessageAt(LocalDateTime.now());
