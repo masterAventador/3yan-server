@@ -157,11 +157,13 @@ public class TtsService {
         }
         reqParams.put("audio_params", audioParams);
 
-        // additions (context_texts for TTS 2.0 引用上文)
+        // additions must be a JSON string, not an object
         if (contextTexts != null && !contextTexts.isEmpty()) {
-            Map<String, Object> additions = new LinkedHashMap<>();
-            additions.put("context_texts", contextTexts);
-            reqParams.put("additions", additions);
+            try {
+                Map<String, Object> additionsMap = new LinkedHashMap<>();
+                additionsMap.put("context_texts", contextTexts);
+                reqParams.put("additions", new ObjectMapper().writeValueAsString(additionsMap));
+            } catch (Exception ignored) {}
         }
 
         body.put("req_params", reqParams);
