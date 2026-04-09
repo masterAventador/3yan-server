@@ -33,7 +33,7 @@ sanyan:
     app-key: ${JPUSH_APP_KEY:}
     master-secret: ${JPUSH_MASTER_SECRET:}
   tts:
-    enabled: false
+    enabled: true
     app-id: "7231248180"
     access-token: ${TTS_ACCESS_TOKEN:VuO0W4r1DVtvxl_7bEfuE3Zbr3iBVuL9}
     voice-type: zh_female_vv_uranus_bigtts
