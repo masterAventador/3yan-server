@@ -1,6 +1,7 @@
 package com.sanyan.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sanyan.util.TextProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,15 +41,16 @@ public class TtsService {
     }
 
     /**
-     * Synthesize speech, return MP3 audio bytes
+     * Synthesize speech, return MP3 audio bytes.
+     * Uses AI-provided emotion tag for TTS emotion control.
      */
-    public byte[] synthesize(String text, List<String> actions) {
+    public byte[] synthesize(String text, TextProcessor.EmotionTag emotion) {
         if (text == null || text.isBlank()) {
             return null;
         }
 
         try {
-            String requestBody = buildRequestBody(appId, accessToken, cluster, voiceType, text, actions);
+            String requestBody = buildRequestBody(appId, accessToken, cluster, voiceType, text, emotion);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -56,8 +58,8 @@ public class TtsService {
 
             HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
 
-            log.info("TTS 请求: textLength={}, actions={}", text.length(),
-                    actions != null ? actions.size() : 0);
+            log.info("TTS 请求: textLength={}, emotion={}", text.length(),
+                    emotion != null ? emotion.type() + ":" + emotion.scale() : "none");
             long start = System.currentTimeMillis();
 
             ResponseEntity<String> response = restTemplate.exchange(
@@ -83,16 +85,12 @@ public class TtsService {
     }
 
     /**
-     * Build TTS request body JSON
+     * Build TTS request body JSON.
+     * emotion comes from AI model's [emotion:type:scale] tag.
      */
     public static String buildRequestBody(String appId, String token, String cluster,
                                            String voiceType, String text,
-                                           List<String> actions) {
-        String finalText = text;
-
-        // Map action descriptions to TTS emotion parameter
-        String emotion = mapActionsToEmotion(actions);
-
+                                           TextProcessor.EmotionTag emotion) {
         Map<String, Object> body = new LinkedHashMap<>();
 
         Map<String, Object> app = new LinkedHashMap<>();
@@ -111,14 +109,15 @@ public class TtsService {
         audio.put("volume_ratio", 1.0);
         audio.put("pitch_ratio", 1.0);
         if (emotion != null) {
-            audio.put("emotion", emotion);
-            audio.put("emotion_strength", 0.8);
+            audio.put("enable_emotion", true);
+            audio.put("emotion", emotion.type());
+            audio.put("emotion_scale", (double) emotion.scale());
         }
         body.put("audio", audio);
 
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("reqid", UUID.randomUUID().toString());
-        request.put("text", finalText);
+        request.put("text", text);
         request.put("text_type", "plain");
         request.put("operation", "query");
         body.put("request", request);
@@ -128,36 +127,5 @@ public class TtsService {
         } catch (Exception e) {
             throw new RuntimeException("构建 TTS 请求体失败", e);
         }
-    }
-
-    /**
-     * Map action descriptions to TTS emotion value.
-     * Returns null if no emotion can be determined.
-     */
-    public static String mapActionsToEmotion(List<String> actions) {
-        if (actions == null || actions.isEmpty()) {
-            return null;
-        }
-        String combined = String.join(" ", actions);
-
-        // Happy signals
-        if (combined.contains("开心") || combined.contains("笑") || combined.contains("高兴")
-                || combined.contains("拍手") || combined.contains("跳") || combined.contains("兴奋")
-                || combined.contains("欢呼") || combined.contains("雀跃")) {
-            return "happy";
-        }
-        // Sad signals
-        if (combined.contains("难过") || combined.contains("哭") || combined.contains("伤心")
-                || combined.contains("叹气") || combined.contains("低落") || combined.contains("流泪")
-                || combined.contains("委屈")) {
-            return "sad";
-        }
-        // Angry signals
-        if (combined.contains("生气") || combined.contains("愤怒") || combined.contains("皱眉")
-                || combined.contains("气鼓鼓") || combined.contains("瞪") || combined.contains("怒")) {
-            return "angry";
-        }
-        // Default: no specific emotion, let TTS decide naturally
-        return null;
     }
 }

@@ -62,7 +62,7 @@ public class MessageService {
             var extracted = TextProcessor.extract(aiReply);
             String messageContent = extracted.cleanText();
 
-            byte[] audioData = ttsService.synthesize(messageContent, extracted.actions());
+            byte[] audioData = ttsService.synthesize(messageContent, extracted.emotion());
             if (audioData != null) {
                 // Save voice message first to get ID for COS path
                 Message aiMsg = new Message();

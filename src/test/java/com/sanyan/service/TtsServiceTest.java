@@ -1,13 +1,13 @@
 package com.sanyan.service;
 
+import com.sanyan.util.TextProcessor;
 import org.junit.jupiter.api.Test;
-import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TtsServiceTest {
 
     @Test
-    void buildRequestBody_withoutActions() {
+    void buildRequestBody_withoutEmotion() {
         String body = TtsService.buildRequestBody(
                 "7231248180", "test_token", "volcano_tts",
                 "zh_female_vv_uranus_bigtts", "你好呀", null);
@@ -17,59 +17,28 @@ class TtsServiceTest {
         assertThat(body).contains("\"text\":\"你好呀\"");
         assertThat(body).contains("\"encoding\":\"mp3\"");
         assertThat(body).doesNotContain("\"emotion\"");
+        assertThat(body).doesNotContain("\"enable_emotion\"");
     }
 
     @Test
-    void buildRequestBody_withHappyAction_setsEmotion() {
+    void buildRequestBody_withEmotion() {
+        var emotion = new TextProcessor.EmotionTag("happy", 4);
         String body = TtsService.buildRequestBody(
                 "7231248180", "test_token", "volcano_tts",
-                "zh_female_vv_uranus_bigtts", "你好呀",
-                List.of("开心地拍手"));
+                "zh_female_vv_uranus_bigtts", "你好呀", emotion);
         assertThat(body).contains("\"text\":\"你好呀\"");
-        assertThat(body).doesNotContain("开心地拍手");
+        assertThat(body).contains("\"enable_emotion\":true");
         assertThat(body).contains("\"emotion\":\"happy\"");
-        assertThat(body).contains("\"emotion_strength\":0.8");
+        assertThat(body).contains("\"emotion_scale\":4.0");
     }
 
     @Test
-    void buildRequestBody_withSadAction_setsEmotion() {
+    void buildRequestBody_withSadEmotion() {
+        var emotion = new TextProcessor.EmotionTag("sad", 2);
         String body = TtsService.buildRequestBody(
                 "7231248180", "test_token", "volcano_tts",
-                "zh_female_vv_uranus_bigtts", "别难过",
-                List.of("叹气"));
+                "zh_female_vv_uranus_bigtts", "别难过", emotion);
         assertThat(body).contains("\"emotion\":\"sad\"");
-    }
-
-    @Test
-    void buildRequestBody_withUnknownAction_noEmotion() {
-        String body = TtsService.buildRequestBody(
-                "7231248180", "test_token", "volcano_tts",
-                "zh_female_vv_uranus_bigtts", "你好呀",
-                List.of("歪头"));
-        assertThat(body).doesNotContain("\"emotion\"");
-    }
-
-    @Test
-    void mapActionsToEmotion_happy() {
-        assertThat(TtsService.mapActionsToEmotion(List.of("开心地跳起来"))).isEqualTo("happy");
-        assertThat(TtsService.mapActionsToEmotion(List.of("微笑着点头"))).isEqualTo("happy");
-    }
-
-    @Test
-    void mapActionsToEmotion_sad() {
-        assertThat(TtsService.mapActionsToEmotion(List.of("难过地低头"))).isEqualTo("sad");
-        assertThat(TtsService.mapActionsToEmotion(List.of("委屈巴巴"))).isEqualTo("sad");
-    }
-
-    @Test
-    void mapActionsToEmotion_angry() {
-        assertThat(TtsService.mapActionsToEmotion(List.of("生气地皱眉"))).isEqualTo("angry");
-    }
-
-    @Test
-    void mapActionsToEmotion_null_whenNoMatch() {
-        assertThat(TtsService.mapActionsToEmotion(List.of("歪头", "双手抱胸"))).isNull();
-        assertThat(TtsService.mapActionsToEmotion(null)).isNull();
-        assertThat(TtsService.mapActionsToEmotion(List.of())).isNull();
+        assertThat(body).contains("\"emotion_scale\":2.0");
     }
 }

@@ -8,22 +8,36 @@ import java.util.regex.Pattern;
 public class TextProcessor {
 
     private static final Pattern ACTION_PATTERN = Pattern.compile("（([^）]+)）");
+    private static final Pattern EMOTION_PATTERN = Pattern.compile("\\[emotion:(\\w+):(\\d)\\]");
 
-    public record ExtractResult(String cleanText, List<String> actions) {}
+    public record ExtractResult(String cleanText, List<String> actions, EmotionTag emotion) {}
+
+    public record EmotionTag(String type, int scale) {}
 
     public static ExtractResult extract(String text) {
         if (text == null || text.isEmpty()) {
-            return new ExtractResult("", List.of());
+            return new ExtractResult("", List.of(), null);
         }
 
+        // 1. Extract emotion tag from end of text
+        EmotionTag emotion = null;
+        Matcher emotionMatcher = EMOTION_PATTERN.matcher(text);
+        String textWithoutEmotion = text;
+        while (emotionMatcher.find()) {
+            emotion = new EmotionTag(emotionMatcher.group(1), Integer.parseInt(emotionMatcher.group(2)));
+        }
+        textWithoutEmotion = EMOTION_PATTERN.matcher(text).replaceAll("").trim();
+
+        // 2. Extract action descriptions
         List<String> actions = new ArrayList<>();
         StringBuffer sb = new StringBuffer();
-        Matcher matcher = ACTION_PATTERN.matcher(text);
-        while (matcher.find()) {
-            actions.add(matcher.group(1));
-            matcher.appendReplacement(sb, "");
+        Matcher actionMatcher = ACTION_PATTERN.matcher(textWithoutEmotion);
+        while (actionMatcher.find()) {
+            actions.add(actionMatcher.group(1));
+            actionMatcher.appendReplacement(sb, "");
         }
-        matcher.appendTail(sb);
-        return new ExtractResult(sb.toString(), List.copyOf(actions));
+        actionMatcher.appendTail(sb);
+
+        return new ExtractResult(sb.toString(), List.copyOf(actions), emotion);
     }
 }

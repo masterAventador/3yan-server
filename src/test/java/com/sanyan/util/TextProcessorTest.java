@@ -10,6 +10,7 @@ class TextProcessorTest {
         var result = TextProcessor.extract("你好呀（歪头微笑）今天怎么样？");
         assertThat(result.cleanText()).isEqualTo("你好呀今天怎么样？");
         assertThat(result.actions()).containsExactly("歪头微笑");
+        assertThat(result.emotion()).isNull();
     }
 
     @Test
@@ -38,6 +39,7 @@ class TextProcessorTest {
         var result = TextProcessor.extract("");
         assertThat(result.cleanText()).isEmpty();
         assertThat(result.actions()).isEmpty();
+        assertThat(result.emotion()).isNull();
     }
 
     @Test
@@ -45,5 +47,39 @@ class TextProcessorTest {
         var result = TextProcessor.extract("（害羞地低头）谢谢你呀（开心地跳起来）");
         assertThat(result.cleanText()).isEqualTo("谢谢你呀");
         assertThat(result.actions()).containsExactly("害羞地低头", "开心地跳起来");
+    }
+
+    // === Emotion tag tests ===
+
+    @Test
+    void extractEmotion_happyTag() {
+        var result = TextProcessor.extract("你好呀～[emotion:happy:3]");
+        assertThat(result.cleanText()).isEqualTo("你好呀～");
+        assertThat(result.emotion()).isNotNull();
+        assertThat(result.emotion().type()).isEqualTo("happy");
+        assertThat(result.emotion().scale()).isEqualTo(3);
+    }
+
+    @Test
+    void extractEmotion_sadTag() {
+        var result = TextProcessor.extract("别难过呀[emotion:sad:4]");
+        assertThat(result.cleanText()).isEqualTo("别难过呀");
+        assertThat(result.emotion().type()).isEqualTo("sad");
+        assertThat(result.emotion().scale()).isEqualTo(4);
+    }
+
+    @Test
+    void extractEmotion_withActionsAndEmotion() {
+        var result = TextProcessor.extract("你好呀（开心地拍手）今天真开心！[emotion:happy:5]");
+        assertThat(result.cleanText()).isEqualTo("你好呀今天真开心！");
+        assertThat(result.actions()).containsExactly("开心地拍手");
+        assertThat(result.emotion().type()).isEqualTo("happy");
+        assertThat(result.emotion().scale()).isEqualTo(5);
+    }
+
+    @Test
+    void extractEmotion_noTag() {
+        var result = TextProcessor.extract("普通回复没有情感标记");
+        assertThat(result.emotion()).isNull();
     }
 }
