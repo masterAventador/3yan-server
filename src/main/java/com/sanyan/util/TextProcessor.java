@@ -17,12 +17,13 @@ public class TextProcessor {
         }
 
         List<String> actions = new ArrayList<>();
+        StringBuffer sb = new StringBuffer();
         Matcher matcher = ACTION_PATTERN.matcher(text);
         while (matcher.find()) {
             actions.add(matcher.group(1));
+            matcher.appendReplacement(sb, "");
         }
-
-        String cleanText = ACTION_PATTERN.matcher(text).replaceAll("");
-        return new ExtractResult(cleanText, actions);
+        matcher.appendTail(sb);
+        return new ExtractResult(sb.toString(), List.copyOf(actions));
     }
 }
