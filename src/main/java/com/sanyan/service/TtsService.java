@@ -88,9 +88,10 @@ public class TtsService {
     public static String buildRequestBody(String appId, String token, String cluster,
                                            String voiceType, String text,
                                            List<String> actions) {
-        // Actions are reserved for future TTS 2.0 voice tag support
-        // Currently only clean text is sent to TTS
         String finalText = text;
+
+        // Map action descriptions to TTS emotion parameter
+        String emotion = mapActionsToEmotion(actions);
 
         Map<String, Object> body = new LinkedHashMap<>();
 
@@ -109,6 +110,10 @@ public class TtsService {
         audio.put("speed_ratio", 1.0);
         audio.put("volume_ratio", 1.0);
         audio.put("pitch_ratio", 1.0);
+        if (emotion != null) {
+            audio.put("emotion", emotion);
+            audio.put("emotion_strength", 0.8);
+        }
         body.put("audio", audio);
 
         Map<String, Object> request = new LinkedHashMap<>();
@@ -123,5 +128,36 @@ public class TtsService {
         } catch (Exception e) {
             throw new RuntimeException("构建 TTS 请求体失败", e);
         }
+    }
+
+    /**
+     * Map action descriptions to TTS emotion value.
+     * Returns null if no emotion can be determined.
+     */
+    public static String mapActionsToEmotion(List<String> actions) {
+        if (actions == null || actions.isEmpty()) {
+            return null;
+        }
+        String combined = String.join(" ", actions);
+
+        // Happy signals
+        if (combined.contains("开心") || combined.contains("笑") || combined.contains("高兴")
+                || combined.contains("拍手") || combined.contains("跳") || combined.contains("兴奋")
+                || combined.contains("欢呼") || combined.contains("雀跃")) {
+            return "happy";
+        }
+        // Sad signals
+        if (combined.contains("难过") || combined.contains("哭") || combined.contains("伤心")
+                || combined.contains("叹气") || combined.contains("低落") || combined.contains("流泪")
+                || combined.contains("委屈")) {
+            return "sad";
+        }
+        // Angry signals
+        if (combined.contains("生气") || combined.contains("愤怒") || combined.contains("皱眉")
+                || combined.contains("气鼓鼓") || combined.contains("瞪") || combined.contains("怒")) {
+            return "angry";
+        }
+        // Default: no specific emotion, let TTS decide naturally
+        return null;
     }
 }
