@@ -62,7 +62,10 @@ public class MessageService {
             var extracted = TextProcessor.extract(aiReply);
             String messageContent = extracted.cleanText();
 
-            byte[] audioData = ttsService.synthesize(messageContent, extracted.emotion());
+            // Build context_texts from recent messages for TTS 2.0 引用上文
+            List<String> contextTexts = buildTtsContext(conversationId, content);
+
+            byte[] audioData = ttsService.synthesize(messageContent, extracted.emotion(), contextTexts);
             if (audioData != null) {
                 // Save voice message first to get ID for COS path
                 Message aiMsg = new Message();
@@ -217,5 +220,18 @@ public class MessageService {
         }
 
         return d;
+    }
+
+    /**
+     * Build context texts for TTS 2.0 引用上文.
+     * Takes the last user message as context so TTS understands the conversation tone.
+     */
+    private List<String> buildTtsContext(Long conversationId, String currentUserMessage) {
+        // context_texts only uses the first element, so just pass the user's message
+        // This helps TTS understand if it's a casual/emotional/serious conversation
+        if (currentUserMessage != null && !currentUserMessage.isBlank()) {
+            return List.of(currentUserMessage);
+        }
+        return null;
     }
 }
