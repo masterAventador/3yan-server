@@ -76,7 +76,12 @@ public class WebSocketHandler extends TextWebSocketHandler {
                 Message aiMsg = messageService.handleUserMessage(
                         userId, wsMsg.getConversationId(), wsMsg.getContentType(), wsMsg.getContent());
 
-                long delay = messageService.calculateTypingDelay(aiMsg.getContent());
+                long delay;
+                if ("voice".equals(aiMsg.getContentType())) {
+                    delay = 500; // Voice messages already had TTS processing time
+                } else {
+                    delay = messageService.calculateTypingDelay(aiMsg.getContent());
+                }
                 log.info("模拟打字延迟: {}ms, convId={}", delay, wsMsg.getConversationId());
                 Thread.sleep(delay);
 

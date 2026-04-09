@@ -11,5 +11,6 @@ public class MessageData {
     private String contentType;
     private String content;
     private String source;
+    private String mediaUrl;
     private LocalDateTime createdAt;
 }

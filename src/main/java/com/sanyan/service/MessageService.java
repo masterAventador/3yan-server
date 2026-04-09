@@ -8,6 +8,7 @@ import com.sanyan.entity.Message;
 import com.sanyan.repository.AiCharacterRepository;
 import com.sanyan.repository.ConversationRepository;
 import com.sanyan.repository.MessageRepository;
+import com.sanyan.util.TextProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -28,6 +29,8 @@ public class MessageService {
     private final ConversationRepository conversationRepository;
     private final AiCharacterRepository characterRepository;
     private final AiService aiService;
+    private final TtsService ttsService;
+    private final CosService cosService;
     private final StringRedisTemplate redisTemplate;
 
     /**
@@ -54,7 +57,45 @@ public class MessageService {
         String aiReply = aiService.chat(character, conversationId);
         log.info("豆包 AI 回复: convId={}, replyLength={}", conversationId, aiReply.length());
 
-        // Save AI reply
+        // TTS flow: when enabled, try to synthesize voice message
+        if (ttsService.isEnabled()) {
+            var extracted = TextProcessor.extract(aiReply);
+            String messageContent = extracted.cleanText();
+
+            byte[] audioData = ttsService.synthesize(messageContent, extracted.actions());
+            if (audioData != null) {
+                // Save voice message first to get ID for COS path
+                Message aiMsg = new Message();
+                aiMsg.setConversationId(conversationId);
+                aiMsg.setSenderType("ai");
+                aiMsg.setContentType("voice");
+                aiMsg.setContent(messageContent);
+                aiMsg.setSource("reply");
+                messageRepository.save(aiMsg);
+
+                String mediaUrl = cosService.upload(audioData, conversationId, aiMsg.getId());
+                aiMsg.setMediaUrl(mediaUrl);
+                messageRepository.save(aiMsg);
+                log.info("语音消息生成完成: convId={}, msgId={}, mediaUrl={}", conversationId, aiMsg.getId(), mediaUrl);
+
+                // Update conversation + Redis tracking
+                conv.setLastMessageAt(LocalDateTime.now());
+                conv.setUnreadCount(conv.getUnreadCount() + 1);
+                conversationRepository.save(conv);
+
+                String roundKey = "conv:round:" + conversationId;
+                String roundTsKey = "conv:round:" + conversationId + ":ts";
+                redisTemplate.opsForList().rightPush(roundKey, String.valueOf(userMsg.getId()));
+                redisTemplate.opsForList().rightPush(roundKey, String.valueOf(aiMsg.getId()));
+                redisTemplate.opsForValue().set(roundTsKey, String.valueOf(System.currentTimeMillis()));
+
+                return aiMsg;
+            }
+            // TTS failed, fall through to text mode
+            log.warn("TTS 合成失败，降级为文字消息: convId={}", conversationId);
+        }
+
+        // Text message (TTS disabled or degraded)
         Message aiMsg = new Message();
         aiMsg.setConversationId(conversationId);
         aiMsg.setSenderType("ai");
@@ -150,6 +191,7 @@ public class MessageService {
         d.setContentType(msg.getContentType());
         d.setContent(msg.getContent());
         d.setSource(msg.getSource());
+        d.setMediaUrl(msg.getMediaUrl());
         d.setCreatedAt(msg.getCreatedAt());
         return d;
     }

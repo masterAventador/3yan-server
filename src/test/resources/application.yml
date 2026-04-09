@@ -25,3 +25,12 @@ sanyan:
     api-key: test
     model: test
     endpoint: http://localhost:9999
+  cos:
+    secret-id: test
+    secret-key: test
+    bucket: test-bucket
+    region: ap-guangzhou
+  tts:
+    enabled: false
+    app-id: test
+    access-token: test
