@@ -6,6 +6,7 @@ import com.qcloud.cos.auth.BasicCOSCredentials;
 import com.qcloud.cos.model.ObjectMetadata;
 import com.qcloud.cos.region.Region;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,14 @@ public class CosService {
         var config = new ClientConfig(new Region(region));
         cosClient = new COSClient(cred, config);
         log.info("COS 客户端初始化完成: bucket={}, region={}", bucket, region);
+    }
+
+    @PreDestroy
+    public void destroy() {
+        if (cosClient != null) {
+            cosClient.shutdown();
+            log.info("COS 客户端已关闭");
+        }
     }
 
     public String upload(byte[] data, Long conversationId, Long messageId) {
