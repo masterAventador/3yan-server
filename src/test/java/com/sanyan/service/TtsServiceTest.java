@@ -18,20 +18,13 @@ class TtsServiceTest {
     }
 
     @Test
-    void buildRequestBody_withActions() {
+    void buildRequestBody_withActions_onlySendsCleanText() {
         String body = TtsService.buildRequestBody(
                 "7231248180", "test_token", "volcano_tts",
                 "zh_female_vv_uranus_bigtts", "你好呀",
                 java.util.List.of("害羞地低头"));
-        assertThat(body).contains("\"text\":\"[害羞地低头]你好呀\"");
-    }
-
-    @Test
-    void buildRequestBody_withMultipleActions() {
-        String body = TtsService.buildRequestBody(
-                "7231248180", "test_token", "volcano_tts",
-                "zh_female_vv_uranus_bigtts", "你好呀",
-                java.util.List.of("歪头", "微笑"));
-        assertThat(body).contains("\"text\":\"[歪头，微笑]你好呀\"");
+        // Actions should NOT be in the text sent to TTS
+        assertThat(body).contains("\"text\":\"你好呀\"");
+        assertThat(body).doesNotContain("害羞地低头");
     }
 }

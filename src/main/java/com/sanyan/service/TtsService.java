@@ -88,12 +88,9 @@ public class TtsService {
     public static String buildRequestBody(String appId, String token, String cluster,
                                            String voiceType, String text,
                                            List<String> actions) {
-        // If actions exist, prepend as voice instruction hint
+        // Actions are reserved for future TTS 2.0 voice tag support
+        // Currently only clean text is sent to TTS
         String finalText = text;
-        if (actions != null && !actions.isEmpty()) {
-            String actionHint = "[" + String.join("，", actions) + "]";
-            finalText = actionHint + text;
-        }
 
         Map<String, Object> body = new LinkedHashMap<>();
 
