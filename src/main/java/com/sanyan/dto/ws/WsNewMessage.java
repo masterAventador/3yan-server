@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 public class WsNewMessage {
-    private final String type = "new_message";
+    private final String type = WsEventType.NEW_MESSAGE;
     private Long conversationId;
     private MessageData message;
 

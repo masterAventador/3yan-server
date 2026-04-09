@@ -1,5 +1,6 @@
 package com.sanyan.service;
 
+import com.sanyan.dto.ws.MessageContentType;
 import com.sanyan.dto.data.ConversationData;
 import com.sanyan.dto.data.MessageData;
 import com.sanyan.entity.AiCharacter;
@@ -71,7 +72,7 @@ public class MessageService {
                 Message aiMsg = new Message();
                 aiMsg.setConversationId(conversationId);
                 aiMsg.setSenderType("ai");
-                aiMsg.setContentType("voice");
+                aiMsg.setContentType(MessageContentType.VOICE);
                 aiMsg.setContent(messageContent);
                 aiMsg.setSource("reply");
                 messageRepository.save(aiMsg);
@@ -102,7 +103,7 @@ public class MessageService {
         Message aiMsg = new Message();
         aiMsg.setConversationId(conversationId);
         aiMsg.setSenderType("ai");
-        aiMsg.setContentType("text");
+        aiMsg.setContentType(MessageContentType.TEXT);
         aiMsg.setContent(aiReply);
         aiMsg.setSource("reply");
         messageRepository.save(aiMsg);

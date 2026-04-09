@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class WsAck {
-    private final String type = "ack";
+    private final String type = WsEventType.ACK;
     private String clientMsgId;
 
     public WsAck(String clientMsgId) {

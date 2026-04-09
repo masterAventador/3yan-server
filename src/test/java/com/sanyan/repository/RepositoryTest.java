@@ -48,7 +48,7 @@ class RepositoryTest {
         Message msg = new Message();
         msg.setConversationId(1L);
         msg.setSenderType("user");
-        msg.setContentType("text");
+        msg.setContentType(com.sanyan.dto.ws.MessageContentType.TEXT);
         msg.setContent("你好");
         msg.setSource("reply");
         Message saved = messageRepository.save(msg);

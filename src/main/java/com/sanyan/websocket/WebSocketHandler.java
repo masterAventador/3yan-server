@@ -39,9 +39,9 @@ public class WebSocketHandler extends TextWebSocketHandler {
         WsMessage wsMsg = objectMapper.readValue(message.getPayload(), WsMessage.class);
 
         switch (wsMsg.getType()) {
-            case "ping" -> sendToSession(session, "{\"type\":\"pong\"}");
-            case "send_message" -> handleSendMessage(userId, wsMsg, session);
-            case "sync" -> handleSync(userId, wsMsg, session);
+            case WsEventType.PING -> sendToSession(session, "{\"type\":\"" + WsEventType.PONG + "\"}");
+            case WsEventType.SEND_MESSAGE -> handleSendMessage(userId, wsMsg, session);
+            case WsEventType.SYNC -> handleSync(userId, wsMsg, session);
             default -> log.warn("未知消息类型: {}", wsMsg.getType());
         }
     }
@@ -77,7 +77,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
                         userId, wsMsg.getConversationId(), wsMsg.getContentType(), wsMsg.getContent());
 
                 long delay;
-                if ("voice".equals(aiMsg.getContentType())) {
+                if (MessageContentType.VOICE.equals(aiMsg.getContentType())) {
                     delay = 500; // Voice messages already had TTS processing time
                 } else {
                     delay = messageService.calculateTypingDelay(aiMsg.getContent());

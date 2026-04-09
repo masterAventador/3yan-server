@@ -3,6 +3,7 @@ package com.sanyan.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.dto.data.MessageData;
+import com.sanyan.dto.ws.MessageContentType;
 import com.sanyan.dto.ws.WsNewMessage;
 import com.sanyan.dto.ws.WsTyping;
 import com.sanyan.entity.AiCharacter;
@@ -106,7 +107,7 @@ public class ProactiveService {
                 Message proactiveMsg = new Message();
                 proactiveMsg.setConversationId(conversationId);
                 proactiveMsg.setSenderType("ai");
-                proactiveMsg.setContentType("text");
+                proactiveMsg.setContentType(MessageContentType.TEXT);
                 proactiveMsg.setContent(content);
                 proactiveMsg.setSource("proactive");
                 messageRepository.save(proactiveMsg);
