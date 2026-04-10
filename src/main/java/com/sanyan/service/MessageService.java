@@ -100,11 +100,13 @@ public class MessageService {
         }
 
         // Text message (TTS disabled or degraded)
+        // Still need to strip emotion tags and action descriptions from text
+        var extracted = TextProcessor.extract(aiReply);
         Message aiMsg = new Message();
         aiMsg.setConversationId(conversationId);
         aiMsg.setSenderType("ai");
         aiMsg.setContentType(MessageContentType.TEXT);
-        aiMsg.setContent(aiReply);
+        aiMsg.setContent(extracted.cleanText());
         aiMsg.setSource("reply");
         messageRepository.save(aiMsg);
         log.info("AI 回复已保存: convId={}, msgId={}", conversationId, aiMsg.getId());
