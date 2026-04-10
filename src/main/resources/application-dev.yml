@@ -32,6 +32,10 @@ sanyan:
   push:
     app-key: ${JPUSH_APP_KEY:}
     master-secret: ${JPUSH_MASTER_SECRET:}
+  asr:
+    enabled: true
+    app-id: "6383804695"
+    access-token: ${ASR_ACCESS_TOKEN:BgkVhS2NOZfEP9TbhuWdREWzbZEjNLHi}
   tts:
     enabled: true
     app-id: "7231248180"
