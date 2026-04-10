@@ -151,6 +151,7 @@ public class TtsService {
         Map<String, Object> audioParams = new LinkedHashMap<>();
         audioParams.put("format", "mp3");
         audioParams.put("sample_rate", 24000);
+        audioParams.put("loudness_rate", 50); // 提高音频响度（范围 -50 ~ 100）
         if (emotion != null) {
             audioParams.put("emotion", emotion.type());
             audioParams.put("emotion_scale", emotion.scale());
