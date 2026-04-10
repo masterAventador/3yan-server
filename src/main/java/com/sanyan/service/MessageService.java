@@ -37,7 +37,8 @@ public class MessageService {
     /**
      * Handle user message: save user msg, call AI, save AI reply, return AI Message
      */
-    public Message handleUserMessage(Long userId, Long conversationId, String contentType, String content) {
+    public Message handleUserMessage(Long userId, Long conversationId, String contentType, String content,
+                                      String mediaUrl, Integer duration) {
         Conversation conv = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("会话不存在"));
 
@@ -46,7 +47,9 @@ public class MessageService {
         userMsg.setConversationId(conversationId);
         userMsg.setSenderType("user");
         userMsg.setContentType(contentType);
-        userMsg.setContent(content);
+        userMsg.setContent(content != null ? content : "");
+        userMsg.setMediaUrl(mediaUrl);
+        userMsg.setDuration(duration);
         userMsg.setSource("reply");
         messageRepository.save(userMsg);
         log.info("用户消息已保存: userId={}, convId={}, msgId={}", userId, conversationId, userMsg.getId());
@@ -55,7 +58,12 @@ public class MessageService {
         AiCharacter character = characterRepository.findById(conv.getCharacterId())
                 .orElseThrow(() -> new RuntimeException("角色不存在"));
         log.info("调用豆包 AI: convId={}, character={}", conversationId, character.getName());
-        String aiReply = aiService.chat(character, conversationId);
+        String aiReply;
+        if ("voice".equals(contentType)) {
+            aiReply = aiService.chatVoiceAck(character, conversationId);
+        } else {
+            aiReply = aiService.chat(character, conversationId);
+        }
         log.info("豆包 AI 回复: convId={}, replyLength={}", conversationId, aiReply.length());
 
         // TTS flow: when enabled, try to synthesize voice message
@@ -78,10 +86,10 @@ public class MessageService {
                 messageRepository.save(aiMsg);
 
                 String cosKey = CosService.buildAiVoiceKey(conversationId, aiMsg.getId());
-                String mediaUrl = cosService.upload(audioData, cosKey, "audio/mpeg");
-                aiMsg.setMediaUrl(mediaUrl);
+                String aiMediaUrl = cosService.upload(audioData, cosKey, "audio/mpeg");
+                aiMsg.setMediaUrl(aiMediaUrl);
                 messageRepository.save(aiMsg);
-                log.info("语音消息生成完成: convId={}, msgId={}, mediaUrl={}", conversationId, aiMsg.getId(), mediaUrl);
+                log.info("语音消息生成完成: convId={}, msgId={}, mediaUrl={}", conversationId, aiMsg.getId(), aiMediaUrl);
 
                 // Update conversation + Redis tracking
                 conv.setLastMessageAt(LocalDateTime.now());
@@ -199,6 +207,7 @@ public class MessageService {
         d.setContent(msg.getContent());
         d.setSource(msg.getSource());
         d.setMediaUrl(msg.getMediaUrl());
+        d.setDuration(msg.getDuration());
         d.setCreatedAt(msg.getCreatedAt());
         return d;
     }

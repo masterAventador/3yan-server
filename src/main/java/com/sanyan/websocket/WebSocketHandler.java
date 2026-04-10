@@ -74,7 +74,8 @@ public class WebSocketHandler extends TextWebSocketHandler {
         CompletableFuture.runAsync(() -> {
             try {
                 Message aiMsg = messageService.handleUserMessage(
-                        userId, wsMsg.getConversationId(), wsMsg.getContentType(), wsMsg.getContent());
+                        userId, wsMsg.getConversationId(), wsMsg.getContentType(), wsMsg.getContent(),
+                        wsMsg.getMediaUrl(), wsMsg.getDuration());
 
                 long delay;
                 if (MessageContentType.VOICE.equals(aiMsg.getContentType())) {

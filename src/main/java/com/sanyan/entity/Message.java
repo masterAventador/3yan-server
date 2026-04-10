@@ -22,6 +22,8 @@ public class Message {
     @Column(columnDefinition = "TEXT")
     private String content;
     private String mediaUrl;
+    @Column
+    private Integer duration;
     @Column(nullable = false, length = 10)
     private String source; // reply / proactive
     @CreationTimestamp

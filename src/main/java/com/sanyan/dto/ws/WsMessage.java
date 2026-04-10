@@ -14,4 +14,7 @@ public class WsMessage {
     private String clientMsgId;
     // sync fields
     private Long lastMsgId;
+    // voice/video message fields
+    private String mediaUrl;
+    private Integer duration;
 }

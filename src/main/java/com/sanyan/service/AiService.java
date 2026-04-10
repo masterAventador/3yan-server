@@ -58,6 +58,27 @@ public class AiService {
     }
 
     /**
+     * 用户发了语音但当前不支持 ASR，让 AI 生成"没听清"的撒娇回复。
+     */
+    public String chatVoiceAck(AiCharacter character, Long conversationId) {
+        String time = formatCurrentTime();
+        String profile = getProfile(conversationId);
+        String basePrompt = assembleSystemPrompt(character.getSystemPrompt(), time, profile);
+        String voicePrompt = basePrompt
+            + "\n\n[特殊场景] 用户刚才发了一条语音消息，但你现在还无法听懂语音内容。"
+            + "请用符合你人设的方式回复，表达你听到了但没听清，让用户再说一遍或者打字告诉你。"
+            + "要自然、多变、撒娇，每次都不一样。记得按规则输出语音情感标签。";
+
+        List<MemorySummary> summaries = memorySummaryRepository
+                .findByConversationIdOrderByCreatedAtDesc(conversationId, PageRequest.of(0, 5));
+        List<Message> recentMessages = messageRepository
+                .findByConversationIdOrderByIdDesc(conversationId, PageRequest.of(0, 20));
+        Collections.reverse(recentMessages);
+
+        return callDoubao(voicePrompt, summaries, recentMessages);
+    }
+
+    /**
      * AI proactive message (with trigger hint)
      */
     public String chatProactive(AiCharacter character, Long conversationId, String triggerHint) {
