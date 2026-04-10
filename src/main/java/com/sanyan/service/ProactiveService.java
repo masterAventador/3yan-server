@@ -124,7 +124,8 @@ public class ProactiveService {
                         proactiveMsg.setContent(cleanContent);
                         messageRepository.save(proactiveMsg);
 
-                        String mediaUrl = cosService.upload(audioData, conversationId, proactiveMsg.getId());
+                        String cosKey = CosService.buildAiVoiceKey(conversationId, proactiveMsg.getId());
+                        String mediaUrl = cosService.upload(audioData, cosKey, "audio/mpeg");
                         proactiveMsg.setMediaUrl(mediaUrl);
                         messageRepository.save(proactiveMsg);
                         log.info("主动语音消息生成完成: convId={}, msgId={}", conversationId, proactiveMsg.getId());

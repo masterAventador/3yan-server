@@ -77,7 +77,8 @@ public class MessageService {
                 aiMsg.setSource("reply");
                 messageRepository.save(aiMsg);
 
-                String mediaUrl = cosService.upload(audioData, conversationId, aiMsg.getId());
+                String cosKey = CosService.buildAiVoiceKey(conversationId, aiMsg.getId());
+                String mediaUrl = cosService.upload(audioData, cosKey, "audio/mpeg");
                 aiMsg.setMediaUrl(mediaUrl);
                 messageRepository.save(aiMsg);
                 log.info("语音消息生成完成: convId={}, msgId={}, mediaUrl={}", conversationId, aiMsg.getId(), mediaUrl);

@@ -12,8 +12,15 @@ class CosServiceTest {
     }
 
     @Test
-    void buildObjectKey_returnsCorrectPath() {
-        String key = CosService.buildObjectKey(42L, 100L);
-        assertThat(key).isEqualTo("voice/42/100.mp3");
+    void buildObjectKeyForAiVoice_returnsCorrectPath() {
+        String key = CosService.buildAiVoiceKey(100L, 200L);
+        assertThat(key).isEqualTo("voice/ai/100/200.mp3");
+    }
+
+    @Test
+    void buildObjectKeyForUserVoice_returnsCorrectPath() {
+        String key = CosService.buildUserVoiceKey(1L, "abc123");
+        assertThat(key).startsWith("voice/user/1/");
+        assertThat(key).endsWith("_abc123.m4a");
     }
 }
