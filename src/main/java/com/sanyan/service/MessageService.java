@@ -33,6 +33,7 @@ public class MessageService {
     private final AiService aiService;
     private final TtsService ttsService;
     private final CosService cosService;
+    private final AsrService asrService;
     private final StringRedisTemplate redisTemplate;
 
     /**
@@ -61,7 +62,23 @@ public class MessageService {
         log.info("调用豆包 AI: convId={}, character={}", conversationId, character.getName());
         String aiReply;
         if (MessageContentType.VOICE.equals(contentType)) {
-            aiReply = aiService.chatVoiceAck(character, conversationId);
+            // 尝试 ASR 转写
+            String transcribedText = asrService.isEnabled()
+                    ? asrService.transcribe(mediaUrl)
+                    : null;
+
+            if (transcribedText != null && !transcribedText.isBlank()) {
+                // ASR 成功：回填 content 字段，走正常对话
+                userMsg.setContent(transcribedText);
+                messageRepository.save(userMsg);
+                log.info("ASR 转写成功: convId={}, msgId={}, text={}",
+                        conversationId, userMsg.getId(), transcribedText);
+                aiReply = aiService.chat(character, conversationId);
+            } else {
+                // ASR 失败或静音：降级到 chatVoiceAck
+                log.info("ASR 失败或静音，降级为 chatVoiceAck: convId={}", conversationId);
+                aiReply = aiService.chatVoiceAck(character, conversationId);
+            }
         } else {
             aiReply = aiService.chat(character, conversationId);
         }
