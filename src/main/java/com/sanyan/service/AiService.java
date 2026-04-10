@@ -1,6 +1,7 @@
 package com.sanyan.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sanyan.dto.ws.SenderType;
 import com.sanyan.entity.AiCharacter;
 import com.sanyan.entity.MemoryProfile;
 import com.sanyan.entity.MemorySummary;
@@ -129,7 +130,7 @@ public class AiService {
             // Add recent messages
             if (messages != null) {
                 for (Message msg : messages) {
-                    String role = "user".equals(msg.getSenderType()) ? "user" : "assistant";
+                    String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
                     chatMessages.add(Map.of("role", role, "content", msg.getContent()));
                 }
             }

@@ -1,6 +1,7 @@
 package com.sanyan.service;
 
 import com.sanyan.dto.ws.MessageContentType;
+import com.sanyan.dto.ws.SenderType;
 import com.sanyan.dto.data.ConversationData;
 import com.sanyan.dto.data.MessageData;
 import com.sanyan.entity.AiCharacter;
@@ -45,7 +46,7 @@ public class MessageService {
         // Save user message
         Message userMsg = new Message();
         userMsg.setConversationId(conversationId);
-        userMsg.setSenderType("user");
+        userMsg.setSenderType(SenderType.USER);
         userMsg.setContentType(contentType);
         userMsg.setContent(content != null ? content : "");
         userMsg.setMediaUrl(mediaUrl);
@@ -59,7 +60,7 @@ public class MessageService {
                 .orElseThrow(() -> new RuntimeException("角色不存在"));
         log.info("调用豆包 AI: convId={}, character={}", conversationId, character.getName());
         String aiReply;
-        if ("voice".equals(contentType)) {
+        if (MessageContentType.VOICE.equals(contentType)) {
             aiReply = aiService.chatVoiceAck(character, conversationId);
         } else {
             aiReply = aiService.chat(character, conversationId);
@@ -79,7 +80,7 @@ public class MessageService {
                 // Save voice message first to get ID for COS path
                 Message aiMsg = new Message();
                 aiMsg.setConversationId(conversationId);
-                aiMsg.setSenderType("ai");
+                aiMsg.setSenderType(SenderType.AI);
                 aiMsg.setContentType(MessageContentType.VOICE);
                 aiMsg.setContent(messageContent);
                 aiMsg.setSource("reply");

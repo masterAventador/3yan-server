@@ -1,5 +1,6 @@
 package com.sanyan.service;
 
+import com.sanyan.dto.ws.SenderType;
 import com.sanyan.entity.MemoryProfile;
 import com.sanyan.entity.MemorySummary;
 import com.sanyan.entity.Message;
@@ -89,7 +90,7 @@ public class MemoryService {
 
         sb.append("【新对话内容】\n");
         for (Message msg : messages) {
-            String role = "user".equals(msg.getSenderType()) ? "用户" : "AI";
+            String role = SenderType.USER.equals(msg.getSenderType()) ? "用户" : "AI";
             sb.append(role).append("：").append(msg.getContent()).append("\n");
         }
 
@@ -106,7 +107,7 @@ public class MemoryService {
         sb.append("请用1-2句话概括以下对话的主要内容：\n\n");
 
         for (Message msg : messages) {
-            String role = "user".equals(msg.getSenderType()) ? "用户" : "AI";
+            String role = SenderType.USER.equals(msg.getSenderType()) ? "用户" : "AI";
             sb.append(role).append("：").append(msg.getContent()).append("\n");
         }
 

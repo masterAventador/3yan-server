@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.dto.data.MessageData;
 import com.sanyan.dto.ws.MessageContentType;
+import com.sanyan.dto.ws.SenderType;
 import com.sanyan.dto.ws.WsNewMessage;
 import com.sanyan.dto.ws.WsTyping;
 import com.sanyan.entity.AiCharacter;
@@ -113,7 +114,7 @@ public class ProactiveService {
                 // Save message to DB
                 Message proactiveMsg = new Message();
                 proactiveMsg.setConversationId(conversationId);
-                proactiveMsg.setSenderType("ai");
+                proactiveMsg.setSenderType(SenderType.AI);
                 proactiveMsg.setSource("proactive");
 
                 // TTS flow
@@ -186,7 +187,7 @@ public class ProactiveService {
                 .findByConversationIdOrderByIdDesc(conversationId, PageRequest.of(0, 1));
         if (messages.isEmpty()) return false;
         Message last = messages.get(0);
-        return "ai".equals(last.getSenderType()) && "proactive".equals(last.getSource());
+        return SenderType.AI.equals(last.getSenderType()) && "proactive".equals(last.getSource());
     }
 
     /**
