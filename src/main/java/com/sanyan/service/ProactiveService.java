@@ -12,6 +12,7 @@ import com.sanyan.entity.Message;
 import com.sanyan.repository.AiCharacterRepository;
 import com.sanyan.repository.ConversationRepository;
 import com.sanyan.repository.MessageRepository;
+import com.sanyan.util.TextProcessor;
 import com.sanyan.websocket.SessionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +50,8 @@ public class ProactiveService {
     private final SessionManager sessionManager;
     private final StringRedisTemplate redisTemplate;
     private final PushService pushService;
+    private final TtsService ttsService;
+    private final CosService cosService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -97,20 +100,45 @@ public class ProactiveService {
         final int finalMaxDaily = maxDaily;
         CompletableFuture.runAsync(() -> {
             try {
-                String content = aiService.chatProactive(character, conversationId, triggerHint);
-                if (content == null || content.isBlank()) {
+                String aiReply = aiService.chatProactive(character, conversationId, triggerHint);
+                if (aiReply == null || aiReply.isBlank()) {
                     log.warn("AI 主动消息内容为空，跳过，conversationId={}", conversationId);
                     return;
                 }
+
+                // Extract emotion tags and action descriptions
+                var extracted = TextProcessor.extract(aiReply);
+                String cleanContent = extracted.cleanText();
 
                 // Save message to DB
                 Message proactiveMsg = new Message();
                 proactiveMsg.setConversationId(conversationId);
                 proactiveMsg.setSenderType("ai");
-                proactiveMsg.setContentType(MessageContentType.TEXT);
-                proactiveMsg.setContent(content);
                 proactiveMsg.setSource("proactive");
-                messageRepository.save(proactiveMsg);
+
+                // TTS flow
+                if (ttsService.isEnabled()) {
+                    byte[] audioData = ttsService.synthesize(cleanContent, extracted.emotion(), null);
+                    if (audioData != null) {
+                        proactiveMsg.setContentType(MessageContentType.VOICE);
+                        proactiveMsg.setContent(cleanContent);
+                        messageRepository.save(proactiveMsg);
+
+                        String mediaUrl = cosService.upload(audioData, conversationId, proactiveMsg.getId());
+                        proactiveMsg.setMediaUrl(mediaUrl);
+                        messageRepository.save(proactiveMsg);
+                        log.info("主动语音消息生成完成: convId={}, msgId={}", conversationId, proactiveMsg.getId());
+                    } else {
+                        // TTS failed, fallback to text
+                        proactiveMsg.setContentType(MessageContentType.TEXT);
+                        proactiveMsg.setContent(cleanContent);
+                        messageRepository.save(proactiveMsg);
+                    }
+                } else {
+                    proactiveMsg.setContentType(MessageContentType.TEXT);
+                    proactiveMsg.setContent(cleanContent);
+                    messageRepository.save(proactiveMsg);
+                }
 
                 // Update conversation unread count & lastMessageAt
                 conv.setLastMessageAt(LocalDateTime.now());
@@ -122,7 +150,7 @@ public class ProactiveService {
                 if (session.isPresent()) {
                     deliverOnline(session.get(), conv, proactiveMsg);
                 } else {
-                    pushService.sendPush(userId, character.getName() + "：" + content);
+                    pushService.sendPush(userId, character.getName() + "：" + cleanContent);
                 }
 
             } catch (Exception e) {
