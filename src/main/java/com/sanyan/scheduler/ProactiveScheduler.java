@@ -36,7 +36,7 @@ public class ProactiveScheduler {
 
     /**
      * Every 10 minutes: check greeting time slots defined in each character's proactive_config.
-     * Example config: {"greeting_slots": ["07:00-09:00", "12:00-13:00", "20:00-22:00"]}
+     * Example config: {"active_hours":[8,22],"greeting":{"enabled":true,"slots":["08:00-09:00","12:00-13:00","21:00-22:00"]}}
      */
     @Scheduled(fixedRate = 600_000)
     public void greetingCheck() {
@@ -45,10 +45,16 @@ public class ProactiveScheduler {
 
         for (AiCharacter character : characters) {
             JsonNode cfg = parseConfig(character);
-            if (cfg == null || !cfg.has("greeting_slots")) continue;
+            if (cfg == null) continue;
+            if (!isWithinActiveHours(now, cfg)) continue;
+
+            JsonNode greetingNode = cfg.path("greeting");
+            if (!greetingNode.path("enabled").asBoolean(true)) continue;
+            JsonNode slots = greetingNode.path("slots");
+            if (!slots.isArray() || slots.isEmpty()) continue;
 
             boolean inSlot = false;
-            for (JsonNode slotNode : cfg.get("greeting_slots")) {
+            for (JsonNode slotNode : slots) {
                 if (isInTimeSlot(now, slotNode.asText())) {
                     inSlot = true;
                     break;
@@ -71,18 +77,21 @@ public class ProactiveScheduler {
 
     /**
      * Every 30 minutes: detect idle users (no message in configurable hours) and send care message.
-     * Example config: {"idle_trigger_hours": 8}
+     * Example config: {"active_hours":[8,22],"event_trigger":{"enabled":true,"idle_hours_threshold":6}}
      */
     @Scheduled(fixedRate = 1_800_000)
     public void eventTriggerCheck() {
+        LocalTime now = LocalTime.now();
         List<AiCharacter> characters = characterRepository.findAll();
 
         for (AiCharacter character : characters) {
             JsonNode cfg = parseConfig(character);
-            int idleHours = 8;
-            if (cfg != null && cfg.has("idle_trigger_hours")) {
-                idleHours = cfg.get("idle_trigger_hours").asInt(8);
-            }
+            if (cfg == null) continue;
+            if (!isWithinActiveHours(now, cfg)) continue;
+
+            JsonNode eventNode = cfg.path("event_trigger");
+            if (!eventNode.path("enabled").asBoolean(true)) continue;
+            int idleHours = eventNode.path("idle_hours_threshold").asInt(8);
 
             LocalDateTime threshold = LocalDateTime.now().minusHours(idleHours);
             List<Conversation> conversations = conversationRepository.findAll();
@@ -104,18 +113,21 @@ public class ProactiveScheduler {
 
     /**
      * Every hour: random situational trigger — share life moments, ask questions, etc.
-     * Example config: {"situational_trigger_rate": 0.3}  (30% chance per check)
+     * Example config: {"active_hours":[8,22],"situational":{"enabled":true,"trigger_rate":0.2}}  (20% chance per check)
      */
     @Scheduled(fixedRate = 3_600_000)
     public void situationalCheck() {
+        LocalTime now = LocalTime.now();
         List<AiCharacter> characters = characterRepository.findAll();
 
         for (AiCharacter character : characters) {
             JsonNode cfg = parseConfig(character);
-            double triggerRate = 0.2;
-            if (cfg != null && cfg.has("situational_trigger_rate")) {
-                triggerRate = cfg.get("situational_trigger_rate").asDouble(0.2);
-            }
+            if (cfg == null) continue;
+            if (!isWithinActiveHours(now, cfg)) continue;
+
+            JsonNode situNode = cfg.path("situational");
+            if (!situNode.path("enabled").asBoolean(true)) continue;
+            double triggerRate = situNode.path("trigger_rate").asDouble(0.2);
 
             // Random probability check
             if (ThreadLocalRandom.current().nextDouble() > triggerRate) continue;
@@ -145,6 +157,22 @@ public class ProactiveScheduler {
             log.warn("解析 proactive_config 失败, characterId={}", character.getId());
             return null;
         }
+    }
+
+    /**
+     * Check if the current time is within the active hours range configured.
+     * If active_hours not configured, returns true (no time restriction).
+     *
+     * Config example: {"active_hours": [8, 22]} means hours 8:00-22:59 inclusive.
+     */
+    static boolean isWithinActiveHours(LocalTime now, JsonNode cfg) {
+        if (cfg == null || !cfg.has("active_hours")) return true;
+        JsonNode range = cfg.get("active_hours");
+        if (!range.isArray() || range.size() != 2) return true;
+        int startHour = range.get(0).asInt();
+        int endHour = range.get(1).asInt();
+        int curHour = now.getHour();
+        return curHour >= startHour && curHour <= endHour;
     }
 
     /**
