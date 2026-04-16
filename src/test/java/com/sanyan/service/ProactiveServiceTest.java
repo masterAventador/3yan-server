@@ -66,4 +66,18 @@ class ProactiveServiceTest {
 
         assertThat(proactiveService.hasUnansweredProactive(100L)).isFalse();
     }
+
+    @Test
+    void isSendableContent_shouldReturnFalseForBlank() {
+        assertThat(ProactiveService.isSendableContent(null)).isFalse();
+        assertThat(ProactiveService.isSendableContent("")).isFalse();
+        assertThat(ProactiveService.isSendableContent("   ")).isFalse();
+        assertThat(ProactiveService.isSendableContent("\n")).isFalse();
+    }
+
+    @Test
+    void isSendableContent_shouldReturnTrueForActualContent() {
+        assertThat(ProactiveService.isSendableContent("嗨，最近怎么样？")).isTrue();
+        assertThat(ProactiveService.isSendableContent("a")).isTrue();
+    }
 }
