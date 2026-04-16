@@ -62,16 +62,8 @@ public class ProactiveScheduler {
             }
             if (!inSlot) continue;
 
-            List<Conversation> conversations = conversationRepository.findAll();
-            for (Conversation conv : conversations) {
-                if (!conv.getCharacterId().equals(character.getId())) continue;
-                try {
-                    proactiveService.sendProactiveMessage(conv, character,
-                            "现在是打招呼的好时机，用温暖自然的方式主动问候用户，关心他/她的近况");
-                } catch (Exception e) {
-                    log.error("问候触发失败, convId={}", conv.getId(), e);
-                }
-            }
+            dispatchProactiveForCharacter(character, "问候",
+                    "现在是打招呼的好时机，用温暖自然的方式主动问候用户，关心他/她的近况");
         }
     }
 
@@ -94,10 +86,9 @@ public class ProactiveScheduler {
             int idleHours = eventNode.path("idle_hours_threshold").asInt(8);
 
             LocalDateTime threshold = LocalDateTime.now().minusHours(idleHours);
-            List<Conversation> conversations = conversationRepository.findAll();
+            List<Conversation> conversations = conversationRepository.findByCharacterId(character.getId());
 
             for (Conversation conv : conversations) {
-                if (!conv.getCharacterId().equals(character.getId())) continue;
                 if (conv.getLastMessageAt() == null) continue;
                 if (conv.getLastMessageAt().isAfter(threshold)) continue;
 
@@ -132,15 +123,22 @@ public class ProactiveScheduler {
             // Random probability check
             if (ThreadLocalRandom.current().nextDouble() > triggerRate) continue;
 
-            List<Conversation> conversations = conversationRepository.findAll();
-            for (Conversation conv : conversations) {
-                if (!conv.getCharacterId().equals(character.getId())) continue;
-                try {
-                    proactiveService.sendProactiveMessage(conv, character,
-                            "随机分享一个生活感悟、有趣的事情或者问用户一个轻松的问题，让对话更有温度");
-                } catch (Exception e) {
-                    log.error("情景触发失败, convId={}", conv.getId(), e);
-                }
+            dispatchProactiveForCharacter(character, "情景",
+                    "随机分享一个生活感悟、有趣的事情或者问用户一个轻松的问题，让对话更有温度");
+        }
+    }
+
+    /**
+     * 对指定 character 的所有 conversation 触发主动消息。
+     * 用 findByCharacterId 避免 N+1 全表扫描。
+     */
+    private void dispatchProactiveForCharacter(AiCharacter character, String triggerType, String triggerHint) {
+        List<Conversation> conversations = conversationRepository.findByCharacterId(character.getId());
+        for (Conversation conv : conversations) {
+            try {
+                proactiveService.sendProactiveMessage(conv, character, triggerHint);
+            } catch (Exception e) {
+                log.error("{}触发失败, convId={}", triggerType, conv.getId(), e);
             }
         }
     }
@@ -171,6 +169,18 @@ public class ProactiveScheduler {
         if (!range.isArray() || range.size() != 2) return true;
         int startHour = range.get(0).asInt();
         int endHour = range.get(1).asInt();
+
+        // 合法性校验：越界配置 fail-safe 放行 + 告警
+        if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) {
+            log.warn("active_hours 越界（[{}, {}]），将忽略时段限制并放行", startHour, endHour);
+            return true;
+        }
+        // 反向配置 fail-closed 拦截 + 告警（不支持跨午夜场景）
+        if (startHour > endHour) {
+            log.warn("active_hours 反向（[{}, {}]），不支持跨午夜场景，将永远不触发主动消息", startHour, endHour);
+            return false;
+        }
+
         int curHour = now.getHour();
         return curHour >= startHour && curHour <= endHour;
     }
