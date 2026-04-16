@@ -6,9 +6,14 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "conversation", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"user_id", "character_id"})
-})
+@Table(name = "conversation",
+    uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"user_id", "character_id"})
+    },
+    indexes = {
+        @Index(name = "idx_conversation_character_id", columnList = "character_id")
+    }
+)
 public class Conversation {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
