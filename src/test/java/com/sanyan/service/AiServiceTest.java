@@ -70,4 +70,52 @@ class AiServiceTest {
 
         verify(messageRepo, never()).findByConversationIdOrderByIdDesc(anyLong(), any());
     }
+
+    @Test
+    void chatProactive_shouldReturnNull_whenDoubaoFallsBack() throws Exception {
+        var messageRepo = mock(com.sanyan.repository.MessageRepository.class);
+        var memoryProfileRepo = mock(com.sanyan.repository.MemoryProfileRepository.class);
+        var memorySummaryRepo = mock(com.sanyan.repository.MemorySummaryRepository.class);
+        var objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var restTemplate = mock(org.springframework.web.client.RestTemplate.class);
+
+        AiService aiService = new AiService(messageRepo, memoryProfileRepo, memorySummaryRepo, objectMapper, restTemplate);
+
+        when(memoryProfileRepo.findByConversationId(1L)).thenReturn(java.util.Optional.empty());
+        when(memorySummaryRepo.findByConversationIdOrderByCreatedAtDesc(eq(1L), any())).thenReturn(List.of());
+
+        // 模拟豆包接口挂掉 → callDoubaoRaw 走 catch 返回兜底
+        when(restTemplate.exchange(anyString(), any(), any(), eq(String.class)))
+                .thenThrow(new org.springframework.web.client.RestClientException("simulated 5xx"));
+
+        com.sanyan.entity.AiCharacter character = new com.sanyan.entity.AiCharacter();
+        character.setSystemPrompt("你是小婉");
+        String result = aiService.chatProactive(character, 1L, "主动打招呼");
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void chat_shouldReturnFallbackString_whenDoubaoFallsBack() throws Exception {
+        // 验证 chat 链路（用户主动发消息）保持原行为：失败时返回兜底文案
+        var messageRepo = mock(com.sanyan.repository.MessageRepository.class);
+        var memoryProfileRepo = mock(com.sanyan.repository.MemoryProfileRepository.class);
+        var memorySummaryRepo = mock(com.sanyan.repository.MemorySummaryRepository.class);
+        var objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var restTemplate = mock(org.springframework.web.client.RestTemplate.class);
+
+        AiService aiService = new AiService(messageRepo, memoryProfileRepo, memorySummaryRepo, objectMapper, restTemplate);
+
+        when(memoryProfileRepo.findByConversationId(1L)).thenReturn(java.util.Optional.empty());
+        when(memorySummaryRepo.findByConversationIdOrderByCreatedAtDesc(eq(1L), any())).thenReturn(List.of());
+        when(messageRepo.findByConversationIdOrderByIdDesc(eq(1L), any())).thenReturn(List.of());
+        when(restTemplate.exchange(anyString(), any(), any(), eq(String.class)))
+                .thenThrow(new org.springframework.web.client.RestClientException("simulated 5xx"));
+
+        com.sanyan.entity.AiCharacter character = new com.sanyan.entity.AiCharacter();
+        character.setSystemPrompt("你是小婉");
+        String result = aiService.chat(character, 1L);
+
+        assertThat(result).isEqualTo(AiService.AI_FALLBACK_MESSAGE);
+    }
 }

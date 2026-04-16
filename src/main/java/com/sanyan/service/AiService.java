@@ -42,6 +42,13 @@ public class AiService {
     private String endpoint;
 
     /**
+     * Fallback message returned when doubao API call fails.
+     * Used by chat/chatVoiceAck (user-triggered) as a graceful degradation.
+     * For chatProactive (AI-initiated), this string triggers a null return — see chatProactive().
+     */
+    static final String AI_FALLBACK_MESSAGE = "抱歉，我现在有点走神了，等下再聊吧~";
+
+    /**
      * AI reply to user message
      */
     public String chat(AiCharacter character, Long conversationId) {
@@ -130,7 +137,12 @@ public class AiService {
         List<Map<String, String>> messages = buildProactiveMessages(
                 character.getSystemPrompt(), time, profile, summaries, triggerHint);
 
-        return callDoubaoRaw(messages);
+        String result = callDoubaoRaw(messages);
+        if (AI_FALLBACK_MESSAGE.equals(result)) {
+            log.warn("豆包 API 失败，主动消息放弃。conversationId={}", conversationId);
+            return null;
+        }
+        return result;
     }
 
     /**
@@ -178,7 +190,7 @@ public class AiService {
 
         } catch (Exception e) {
             log.error("豆包 API 调用失败", e);
-            return "抱歉，我现在有点走神了，等下再聊吧~";
+            return AI_FALLBACK_MESSAGE;
         }
     }
 
