@@ -112,7 +112,7 @@ public class ProactiveService {
                 String cleanContent = extracted.cleanText();
 
                 // Defensive: if cleaned content is blank (AI replied only with tags), skip
-                if (!isSendableContent(cleanContent)) {
+                if (!hasNonBlankContent(cleanContent)) {
                     log.warn("主动消息清洗后内容为空，跳过保存。conversationId={}, aiReply={}",
                             conversationId, aiReply);
                     return;
@@ -172,7 +172,7 @@ public class ProactiveService {
      * Check if the cleaned content (after TextProcessor.extract) is sendable.
      * Blank content can result from AI replying with only emotion/action tags.
      */
-    static boolean isSendableContent(String cleanContent) {
+    static boolean hasNonBlankContent(String cleanContent) {
         return cleanContent != null && !cleanContent.isBlank();
     }
 

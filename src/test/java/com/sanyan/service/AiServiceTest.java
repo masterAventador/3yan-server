@@ -1,6 +1,7 @@
 package com.sanyan.service;
 
 import com.sanyan.entity.MemorySummary;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -11,6 +12,23 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 class AiServiceTest {
+
+    private com.sanyan.repository.MessageRepository messageRepo;
+    private com.sanyan.repository.MemoryProfileRepository memoryProfileRepo;
+    private com.sanyan.repository.MemorySummaryRepository memorySummaryRepo;
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private org.springframework.web.client.RestTemplate restTemplate;
+    private AiService aiService;
+
+    @BeforeEach
+    void setUp() {
+        messageRepo = mock(com.sanyan.repository.MessageRepository.class);
+        memoryProfileRepo = mock(com.sanyan.repository.MemoryProfileRepository.class);
+        memorySummaryRepo = mock(com.sanyan.repository.MemorySummaryRepository.class);
+        objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        restTemplate = mock(org.springframework.web.client.RestTemplate.class);
+        aiService = new AiService(messageRepo, memoryProfileRepo, memorySummaryRepo, objectMapper, restTemplate);
+    }
 
     @Test
     void shouldAssemblePromptWithTimeAndProfile() {
@@ -49,14 +67,6 @@ class AiServiceTest {
 
     @Test
     void chatProactive_shouldNotLoadRecentMessages() throws Exception {
-        var messageRepo = mock(com.sanyan.repository.MessageRepository.class);
-        var memoryProfileRepo = mock(com.sanyan.repository.MemoryProfileRepository.class);
-        var memorySummaryRepo = mock(com.sanyan.repository.MemorySummaryRepository.class);
-        var objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-        var restTemplate = mock(org.springframework.web.client.RestTemplate.class);
-
-        AiService aiService = new AiService(messageRepo, memoryProfileRepo, memorySummaryRepo, objectMapper, restTemplate);
-
         when(memoryProfileRepo.findByConversationId(1L)).thenReturn(java.util.Optional.empty());
         when(memorySummaryRepo.findByConversationIdOrderByCreatedAtDesc(eq(1L), any())).thenReturn(List.of());
 
@@ -73,14 +83,6 @@ class AiServiceTest {
 
     @Test
     void chatProactive_shouldReturnNull_whenDoubaoFallsBack() throws Exception {
-        var messageRepo = mock(com.sanyan.repository.MessageRepository.class);
-        var memoryProfileRepo = mock(com.sanyan.repository.MemoryProfileRepository.class);
-        var memorySummaryRepo = mock(com.sanyan.repository.MemorySummaryRepository.class);
-        var objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-        var restTemplate = mock(org.springframework.web.client.RestTemplate.class);
-
-        AiService aiService = new AiService(messageRepo, memoryProfileRepo, memorySummaryRepo, objectMapper, restTemplate);
-
         when(memoryProfileRepo.findByConversationId(1L)).thenReturn(java.util.Optional.empty());
         when(memorySummaryRepo.findByConversationIdOrderByCreatedAtDesc(eq(1L), any())).thenReturn(List.of());
 
@@ -98,14 +100,6 @@ class AiServiceTest {
     @Test
     void chat_shouldReturnFallbackString_whenDoubaoFallsBack() throws Exception {
         // 验证 chat 链路（用户主动发消息）保持原行为：失败时返回兜底文案
-        var messageRepo = mock(com.sanyan.repository.MessageRepository.class);
-        var memoryProfileRepo = mock(com.sanyan.repository.MemoryProfileRepository.class);
-        var memorySummaryRepo = mock(com.sanyan.repository.MemorySummaryRepository.class);
-        var objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-        var restTemplate = mock(org.springframework.web.client.RestTemplate.class);
-
-        AiService aiService = new AiService(messageRepo, memoryProfileRepo, memorySummaryRepo, objectMapper, restTemplate);
-
         when(memoryProfileRepo.findByConversationId(1L)).thenReturn(java.util.Optional.empty());
         when(memorySummaryRepo.findByConversationIdOrderByCreatedAtDesc(eq(1L), any())).thenReturn(List.of());
         when(messageRepo.findByConversationIdOrderByIdDesc(eq(1L), any())).thenReturn(List.of());
