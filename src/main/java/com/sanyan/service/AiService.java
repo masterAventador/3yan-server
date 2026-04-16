@@ -80,21 +80,57 @@ public class AiService {
     }
 
     /**
+     * Build messages array for proactive trigger.
+     * NO conversation history is passed — proactive should be a fresh initiation,
+     * not a continuation of past dialogue.
+     */
+    static List<Map<String, String>> buildProactiveMessages(
+            String characterPrompt,
+            String time,
+            String profile,
+            List<MemorySummary> summaries,
+            String triggerHint) {
+
+        StringBuilder systemContent = new StringBuilder(characterPrompt);
+        systemContent.append("\n\n[当前时间] ").append(time);
+        if (profile != null && !profile.isBlank()) {
+            systemContent.append("\n\n[你对用户的印象] ").append(profile);
+        }
+        if (summaries != null && !summaries.isEmpty()) {
+            systemContent.append("\n\n[你们以前聊过的事]");
+            for (MemorySummary s : summaries) {
+                systemContent.append("\n- ").append(s.getSummary());
+            }
+        }
+
+        String userContent = "【这不是用户的话，是给你的系统指令】\n"
+                + triggerHint + "\n"
+                + "注意：\n"
+                + "- 这是你主动发起的消息，不要写成在回复用户上一句\n"
+                + "- 不要直接复述以前聊过的事，那是你的记忆，不是要拿来重复\n"
+                + "- 考虑当前时间，措辞要符合场景\n"
+                + "- 直接输出消息内容，不要带任何解释或前缀";
+
+        return List.of(
+                Map.of("role", "system", "content", systemContent.toString()),
+                Map.of("role", "user", "content", userContent)
+        );
+    }
+
+    /**
      * AI proactive message (with trigger hint)
      */
     public String chatProactive(AiCharacter character, Long conversationId, String triggerHint) {
         String time = formatCurrentTime();
         String profile = getProfile(conversationId);
-        String basePrompt = assembleSystemPrompt(character.getSystemPrompt(), time, profile);
-        String systemPrompt = basePrompt + "\n\n[主动触发提示] " + triggerHint;
 
         List<MemorySummary> summaries = memorySummaryRepository
                 .findByConversationIdOrderByCreatedAtDesc(conversationId, PageRequest.of(0, 5));
-        List<Message> recentMessages = messageRepository
-                .findByConversationIdOrderByIdDesc(conversationId, PageRequest.of(0, 20));
-        Collections.reverse(recentMessages);
 
-        return callDoubao(systemPrompt, summaries, recentMessages);
+        List<Map<String, String>> messages = buildProactiveMessages(
+                character.getSystemPrompt(), time, profile, summaries, triggerHint);
+
+        return callDoubaoRaw(messages);
     }
 
     /**
@@ -111,30 +147,10 @@ public class AiService {
     }
 
     /**
-     * Call doubao API (OpenAI-compatible chat completion)
+     * Call doubao API with raw chat messages (already-built role/content list).
      */
-    public String callDoubao(String systemPrompt, List<MemorySummary> summaries, List<Message> messages) {
+    public String callDoubaoRaw(List<Map<String, String>> chatMessages) {
         try {
-            List<Map<String, String>> chatMessages = new ArrayList<>();
-            chatMessages.add(Map.of("role", "system", "content", systemPrompt));
-
-            // Add summaries as system context
-            if (summaries != null && !summaries.isEmpty()) {
-                StringBuilder summaryText = new StringBuilder("[历史记忆摘要]\n");
-                for (MemorySummary s : summaries) {
-                    summaryText.append("- ").append(s.getSummary()).append("\n");
-                }
-                chatMessages.add(Map.of("role", "system", "content", summaryText.toString()));
-            }
-
-            // Add recent messages
-            if (messages != null) {
-                for (Message msg : messages) {
-                    String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
-                    chatMessages.add(Map.of("role", role, "content", msg.getContent()));
-                }
-            }
-
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
             requestBody.put("messages", chatMessages);
@@ -164,6 +180,31 @@ public class AiService {
             log.error("豆包 API 调用失败", e);
             return "抱歉，我现在有点走神了，等下再聊吧~";
         }
+    }
+
+    /**
+     * Call doubao API (OpenAI-compatible chat completion)
+     */
+    public String callDoubao(String systemPrompt, List<MemorySummary> summaries, List<Message> messages) {
+        List<Map<String, String>> chatMessages = new ArrayList<>();
+        chatMessages.add(Map.of("role", "system", "content", systemPrompt));
+
+        if (summaries != null && !summaries.isEmpty()) {
+            StringBuilder summaryText = new StringBuilder("[历史记忆摘要]\n");
+            for (MemorySummary s : summaries) {
+                summaryText.append("- ").append(s.getSummary()).append("\n");
+            }
+            chatMessages.add(Map.of("role", "system", "content", summaryText.toString()));
+        }
+
+        if (messages != null) {
+            for (Message msg : messages) {
+                String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
+                chatMessages.add(Map.of("role", role, "content", msg.getContent()));
+            }
+        }
+
+        return callDoubaoRaw(chatMessages);
     }
 
     /**
