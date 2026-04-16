@@ -138,7 +138,6 @@ public class AiService {
                 character.getSystemPrompt(), time, profile, summaries, triggerHint);
 
         String result = callDoubaoRaw(messages);
-        // TODO: 如果出现第 3 个调用方需要"API 失败时返回 null"语义，把 callDoubaoRaw 重构成 Optional<String> 返回
         if (AI_FALLBACK_MESSAGE.equals(result)) {
             log.warn("豆包 API 失败，主动消息放弃。conversationId={}, characterId={}, trigger={}",
                     conversationId, character.getId(), triggerHint);

@@ -1,11 +1,13 @@
 package com.sanyan.service;
 
+import com.sanyan.dto.ws.SenderType;
 import com.sanyan.entity.Message;
 import com.sanyan.repository.MessageRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -33,7 +35,7 @@ class ProactiveServiceTest {
     @Mock private PushService pushService;
     @Mock private TtsService ttsService;
     @Mock private CosService cosService;
-    @Mock private ObjectMapper objectMapper;
+    @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks private ProactiveService proactiveService;
 
@@ -50,7 +52,7 @@ class ProactiveServiceTest {
     @Test
     void shouldCheckLastProactiveUnanswered() {
         Message lastMsg = new Message();
-        lastMsg.setSenderType("ai");
+        lastMsg.setSenderType(SenderType.AI);
         lastMsg.setSource("proactive");
         when(messageRepository.findByConversationIdOrderByIdDesc(eq(100L), any()))
                 .thenReturn(List.of(lastMsg));
@@ -61,7 +63,7 @@ class ProactiveServiceTest {
     @Test
     void shouldNotFlagWhenUserReplied() {
         Message lastMsg = new Message();
-        lastMsg.setSenderType("user");
+        lastMsg.setSenderType(SenderType.USER);
         lastMsg.setSource("reply");
         when(messageRepository.findByConversationIdOrderByIdDesc(eq(100L), any()))
                 .thenReturn(List.of(lastMsg));
@@ -96,7 +98,7 @@ class ProactiveServiceTest {
         // AI 返回纯标签内容（TextProcessor 清洗后会变成空）
         com.sanyan.entity.AiCharacter character = new com.sanyan.entity.AiCharacter();
         character.setId(99L);
-        character.setProactiveConfig(""); // 走默认配置
+        character.setProactiveConfig(null);
         when(aiService.chatProactive(any(), eq(100L), anyString()))
                 .thenReturn("（在云端轻轻点了点头）[emotion:neutral:1]");
 
@@ -108,8 +110,9 @@ class ProactiveServiceTest {
         proactiveService.sendProactiveMessage(conv, character, "test trigger");
 
         // 等待 CompletableFuture.runAsync 异步完成
-        java.util.concurrent.ForkJoinPool.commonPool()
+        boolean quiesced = java.util.concurrent.ForkJoinPool.commonPool()
                 .awaitQuiescence(2, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(quiesced).as("async task should complete within 2s").isTrue();
 
         // 关键断言：messageRepository.save 一次都没被调用
         verify(messageRepository, never()).save(any());
