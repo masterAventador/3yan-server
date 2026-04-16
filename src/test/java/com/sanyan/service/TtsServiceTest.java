@@ -33,7 +33,8 @@ class TtsServiceTest {
         String body = TtsService.buildRequestBody(
                 "zh_female_vv_uranus_bigtts", "别难过呀", null,
                 List.of("我今天心情不好"));
-        assertThat(body).contains("\"context_texts\":[\"我今天心情不好\"]");
+        // 豆包 TTS V3 契约：additions 必须是转义的 JSON 字符串，不是嵌套对象
+        assertThat(body).contains("\"additions\":\"{\\\"context_texts\\\":[\\\"我今天心情不好\\\"]}\"");
     }
 
     @Test
@@ -44,7 +45,7 @@ class TtsServiceTest {
                 List.of("我失恋了"));
         assertThat(body).contains("\"emotion\":\"sad\"");
         assertThat(body).contains("\"emotion_scale\":3");
-        assertThat(body).contains("\"context_texts\":[\"我失恋了\"]");
+        assertThat(body).contains("\"additions\":\"{\\\"context_texts\\\":[\\\"我失恋了\\\"]}\"");
         assertThat(body).contains("\"text\":\"没事的\"");
     }
 }
