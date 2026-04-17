@@ -8,7 +8,8 @@ import java.util.regex.Pattern;
 public class TextProcessor {
 
     private static final Pattern ACTION_PATTERN = Pattern.compile("（([^）]+)）");
-    private static final Pattern EMOTION_PATTERN = Pattern.compile("\\[emotion:(\\w+):(\\d)\\]");
+    // type 允许任意非冒号/右括号字符（包含中文），避免 AI 返回如 [emotion:担心:2] 时正则失配
+    private static final Pattern EMOTION_PATTERN = Pattern.compile("\\[emotion:([^:\\]]+):(\\d)\\]");
 
     public record ExtractResult(String cleanText, List<String> actions, EmotionTag emotion) {}
 

@@ -131,6 +131,31 @@ public class TtsService {
         return result;
     }
 
+    private static final java.util.Set<String> SUPPORTED_EMOTIONS = java.util.Set.of(
+        "happy", "sad", "angry", "fear", "surprise", "neutral"
+    );
+
+    private static final java.util.Map<String, String> EMOTION_ALIAS = java.util.Map.of(
+        "担心", "fear",
+        "开心", "happy",
+        "难过", "sad",
+        "生气", "angry",
+        "惊讶", "surprise",
+        "平静", "neutral"
+    );
+
+    /**
+     * 把 AI 有时返回的中文 emotion 或非白名单 type 归一化到豆包 TTS 支持的英文 type。
+     * 未知类型一律降级为 neutral，避免 TTS 接口报错。
+     */
+    static String normalizeEmotionType(String type) {
+        if (type == null) return "neutral";
+        final String lower = type.toLowerCase();
+        if (SUPPORTED_EMOTIONS.contains(lower)) return lower;
+        final String mapped = EMOTION_ALIAS.get(type);
+        return mapped != null ? mapped : "neutral";
+    }
+
     /**
      * Build V3 TTS request body JSON.
      */
@@ -153,7 +178,10 @@ public class TtsService {
         audioParams.put("sample_rate", 24000);
         audioParams.put("loudness_rate", 50); // 提高音频响度（范围 -50 ~ 100）
         if (emotion != null) {
-            audioParams.put("emotion", emotion.type());
+            // 豆包 TTS 只认白名单内的英文 emotion type，AI 偶尔会返回中文（如"担心"），
+            // 映射为兼容类型避免 TTS 接口报错。
+            String safeType = normalizeEmotionType(emotion.type());
+            audioParams.put("emotion", safeType);
             audioParams.put("emotion_scale", emotion.scale());
         }
         reqParams.put("audio_params", audioParams);
