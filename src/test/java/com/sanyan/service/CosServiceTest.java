@@ -19,8 +19,14 @@ class CosServiceTest {
 
     @Test
     void buildObjectKeyForUserVoice_returnsCorrectPath() {
-        String key = CosService.buildUserVoiceKey(1L, "abc123");
+        String key = CosService.buildUserVoiceKey(1L, "abc123", "wav");
         assertThat(key).startsWith("voice/user/1/");
+        assertThat(key).endsWith("_abc123.wav");
+    }
+
+    @Test
+    void buildObjectKeyForUserVoice_honorsExtension() {
+        String key = CosService.buildUserVoiceKey(1L, "abc123", "m4a");
         assertThat(key).endsWith("_abc123.m4a");
     }
 }

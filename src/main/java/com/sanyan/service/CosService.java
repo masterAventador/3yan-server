@@ -66,8 +66,8 @@ public class CosService {
         return "voice/ai/" + conversationId + "/" + messageId + ".mp3";
     }
 
-    public static String buildUserVoiceKey(Long userId, String uuid) {
-        return "voice/user/" + userId + "/" + System.currentTimeMillis() + "_" + uuid + ".m4a";
+    public static String buildUserVoiceKey(Long userId, String uuid, String ext) {
+        return "voice/user/" + userId + "/" + System.currentTimeMillis() + "_" + uuid + "." + ext;
     }
 
     public static String buildCosUrl(String bucket, String region, String key) {
