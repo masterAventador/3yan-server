@@ -101,6 +101,8 @@ public class MessageService {
                 aiMsg.setContentType(MessageContentType.VOICE);
                 aiMsg.setContent(messageContent);
                 aiMsg.setSource("reply");
+                // 估算语音时长：中文 TTS 约 5 字/秒，至少 1 秒、最多 60 秒
+                aiMsg.setDuration(estimateVoiceDuration(messageContent));
                 messageRepository.save(aiMsg);
 
                 String cosKey = CosService.buildAiVoiceKey(conversationId, aiMsg.getId());
@@ -214,6 +216,16 @@ public class MessageService {
         }
         Collections.reverse(messages);
         return messages;
+    }
+
+    /**
+     * 按文本长度估算 TTS 语音时长（秒）。
+     * 中文语速约 5 字/秒，截断到 [1, 60]。
+     */
+    static int estimateVoiceDuration(String text) {
+        if (text == null || text.isBlank()) return 1;
+        int seconds = Math.max(1, Math.round(text.length() / 5.0f));
+        return Math.min(60, seconds);
     }
 
     public MessageData toData(Message msg) {
