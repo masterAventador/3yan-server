@@ -1,7 +1,6 @@
 package com.sanyan.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.util.TextProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,15 +39,16 @@ public class TtsService {
 
     /**
      * Synthesize speech using V3 HTTP Chunked API.
+     * {@code ttsStyle} 是自然语言风格指令（如"用温柔心疼的语气"），会塞进 context_texts[0]。
      * Returns MP3 audio bytes, or null on failure.
      */
-    public byte[] synthesize(String text, TextProcessor.EmotionTag emotion, List<String> contextTexts) {
+    public byte[] synthesize(String text, String ttsStyle) {
         if (text == null || text.isBlank()) {
             return null;
         }
 
         try {
-            String requestBody = buildRequestBody(voiceType, text, emotion, contextTexts);
+            String requestBody = buildRequestBody(voiceType, text, ttsStyle);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -58,10 +58,9 @@ public class TtsService {
 
             HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
 
-            log.info("TTS V3 请求: textLength={}, emotion={}, contextTexts={}",
+            log.info("TTS V3 请求: textLength={}, ttsStyle={}",
                     text.length(),
-                    emotion != null ? emotion.type() + ":" + emotion.scale() : "none",
-                    contextTexts != null ? contextTexts.size() : 0);
+                    ttsStyle == null || ttsStyle.isBlank() ? "none" : ttsStyle);
             long start = System.currentTimeMillis();
 
             ResponseEntity<String> response = restTemplate.exchange(
@@ -70,7 +69,6 @@ public class TtsService {
             long elapsed = System.currentTimeMillis() - start;
             log.info("TTS V3 响应: status={}, 耗时={}ms", response.getStatusCode(), elapsed);
 
-            // V3 response is chunked: multiple JSON lines, collect all base64 data
             return parseChunkedResponse(response.getBody());
 
         } catch (Exception e) {
@@ -89,7 +87,6 @@ public class TtsService {
 
         ByteArrayOutputStream audioStream = new ByteArrayOutputStream();
 
-        // Response contains multiple JSON objects, one per line
         for (String line : responseBody.split("\n")) {
             String trimmed = line.trim();
             if (trimmed.isEmpty() || !trimmed.startsWith("{")) {
@@ -101,20 +98,17 @@ public class TtsService {
 
             int code = chunk.get("code") instanceof Number ? ((Number) chunk.get("code")).intValue() : 0;
 
-            // code 20000000 = session finished successfully
             if (code == 20000000) {
                 log.info("TTS V3 合成完成");
                 break;
             }
 
-            // code != 0 and not success = error
             if (code != 0) {
                 String message = (String) chunk.get("message");
                 log.error("TTS V3 错误: code={}, message={}", code, message);
                 return null;
             }
 
-            // Collect base64 audio data
             String audioBase64 = (String) chunk.get("data");
             if (audioBase64 != null && !audioBase64.isEmpty()) {
                 audioStream.write(Base64.getDecoder().decode(audioBase64));
@@ -131,66 +125,30 @@ public class TtsService {
         return result;
     }
 
-    private static final java.util.Set<String> SUPPORTED_EMOTIONS = java.util.Set.of(
-        "happy", "sad", "angry", "fear", "surprise", "neutral"
-    );
-
-    private static final java.util.Map<String, String> EMOTION_ALIAS = java.util.Map.of(
-        "担心", "fear",
-        "开心", "happy",
-        "难过", "sad",
-        "生气", "angry",
-        "惊讶", "surprise",
-        "平静", "neutral"
-    );
-
-    /**
-     * 把 AI 有时返回的中文 emotion 或非白名单 type 归一化到豆包 TTS 支持的英文 type。
-     * 未知类型一律降级为 neutral，避免 TTS 接口报错。
-     */
-    static String normalizeEmotionType(String type) {
-        if (type == null) return "neutral";
-        final String lower = type.toLowerCase();
-        if (SUPPORTED_EMOTIONS.contains(lower)) return lower;
-        final String mapped = EMOTION_ALIAS.get(type);
-        return mapped != null ? mapped : "neutral";
-    }
-
     /**
      * Build V3 TTS request body JSON.
+     * {@code ttsStyle} 非空时塞进 additions.context_texts[0]（豆包约定只读第一个元素）。
      */
-    public static String buildRequestBody(String speaker, String text,
-                                           TextProcessor.EmotionTag emotion,
-                                           List<String> contextTexts) {
+    public static String buildRequestBody(String speaker, String text, String ttsStyle) {
         Map<String, Object> body = new LinkedHashMap<>();
 
-        // user
         body.put("user", Map.of("uid", "sanyan_server"));
 
-        // req_params
         Map<String, Object> reqParams = new LinkedHashMap<>();
         reqParams.put("text", text);
         reqParams.put("speaker", speaker);
 
-        // audio_params
         Map<String, Object> audioParams = new LinkedHashMap<>();
         audioParams.put("format", "mp3");
         audioParams.put("sample_rate", 24000);
         audioParams.put("loudness_rate", 50); // 提高音频响度（范围 -50 ~ 100）
-        if (emotion != null) {
-            // 豆包 TTS 只认白名单内的英文 emotion type，AI 偶尔会返回中文（如"担心"），
-            // 映射为兼容类型避免 TTS 接口报错。
-            String safeType = normalizeEmotionType(emotion.type());
-            audioParams.put("emotion", safeType);
-            audioParams.put("emotion_scale", emotion.scale());
-        }
         reqParams.put("audio_params", audioParams);
 
-        // additions must be a JSON string, not an object
-        if (contextTexts != null && !contextTexts.isEmpty()) {
+        // additions 必须是转义的 JSON 字符串，不是嵌套对象
+        if (ttsStyle != null && !ttsStyle.isBlank()) {
             try {
                 Map<String, Object> additionsMap = new LinkedHashMap<>();
-                additionsMap.put("context_texts", contextTexts);
+                additionsMap.put("context_texts", List.of(ttsStyle));
                 reqParams.put("additions", new ObjectMapper().writeValueAsString(additionsMap));
             } catch (Exception ignored) {}
         }

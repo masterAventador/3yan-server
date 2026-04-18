@@ -107,7 +107,7 @@ public class ProactiveService {
                     return;
                 }
 
-                // Extract emotion tags and action descriptions
+                // Extract tts_style + action descriptions
                 var extracted = TextProcessor.extract(aiReply);
                 String cleanContent = extracted.cleanText();
 
@@ -126,7 +126,7 @@ public class ProactiveService {
 
                 // TTS flow
                 if (ttsService.isEnabled()) {
-                    byte[] audioData = ttsService.synthesize(cleanContent, extracted.emotion(), null);
+                    byte[] audioData = ttsService.synthesize(cleanContent, extracted.ttsStyle());
                     if (audioData != null) {
                         proactiveMsg.setContentType(MessageContentType.VOICE);
                         proactiveMsg.setContent(cleanContent);

@@ -8,37 +8,40 @@ import java.util.regex.Pattern;
 public class TextProcessor {
 
     private static final Pattern ACTION_PATTERN = Pattern.compile("（([^）]+)）");
-    // type 允许任意非冒号/右括号字符（包含中文），避免 AI 返回如 [emotion:担心:2] 时正则失配
-    private static final Pattern EMOTION_PATTERN = Pattern.compile("\\[emotion:([^:\\]]+):(\\d)\\]");
+    // AI 在回复末尾附加的 TTS 合成风格指令（自然语言），传给豆包 TTS 的 context_texts[0]
+    private static final Pattern TTS_STYLE_PATTERN = Pattern.compile("\\[tts_style:([^\\]]+)\\]");
+    // 旧的情感枚举标签，保留匹配仅用于从文本里剔除，不再提取语义
+    private static final Pattern LEGACY_EMOTION_PATTERN =
+            Pattern.compile("\\[emotion:[^:\\]]+:\\d\\]");
 
-    public record ExtractResult(String cleanText, List<String> actions, EmotionTag emotion) {}
-
-    public record EmotionTag(String type, int scale) {}
+    public record ExtractResult(String cleanText, List<String> actions, String ttsStyle) {}
 
     public static ExtractResult extract(String text) {
         if (text == null || text.isEmpty()) {
             return new ExtractResult("", List.of(), null);
         }
 
-        // 1. Extract emotion tag from end of text
-        EmotionTag emotion = null;
-        Matcher emotionMatcher = EMOTION_PATTERN.matcher(text);
-        String textWithoutEmotion = text;
-        while (emotionMatcher.find()) {
-            emotion = new EmotionTag(emotionMatcher.group(1), Integer.parseInt(emotionMatcher.group(2)));
+        // 1. Extract TTS style instruction（取最后一个匹配，允许前面的被覆盖）
+        String ttsStyle = null;
+        Matcher styleMatcher = TTS_STYLE_PATTERN.matcher(text);
+        while (styleMatcher.find()) {
+            ttsStyle = styleMatcher.group(1).trim();
         }
-        textWithoutEmotion = EMOTION_PATTERN.matcher(text).replaceAll("").trim();
+        String stripped = TTS_STYLE_PATTERN.matcher(text).replaceAll("");
 
-        // 2. Extract action descriptions
+        // 2. Strip legacy [emotion:xxx:N] tags（兼容历史数据，不再提取语义）
+        stripped = LEGACY_EMOTION_PATTERN.matcher(stripped).replaceAll("").trim();
+
+        // 3. Extract action descriptions（中文括号）
         List<String> actions = new ArrayList<>();
         StringBuffer sb = new StringBuffer();
-        Matcher actionMatcher = ACTION_PATTERN.matcher(textWithoutEmotion);
+        Matcher actionMatcher = ACTION_PATTERN.matcher(stripped);
         while (actionMatcher.find()) {
             actions.add(actionMatcher.group(1));
             actionMatcher.appendReplacement(sb, "");
         }
         actionMatcher.appendTail(sb);
 
-        return new ExtractResult(sb.toString(), List.copyOf(actions), emotion);
+        return new ExtractResult(sb.toString(), List.copyOf(actions), ttsStyle);
     }
 }
