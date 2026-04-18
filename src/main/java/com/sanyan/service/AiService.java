@@ -199,6 +199,15 @@ public class AiService {
      * Call doubao API (OpenAI-compatible chat completion)
      */
     public String callDoubao(String systemPrompt, List<MemorySummary> summaries, List<Message> messages) {
+        return callDoubaoRaw(buildChatMessages(systemPrompt, summaries, messages));
+    }
+
+    /**
+     * Assemble chat messages for doubao request. AI 历史消息末尾会拼回 [tts_style:...]，
+     * 让下一轮 AI 能看到自己之前的语气选择，做情绪连贯过渡（或刻意对比）。
+     */
+    static List<Map<String, String>> buildChatMessages(
+            String systemPrompt, List<MemorySummary> summaries, List<Message> messages) {
         List<Map<String, String>> chatMessages = new ArrayList<>();
         chatMessages.add(Map.of("role", "system", "content", systemPrompt));
 
@@ -212,12 +221,16 @@ public class AiService {
 
         if (messages != null) {
             for (Message msg : messages) {
-                String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
-                chatMessages.add(Map.of("role", role, "content", msg.getContent()));
+                boolean isUser = SenderType.USER.equals(msg.getSenderType());
+                String role = isUser ? "user" : "assistant";
+                String content = msg.getContent() == null ? "" : msg.getContent();
+                if (!isUser && msg.getTtsStyle() != null && !msg.getTtsStyle().isBlank()) {
+                    content = content + "[tts_style:" + msg.getTtsStyle() + "]";
+                }
+                chatMessages.add(Map.of("role", role, "content", content));
             }
         }
-
-        return callDoubaoRaw(chatMessages);
+        return chatMessages;
     }
 
     /**

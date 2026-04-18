@@ -98,6 +98,49 @@ class AiServiceTest {
     }
 
     @Test
+    void buildChatMessages_appendsTtsStyleToAssistantContent() {
+        com.sanyan.entity.Message aiMsg = new com.sanyan.entity.Message();
+        aiMsg.setSenderType("ai");
+        aiMsg.setContent("嗯……你猜？");
+        aiMsg.setTtsStyle("有点调皮的感觉，声音上扬");
+
+        com.sanyan.entity.Message userMsg = new com.sanyan.entity.Message();
+        userMsg.setSenderType("user");
+        userMsg.setContent("想我了没");
+
+        List<Map<String, String>> chat = AiService.buildChatMessages(
+                "你是小婉", List.of(), List.of(aiMsg, userMsg));
+
+        // system + 2 history
+        assertThat(chat).hasSize(3);
+        assertThat(chat.get(0).get("role")).isEqualTo("system");
+
+        // AI 消息应该把 tts_style 拼回去，让下一轮 AI 看到自己的语气
+        assertThat(chat.get(1).get("role")).isEqualTo("assistant");
+        assertThat(chat.get(1).get("content"))
+                .isEqualTo("嗯……你猜？[tts_style:有点调皮的感觉，声音上扬]");
+
+        // 用户消息不应该被加任何后缀
+        assertThat(chat.get(2).get("role")).isEqualTo("user");
+        assertThat(chat.get(2).get("content")).isEqualTo("想我了没");
+    }
+
+    @Test
+    void buildChatMessages_aiWithoutTtsStyle_contentStaysClean() {
+        // 历史 AI 消息（TTS 失败降级为文字、或旧数据）没有 ttsStyle，不该拼空标签
+        com.sanyan.entity.Message aiMsg = new com.sanyan.entity.Message();
+        aiMsg.setSenderType("ai");
+        aiMsg.setContent("这是没有 style 的回复");
+        aiMsg.setTtsStyle(null);
+
+        List<Map<String, String>> chat = AiService.buildChatMessages(
+                "sys", List.of(), List.of(aiMsg));
+
+        assertThat(chat.get(1).get("content")).isEqualTo("这是没有 style 的回复");
+        assertThat(chat.get(1).get("content")).doesNotContain("[tts_style");
+    }
+
+    @Test
     void chat_shouldReturnFallbackString_whenDoubaoFallsBack() throws Exception {
         // 验证 chat 链路（用户主动发消息）保持原行为：失败时返回兜底文案
         when(memoryProfileRepo.findByConversationId(1L)).thenReturn(java.util.Optional.empty());

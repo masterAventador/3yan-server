@@ -130,6 +130,7 @@ public class ProactiveService {
                     if (audioData != null) {
                         proactiveMsg.setContentType(MessageContentType.VOICE);
                         proactiveMsg.setContent(cleanContent);
+                        proactiveMsg.setTtsStyle(extracted.ttsStyle());
                         proactiveMsg.setDuration(MessageService.estimateVoiceDuration(cleanContent));
                         messageRepository.save(proactiveMsg);
 

@@ -97,6 +97,7 @@ public class MessageService {
                 aiMsg.setSenderType(SenderType.AI);
                 aiMsg.setContentType(MessageContentType.VOICE);
                 aiMsg.setContent(messageContent);
+                aiMsg.setTtsStyle(extracted.ttsStyle());
                 aiMsg.setSource("reply");
                 // 估算语音时长：中文 TTS 约 5 字/秒，至少 1 秒、最多 60 秒
                 aiMsg.setDuration(estimateVoiceDuration(messageContent));

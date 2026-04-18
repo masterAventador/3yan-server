@@ -26,6 +26,10 @@ public class Message {
     private Integer duration;
     @Column(nullable = false, length = 10)
     private String source; // reply / proactive
+    // AI 语音消息对应的 TTS 风格指令（[tts_style:...] 标签里的自然语言）。
+    // 下一轮 AI 对话时拼回历史消息末尾，用于维持情绪连贯性。
+    @Column(length = 500)
+    private String ttsStyle;
     @CreationTimestamp
     private LocalDateTime createdAt;
 }
