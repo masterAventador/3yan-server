@@ -93,6 +93,9 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
             } catch (Exception e) {
                 log.error("处理用户消息失败, userId={}", userId, e);
+                WsError err = new WsError(wsMsg.getClientMsgId(), wsMsg.getConversationId(),
+                        "消息处理失败，请稍后重试");
+                sendObject(session, err);
             }
         });
     }
