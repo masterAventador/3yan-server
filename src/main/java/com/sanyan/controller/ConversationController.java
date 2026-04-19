@@ -3,7 +3,6 @@ package com.sanyan.controller;
 import com.sanyan.dto.ApiResponse;
 import com.sanyan.dto.data.ConversationData;
 import com.sanyan.dto.data.MessageData;
-import com.sanyan.entity.Conversation;
 import com.sanyan.entity.Message;
 import com.sanyan.repository.ConversationRepository;
 import com.sanyan.service.MessageService;
@@ -37,13 +36,13 @@ public class ConversationController {
             @RequestParam(defaultValue = "20") int limit,
             HttpServletRequest request) {
         Long userId = getUserId(request);
-        Conversation conv = conversationRepository.findById(id).orElse(null);
-        if (conv == null || !conv.getUserId().equals(userId)) {
-            return ApiResponse.fail("会话不存在");
+        try {
+            List<Message> messages = messageService.getHistoryMessages(userId, id, beforeId, limit);
+            List<MessageData> data = messages.stream().map(messageService::toData).toList();
+            return ApiResponse.ok(data);
+        } catch (IllegalArgumentException | SecurityException e) {
+            return ApiResponse.fail(e.getMessage());
         }
-        List<Message> messages = messageService.getHistoryMessages(id, beforeId, limit);
-        List<MessageData> data = messages.stream().map(messageService::toData).toList();
-        return ApiResponse.ok(data);
     }
 
     @PostMapping("/{id}/read")

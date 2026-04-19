@@ -104,7 +104,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
         Map<Long, List<MessageData>> conversationMessages = new LinkedHashMap<>();
         for (ConversationData conv : conversations) {
             List<Message> messages = messageService.syncMessages(
-                    conv.getId(), wsMsg.getLastMsgId(), 50);
+                    userId, conv.getId(), wsMsg.getLastMsgId(), 50);
             if (!messages.isEmpty()) {
                 conversationMessages.put(conv.getId(),
                         messages.stream().map(messageService::toData).toList());

@@ -191,9 +191,15 @@ public class MessageService {
     /**
      * Sync messages after given message ID
      */
-    public List<Message> syncMessages(Long conversationId, Long afterMsgId, int limit) {
+    public List<Message> syncMessages(Long userId, Long conversationId, Long afterMsgId, int limit) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        if (!conv.getUserId().equals(userId)) {
+            throw new SecurityException("无权访问该会话");
+        }
         if (afterMsgId == null || afterMsgId <= 0) {
-            List<Message> messages = messageRepository.findByConversationIdOrderByIdDesc(conversationId, PageRequest.of(0, limit));
+            List<Message> messages = messageRepository.findByConversationIdOrderByIdDesc(
+                    conversationId, PageRequest.of(0, limit));
             Collections.reverse(messages);
             return messages;
         }
@@ -204,7 +210,12 @@ public class MessageService {
     /**
      * Get history messages before given message ID (cursor pagination)
      */
-    public List<Message> getHistoryMessages(Long conversationId, Long beforeMsgId, int limit) {
+    public List<Message> getHistoryMessages(Long userId, Long conversationId, Long beforeMsgId, int limit) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        if (!conv.getUserId().equals(userId)) {
+            throw new SecurityException("无权访问该会话");
+        }
         List<Message> messages;
         if (beforeMsgId == null || beforeMsgId <= 0) {
             messages = messageRepository.findByConversationIdOrderByIdDesc(conversationId, PageRequest.of(0, limit));
