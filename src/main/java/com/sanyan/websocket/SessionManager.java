@@ -9,6 +9,22 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * WebSocket 在线用户管理。
+ *
+ * <p><b>⚠️ 单实例部署前提：</b>真正的 {@link WebSocketSession} 只存在
+ * 本进程的 {@link #sessions} 内存 Map。多实例部署时，{@link #isOnline}
+ * 虽然依赖 Redis 跨实例可见，但 {@link #getSession} 只能在当前进程命中，
+ * 无法把消息推给别的实例持有的连接（会造成主动消息丢失）。
+ *
+ * <p>TODO（多实例化改造）：
+ * <ul>
+ *   <li>方案 A：Redis Pub/Sub — 每个实例订阅 {@code ws:push:{userId}} 频道，
+ *       需要下行消息时对应实例把自己持有的 session 写入。</li>
+ *   <li>方案 B：在 Redis 记录 userId → instanceId 映射，通过 HTTP/RPC 路由到
+ *       正确实例。</li>
+ * </ul>
+ */
 @Component
 @RequiredArgsConstructor
 public class SessionManager {
