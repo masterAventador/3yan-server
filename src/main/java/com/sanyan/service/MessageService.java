@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -42,6 +43,7 @@ public class MessageService {
     /**
      * Handle user message: save user msg, call AI, save AI reply, return AI Message
      */
+    @Transactional
     public Message handleUserMessage(Long userId, Long conversationId, String contentType, String content,
                                       String mediaUrl, Integer duration) {
         Conversation conv = conversationRepository.findById(conversationId)
