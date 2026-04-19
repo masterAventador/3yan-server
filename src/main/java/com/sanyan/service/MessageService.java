@@ -21,7 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -171,11 +174,27 @@ public class MessageService {
     }
 
     /**
-     * Get user's conversations with character info
+     * Get user's conversations with character info.
+     * 批量查询角色与最后一条消息，避免 N+1。
      */
     public List<ConversationData> getUserConversations(Long userId) {
         List<Conversation> conversations = conversationRepository.findByUserIdOrderByLastMessageAtDesc(userId);
-        return conversations.stream().map(this::toConversationData).toList();
+        if (conversations.isEmpty()) return List.of();
+
+        Set<Long> charIds = conversations.stream()
+                .map(Conversation::getCharacterId).collect(Collectors.toSet());
+        Set<Long> convIds = conversations.stream()
+                .map(Conversation::getId).collect(Collectors.toSet());
+
+        Map<Long, AiCharacter> charMap = characterRepository.findAllById(charIds).stream()
+                .collect(Collectors.toMap(AiCharacter::getId, c -> c));
+        Map<Long, Message> lastMsgMap = messageRepository.findLastMessagePerConversation(convIds).stream()
+                .collect(Collectors.toMap(Message::getConversationId, m -> m));
+
+        return conversations.stream()
+                .map(conv -> toConversationData(conv, charMap.get(conv.getCharacterId()),
+                        lastMsgMap.get(conv.getId())))
+                .toList();
     }
 
     /**
@@ -261,26 +280,19 @@ public class MessageService {
         return d;
     }
 
-    private ConversationData toConversationData(Conversation conv) {
+    private ConversationData toConversationData(Conversation conv, AiCharacter character, Message lastMessage) {
         ConversationData d = new ConversationData();
         d.setId(conv.getId());
         d.setCharacterId(conv.getCharacterId());
         d.setLastMessageAt(conv.getLastMessageAt());
         d.setUnreadCount(conv.getUnreadCount());
-
-        // Fill character info
-        characterRepository.findById(conv.getCharacterId()).ifPresent(c -> {
-            d.setCharacterName(c.getName());
-            d.setCharacterAvatar(c.getAvatar());
-        });
-
-        // Fill last message preview
-        List<Message> lastMsgs = messageRepository.findByConversationIdOrderByIdDesc(
-                conv.getId(), PageRequest.of(0, 1));
-        if (!lastMsgs.isEmpty()) {
-            d.setLastMessage(lastMsgs.get(0).getContent());
+        if (character != null) {
+            d.setCharacterName(character.getName());
+            d.setCharacterAvatar(character.getAvatar());
         }
-
+        if (lastMessage != null) {
+            d.setLastMessage(lastMessage.getContent());
+        }
         return d;
     }
 }
