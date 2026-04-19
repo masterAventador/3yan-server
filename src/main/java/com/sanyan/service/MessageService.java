@@ -136,7 +136,7 @@ public class MessageService {
         var extracted = TextProcessor.extract(aiReply);
         Message aiMsg = new Message();
         aiMsg.setConversationId(conversationId);
-        aiMsg.setSenderType("ai");
+        aiMsg.setSenderType(SenderType.AI);
         aiMsg.setContentType(MessageContentType.TEXT);
         aiMsg.setContent(extracted.cleanText());
         aiMsg.setSource("reply");
