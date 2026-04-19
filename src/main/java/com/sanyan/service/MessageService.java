@@ -33,6 +33,8 @@ public class MessageService {
 
     private static final String ERR_CONVERSATION_NOT_FOUND = "会话不存在";
     private static final String ERR_FORBIDDEN_CONVERSATION = "无权访问该会话";
+    private static final String FALLBACK_ASR_FAILED = "asr_failed";
+    private static final String FALLBACK_TTS_FAILED = "tts_failed";
 
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
@@ -69,6 +71,7 @@ public class MessageService {
                 .orElseThrow(() -> new RuntimeException("角色不存在"));
         log.info("调用豆包 AI: convId={}, character={}", conversationId, character.getName());
         String aiReply;
+        String fallbackReason = null;
         if (MessageContentType.VOICE.equals(contentType)) {
             // 尝试 ASR 转写
             String transcribedText = asrService.isEnabled()
@@ -85,6 +88,7 @@ public class MessageService {
             } else {
                 // ASR 失败或静音：降级到 chatVoiceAck
                 log.info("ASR 失败或静音，降级为 chatVoiceAck: convId={}", conversationId);
+                fallbackReason = FALLBACK_ASR_FAILED;
                 aiReply = aiService.chatVoiceAck(character, conversationId);
             }
         } else {
@@ -106,6 +110,7 @@ public class MessageService {
                 aiMsg.setContentType(MessageContentType.VOICE);
                 aiMsg.setContent(messageContent);
                 aiMsg.setTtsStyle(extracted.ttsStyle());
+                aiMsg.setFallbackReason(fallbackReason);
                 aiMsg.setSource("reply");
                 // 估算语音时长：中文 TTS 约 5 字/秒，至少 1 秒、最多 60 秒
                 aiMsg.setDuration(estimateVoiceDuration(messageContent));
@@ -132,6 +137,7 @@ public class MessageService {
             }
             // TTS failed, fall through to text mode
             log.warn("TTS 合成失败，降级为文字消息: convId={}", conversationId);
+            fallbackReason = FALLBACK_TTS_FAILED;
         }
 
         // Text message (TTS disabled or degraded)
@@ -142,6 +148,7 @@ public class MessageService {
         aiMsg.setSenderType(SenderType.AI);
         aiMsg.setContentType(MessageContentType.TEXT);
         aiMsg.setContent(extracted.cleanText());
+        aiMsg.setFallbackReason(fallbackReason);
         aiMsg.setSource("reply");
         messageRepository.save(aiMsg);
         log.info("AI 回复已保存: convId={}, msgId={}", conversationId, aiMsg.getId());
@@ -276,6 +283,7 @@ public class MessageService {
         d.setSource(msg.getSource());
         d.setMediaUrl(msg.getMediaUrl());
         d.setDuration(msg.getDuration());
+        d.setFallbackReason(msg.getFallbackReason());
         d.setCreatedAt(msg.getCreatedAt());
         return d;
     }
