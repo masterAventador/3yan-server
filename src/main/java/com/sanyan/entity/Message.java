@@ -8,7 +8,8 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "message", indexes = {
-    @Index(name = "idx_message_conversation", columnList = "conversationId,id")
+    @Index(name = "idx_message_conversation", columnList = "conversationId,id"),
+    @Index(name = "idx_message_created_at", columnList = "createdAt")
 })
 public class Message {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
