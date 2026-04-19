@@ -103,11 +103,16 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
         Map<Long, List<MessageData>> conversationMessages = new LinkedHashMap<>();
         for (ConversationData conv : conversations) {
-            List<Message> messages = messageService.syncMessages(
-                    userId, conv.getId(), wsMsg.getLastMsgId(), 50);
-            if (!messages.isEmpty()) {
-                conversationMessages.put(conv.getId(),
-                        messages.stream().map(messageService::toData).toList());
+            try {
+                List<Message> messages = messageService.syncMessages(
+                        userId, conv.getId(), wsMsg.getLastMsgId(), 50);
+                if (!messages.isEmpty()) {
+                    conversationMessages.put(conv.getId(),
+                            messages.stream().map(messageService::toData).toList());
+                }
+            } catch (IllegalArgumentException e) {
+                log.warn("syncMessages 跳过会话 convId={}, userId={}, reason={}",
+                        conv.getId(), userId, e.getMessage());
             }
         }
 

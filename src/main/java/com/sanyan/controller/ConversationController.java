@@ -40,7 +40,7 @@ public class ConversationController {
             List<Message> messages = messageService.getHistoryMessages(userId, id, beforeId, limit);
             List<MessageData> data = messages.stream().map(messageService::toData).toList();
             return ApiResponse.ok(data);
-        } catch (IllegalArgumentException | SecurityException e) {
+        } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         }
     }

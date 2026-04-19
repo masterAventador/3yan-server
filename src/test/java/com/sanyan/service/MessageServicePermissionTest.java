@@ -30,14 +30,14 @@ class MessageServicePermissionTest {
     @InjectMocks MessageService service;
 
     @Test
-    void getHistoryMessages_whenUserNotOwner_throwsForbidden() {
+    void getHistoryMessages_whenUserNotOwner_throwsIllegalArgument() {
         Conversation conv = new Conversation();
         conv.setId(10L);
         conv.setUserId(1L);
         when(conversationRepository.findById(10L)).thenReturn(Optional.of(conv));
 
         assertThatThrownBy(() -> service.getHistoryMessages(2L, 10L, null, 20))
-                .isInstanceOf(SecurityException.class)
+                .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("无权访问");
     }
 
@@ -48,5 +48,17 @@ class MessageServicePermissionTest {
         assertThatThrownBy(() -> service.getHistoryMessages(1L, 99L, null, 20))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("会话不存在");
+    }
+
+    @Test
+    void syncMessages_whenUserNotOwner_throwsIllegalArgument() {
+        Conversation conv = new Conversation();
+        conv.setId(10L);
+        conv.setUserId(1L);
+        when(conversationRepository.findById(10L)).thenReturn(Optional.of(conv));
+
+        assertThatThrownBy(() -> service.syncMessages(2L, 10L, null, 50))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("无权访问");
     }
 }

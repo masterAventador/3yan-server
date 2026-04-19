@@ -27,6 +27,9 @@ import java.util.concurrent.ThreadLocalRandom;
 @RequiredArgsConstructor
 public class MessageService {
 
+    private static final String ERR_CONVERSATION_NOT_FOUND = "会话不存在";
+    private static final String ERR_FORBIDDEN_CONVERSATION = "无权访问该会话";
+
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
     private final AiCharacterRepository characterRepository;
@@ -42,7 +45,7 @@ public class MessageService {
     public Message handleUserMessage(Long userId, Long conversationId, String contentType, String content,
                                       String mediaUrl, Integer duration) {
         Conversation conv = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new RuntimeException("会话不存在"));
+                .orElseThrow(() -> new RuntimeException(ERR_CONVERSATION_NOT_FOUND));
 
         // Save user message
         Message userMsg = new Message();
@@ -192,11 +195,7 @@ public class MessageService {
      * Sync messages after given message ID
      */
     public List<Message> syncMessages(Long userId, Long conversationId, Long afterMsgId, int limit) {
-        Conversation conv = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
-        if (!conv.getUserId().equals(userId)) {
-            throw new SecurityException("无权访问该会话");
-        }
+        requireOwnedConversation(userId, conversationId);
         if (afterMsgId == null || afterMsgId <= 0) {
             List<Message> messages = messageRepository.findByConversationIdOrderByIdDesc(
                     conversationId, PageRequest.of(0, limit));
@@ -211,11 +210,7 @@ public class MessageService {
      * Get history messages before given message ID (cursor pagination)
      */
     public List<Message> getHistoryMessages(Long userId, Long conversationId, Long beforeMsgId, int limit) {
-        Conversation conv = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
-        if (!conv.getUserId().equals(userId)) {
-            throw new SecurityException("无权访问该会话");
-        }
+        requireOwnedConversation(userId, conversationId);
         List<Message> messages;
         if (beforeMsgId == null || beforeMsgId <= 0) {
             messages = messageRepository.findByConversationIdOrderByIdDesc(conversationId, PageRequest.of(0, limit));
@@ -225,6 +220,19 @@ public class MessageService {
         }
         Collections.reverse(messages);
         return messages;
+    }
+
+    /**
+     * 校验会话存在且属于该用户，返回会话实体。
+     * 不存在或非所有者均抛 IllegalArgumentException，保持与 AuthService 等的异常风格一致。
+     */
+    private Conversation requireOwnedConversation(Long userId, Long conversationId) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException(ERR_CONVERSATION_NOT_FOUND));
+        if (!conv.getUserId().equals(userId)) {
+            throw new IllegalArgumentException(ERR_FORBIDDEN_CONVERSATION);
+        }
+        return conv;
     }
 
     /**
