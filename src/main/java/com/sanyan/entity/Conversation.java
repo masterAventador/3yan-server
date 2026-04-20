@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
         @UniqueConstraint(columnNames = {"user_id", "character_id"})
     },
     indexes = {
-        @Index(name = "idx_conversation_character_id", columnList = "character_id")
+        @Index(name = "idx_conversation_character_id", columnList = "character_id"),
+        @Index(name = "idx_conversation_user_last_msg", columnList = "user_id,last_message_at")
     }
 )
 public class Conversation {

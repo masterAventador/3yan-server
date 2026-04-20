@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -58,6 +59,7 @@ public class ProactiveService {
     /**
      * Core entry: check all guards, then generate and deliver proactive message.
      */
+    @Transactional
     public void sendProactiveMessage(Conversation conv, AiCharacter character, String triggerHint) {
         Long userId = conv.getUserId();
         Long conversationId = conv.getId();

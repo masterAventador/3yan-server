@@ -16,16 +16,25 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MessageService {
+
+    private static final String ERR_CONVERSATION_NOT_FOUND = "会话不存在";
+    private static final String ERR_FORBIDDEN_CONVERSATION = "无权访问该会话";
+    private static final String FALLBACK_ASR_FAILED = "asr_failed";
+    private static final String FALLBACK_TTS_FAILED = "tts_failed";
 
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
@@ -39,10 +48,11 @@ public class MessageService {
     /**
      * Handle user message: save user msg, call AI, save AI reply, return AI Message
      */
+    @Transactional
     public Message handleUserMessage(Long userId, Long conversationId, String contentType, String content,
                                       String mediaUrl, Integer duration) {
         Conversation conv = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new RuntimeException("会话不存在"));
+                .orElseThrow(() -> new RuntimeException(ERR_CONVERSATION_NOT_FOUND));
 
         // Save user message
         Message userMsg = new Message();
@@ -61,6 +71,7 @@ public class MessageService {
                 .orElseThrow(() -> new RuntimeException("角色不存在"));
         log.info("调用豆包 AI: convId={}, character={}", conversationId, character.getName());
         String aiReply;
+        String fallbackReason = null;
         if (MessageContentType.VOICE.equals(contentType)) {
             // 尝试 ASR 转写
             String transcribedText = asrService.isEnabled()
@@ -77,6 +88,7 @@ public class MessageService {
             } else {
                 // ASR 失败或静音：降级到 chatVoiceAck
                 log.info("ASR 失败或静音，降级为 chatVoiceAck: convId={}", conversationId);
+                fallbackReason = FALLBACK_ASR_FAILED;
                 aiReply = aiService.chatVoiceAck(character, conversationId);
             }
         } else {
@@ -98,6 +110,7 @@ public class MessageService {
                 aiMsg.setContentType(MessageContentType.VOICE);
                 aiMsg.setContent(messageContent);
                 aiMsg.setTtsStyle(extracted.ttsStyle());
+                aiMsg.setFallbackReason(fallbackReason);
                 aiMsg.setSource("reply");
                 // 估算语音时长：中文 TTS 约 5 字/秒，至少 1 秒、最多 60 秒
                 aiMsg.setDuration(estimateVoiceDuration(messageContent));
@@ -124,6 +137,7 @@ public class MessageService {
             }
             // TTS failed, fall through to text mode
             log.warn("TTS 合成失败，降级为文字消息: convId={}", conversationId);
+            fallbackReason = FALLBACK_TTS_FAILED;
         }
 
         // Text message (TTS disabled or degraded)
@@ -131,9 +145,10 @@ public class MessageService {
         var extracted = TextProcessor.extract(aiReply);
         Message aiMsg = new Message();
         aiMsg.setConversationId(conversationId);
-        aiMsg.setSenderType("ai");
+        aiMsg.setSenderType(SenderType.AI);
         aiMsg.setContentType(MessageContentType.TEXT);
         aiMsg.setContent(extracted.cleanText());
+        aiMsg.setFallbackReason(fallbackReason);
         aiMsg.setSource("reply");
         messageRepository.save(aiMsg);
         log.info("AI 回复已保存: convId={}, msgId={}", conversationId, aiMsg.getId());
@@ -166,11 +181,27 @@ public class MessageService {
     }
 
     /**
-     * Get user's conversations with character info
+     * Get user's conversations with character info.
+     * 批量查询角色与最后一条消息，避免 N+1。
      */
     public List<ConversationData> getUserConversations(Long userId) {
         List<Conversation> conversations = conversationRepository.findByUserIdOrderByLastMessageAtDesc(userId);
-        return conversations.stream().map(this::toConversationData).toList();
+        if (conversations.isEmpty()) return List.of();
+
+        Set<Long> charIds = conversations.stream()
+                .map(Conversation::getCharacterId).collect(Collectors.toSet());
+        Set<Long> convIds = conversations.stream()
+                .map(Conversation::getId).collect(Collectors.toSet());
+
+        Map<Long, AiCharacter> charMap = characterRepository.findAllById(charIds).stream()
+                .collect(Collectors.toMap(AiCharacter::getId, c -> c));
+        Map<Long, Message> lastMsgMap = messageRepository.findLastMessagePerConversation(convIds).stream()
+                .collect(Collectors.toMap(Message::getConversationId, m -> m));
+
+        return conversations.stream()
+                .map(conv -> toConversationData(conv, charMap.get(conv.getCharacterId()),
+                        lastMsgMap.get(conv.getId())))
+                .toList();
     }
 
     /**
@@ -191,9 +222,11 @@ public class MessageService {
     /**
      * Sync messages after given message ID
      */
-    public List<Message> syncMessages(Long conversationId, Long afterMsgId, int limit) {
+    public List<Message> syncMessages(Long userId, Long conversationId, Long afterMsgId, int limit) {
+        requireOwnedConversation(userId, conversationId);
         if (afterMsgId == null || afterMsgId <= 0) {
-            List<Message> messages = messageRepository.findByConversationIdOrderByIdDesc(conversationId, PageRequest.of(0, limit));
+            List<Message> messages = messageRepository.findByConversationIdOrderByIdDesc(
+                    conversationId, PageRequest.of(0, limit));
             Collections.reverse(messages);
             return messages;
         }
@@ -204,7 +237,8 @@ public class MessageService {
     /**
      * Get history messages before given message ID (cursor pagination)
      */
-    public List<Message> getHistoryMessages(Long conversationId, Long beforeMsgId, int limit) {
+    public List<Message> getHistoryMessages(Long userId, Long conversationId, Long beforeMsgId, int limit) {
+        requireOwnedConversation(userId, conversationId);
         List<Message> messages;
         if (beforeMsgId == null || beforeMsgId <= 0) {
             messages = messageRepository.findByConversationIdOrderByIdDesc(conversationId, PageRequest.of(0, limit));
@@ -214,6 +248,19 @@ public class MessageService {
         }
         Collections.reverse(messages);
         return messages;
+    }
+
+    /**
+     * 校验会话存在且属于该用户，返回会话实体。
+     * 不存在或非所有者均抛 IllegalArgumentException，保持与 AuthService 等的异常风格一致。
+     */
+    private Conversation requireOwnedConversation(Long userId, Long conversationId) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException(ERR_CONVERSATION_NOT_FOUND));
+        if (!conv.getUserId().equals(userId)) {
+            throw new IllegalArgumentException(ERR_FORBIDDEN_CONVERSATION);
+        }
+        return conv;
     }
 
     /**
@@ -236,30 +283,24 @@ public class MessageService {
         d.setSource(msg.getSource());
         d.setMediaUrl(msg.getMediaUrl());
         d.setDuration(msg.getDuration());
+        d.setFallbackReason(msg.getFallbackReason());
         d.setCreatedAt(msg.getCreatedAt());
         return d;
     }
 
-    private ConversationData toConversationData(Conversation conv) {
+    private ConversationData toConversationData(Conversation conv, AiCharacter character, Message lastMessage) {
         ConversationData d = new ConversationData();
         d.setId(conv.getId());
         d.setCharacterId(conv.getCharacterId());
         d.setLastMessageAt(conv.getLastMessageAt());
         d.setUnreadCount(conv.getUnreadCount());
-
-        // Fill character info
-        characterRepository.findById(conv.getCharacterId()).ifPresent(c -> {
-            d.setCharacterName(c.getName());
-            d.setCharacterAvatar(c.getAvatar());
-        });
-
-        // Fill last message preview
-        List<Message> lastMsgs = messageRepository.findByConversationIdOrderByIdDesc(
-                conv.getId(), PageRequest.of(0, 1));
-        if (!lastMsgs.isEmpty()) {
-            d.setLastMessage(lastMsgs.get(0).getContent());
+        if (character != null) {
+            d.setCharacterName(character.getName());
+            d.setCharacterAvatar(character.getAvatar());
         }
-
+        if (lastMessage != null) {
+            d.setLastMessage(lastMessage.getContent());
+        }
         return d;
     }
 }
