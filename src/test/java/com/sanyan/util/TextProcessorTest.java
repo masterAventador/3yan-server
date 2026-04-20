@@ -3,88 +3,103 @@ package com.sanyan.util;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * doubao-seed-character 模型自带动作/神态描述，代码负责全部剥除（产品上不展示）。
+ * 默认用中文全角 （...），偶发 rogue 到半角方括号 [...] 或星号 *...*。
+ */
 class TextProcessorTest {
 
+    // ========== 动作剥除 ==========
+
     @Test
-    void extractActions_withSingleAction() {
-        var result = TextProcessor.extract("你好呀（歪头微笑）今天怎么样？");
-        assertThat(result.cleanText()).isEqualTo("你好呀今天怎么样？");
-        assertThat(result.actions()).containsExactly("歪头微笑");
-        assertThat(result.ttsStyle()).isNull();
+    void stripsFullwidthParenAction() {
+        assertThat(TextProcessor.extract("你好呀（歪头微笑）今天怎么样？").cleanText())
+                .isEqualTo("你好呀今天怎么样？");
     }
 
     @Test
-    void extractActions_withMultipleActions() {
-        var result = TextProcessor.extract("嗯（点头）我知道了（双手抱胸）");
-        assertThat(result.cleanText()).isEqualTo("嗯我知道了");
-        assertThat(result.actions()).containsExactly("点头", "双手抱胸");
+    void stripsMultipleFullwidthParenActions() {
+        assertThat(TextProcessor.extract("嗯（点头）我知道了（双手抱胸）").cleanText())
+                .isEqualTo("嗯我知道了");
     }
 
     @Test
-    void extractActions_withNoActions() {
-        var result = TextProcessor.extract("普通的回复没有动作");
-        assertThat(result.cleanText()).isEqualTo("普通的回复没有动作");
-        assertThat(result.actions()).isEmpty();
+    void stripsHalfwidthSquareBracketAction() {
+        assertThat(TextProcessor.extract("嗯……心里呀，还有……[故意停顿，轻笑着]你猜？").cleanText())
+                .isEqualTo("嗯……心里呀，还有……你猜？");
     }
 
     @Test
-    void extractActions_withEnglishParentheses_shouldNotExtract() {
-        var result = TextProcessor.extract("这是(英文括号)不提取");
-        assertThat(result.cleanText()).isEqualTo("这是(英文括号)不提取");
-        assertThat(result.actions()).isEmpty();
+    void stripsAsteriskAction() {
+        assertThat(TextProcessor.extract("让我想想*歪头*大概是这样。").cleanText())
+                .isEqualTo("让我想想大概是这样。");
     }
 
     @Test
-    void extractActions_withEmptyInput() {
-        var result = TextProcessor.extract("");
-        assertThat(result.cleanText()).isEmpty();
-        assertThat(result.actions()).isEmpty();
-        assertThat(result.ttsStyle()).isNull();
+    void stripsMixedActions() {
+        assertThat(TextProcessor.extract("哈哈哈（捂嘴笑）真的假的[惊讶]*挠头*？").cleanText())
+                .isEqualTo("哈哈哈真的假的？");
     }
 
     @Test
-    void extractActions_actionAtStartAndEnd() {
-        var result = TextProcessor.extract("（害羞地低头）谢谢你呀（开心地跳起来）");
-        assertThat(result.cleanText()).isEqualTo("谢谢你呀");
-        assertThat(result.actions()).containsExactly("害羞地低头", "开心地跳起来");
-    }
-
-    // === tts_style tag tests ===
-
-    @Test
-    void extractTtsStyle_simpleInstruction() {
-        var result = TextProcessor.extract("你好呀～[tts_style:用温柔的语气说]");
-        assertThat(result.cleanText()).isEqualTo("你好呀～");
-        assertThat(result.ttsStyle()).isEqualTo("用温柔的语气说");
+    void stripsActionsAtStartAndEnd() {
+        assertThat(TextProcessor.extract("（害羞地低头）谢谢你呀（开心地跳起来）").cleanText())
+                .isEqualTo("谢谢你呀");
     }
 
     @Test
-    void extractTtsStyle_withActionsAndStyle() {
-        var result = TextProcessor.extract("你好呀（开心地拍手）今天真开心！[tts_style:用开心雀跃的语气说]");
-        assertThat(result.cleanText()).isEqualTo("你好呀今天真开心！");
-        assertThat(result.actions()).containsExactly("开心地拍手");
-        assertThat(result.ttsStyle()).isEqualTo("用开心雀跃的语气说");
+    void noActions_textUnchanged() {
+        assertThat(TextProcessor.extract("普通的回复没有动作").cleanText())
+                .isEqualTo("普通的回复没有动作");
     }
 
     @Test
-    void extractTtsStyle_noTag() {
-        var result = TextProcessor.extract("普通回复没有 tts_style 标记");
-        assertThat(result.ttsStyle()).isNull();
+    void doesNotStripHalfwidthRoundParen() {
+        // 英文小括号在正文里合法（如 "(yes)"、"(2024)"），不能剥
+        assertThat(TextProcessor.extract("这是(英文括号)不剥").cleanText())
+                .isEqualTo("这是(英文括号)不剥");
     }
 
     @Test
-    void extractTtsStyle_arbitraryNaturalLanguage() {
-        // 任意自然语言描述都应该被支持（不受枚举限制）
-        var result = TextProcessor.extract("委屈又故作坚强的话[tts_style:委屈但强装镇定，声音略微颤抖]");
-        assertThat(result.cleanText()).isEqualTo("委屈又故作坚强的话");
-        assertThat(result.ttsStyle()).isEqualTo("委屈但强装镇定，声音略微颤抖");
+    void emptyOrNull_returnsEmpty() {
+        assertThat(TextProcessor.extract("").cleanText()).isEmpty();
+        assertThat(TextProcessor.extract(null).cleanText()).isEmpty();
+    }
+
+    // ========== tts_style 标签提取 ==========
+
+    @Test
+    void extractsTtsStyle_simple() {
+        var r = TextProcessor.extract("你好呀～[tts_style:用温柔的语气说]");
+        assertThat(r.cleanText()).isEqualTo("你好呀～");
+        assertThat(r.ttsStyle()).isEqualTo("用温柔的语气说");
     }
 
     @Test
-    void extractTtsStyle_ignoresLegacyEmotionTag() {
-        // 旧的 [emotion:xxx:N] 标签不应该再被识别，但也不能把它留在 cleanText 里影响 TTS 合成
-        var result = TextProcessor.extract("你好呀[emotion:happy:3]");
-        assertThat(result.cleanText()).isEqualTo("你好呀");
-        assertThat(result.ttsStyle()).isNull();
+    void extractsTtsStyle_arbitraryNaturalLanguage() {
+        var r = TextProcessor.extract("委屈又故作坚强的话[tts_style:委屈但强装镇定，声音略微颤抖]");
+        assertThat(r.cleanText()).isEqualTo("委屈又故作坚强的话");
+        assertThat(r.ttsStyle()).isEqualTo("委屈但强装镇定，声音略微颤抖");
+    }
+
+    @Test
+    void extractsTtsStyle_alongsideAction() {
+        var r = TextProcessor.extract("你好呀（开心地拍手）今天真开心！[tts_style:用开心雀跃的语气说]");
+        assertThat(r.cleanText()).isEqualTo("你好呀今天真开心！");
+        assertThat(r.ttsStyle()).isEqualTo("用开心雀跃的语气说");
+    }
+
+    @Test
+    void noTtsStyle_returnsNull() {
+        assertThat(TextProcessor.extract("普通回复").ttsStyle()).isNull();
+    }
+
+    // ========== 旧的 [emotion:xxx:N] 兼容（剥除，不识别为 tts_style） ==========
+
+    @Test
+    void stripsLegacyEmotionTag() {
+        var r = TextProcessor.extract("你好呀[emotion:happy:3]");
+        assertThat(r.cleanText()).isEqualTo("你好呀");
+        assertThat(r.ttsStyle()).isNull();
     }
 }
