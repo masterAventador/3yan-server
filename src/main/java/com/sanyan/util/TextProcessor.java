@@ -10,13 +10,12 @@ public class TextProcessor {
     // 旧的情感枚举标签，保留匹配仅用于从文本里剔除，不再提取语义
     private static final Pattern LEGACY_EMOTION_PATTERN =
             Pattern.compile("\\[emotion:[^:\\]]+:\\d\\]");
-    // doubao-seed-character 模型自带动作/神态描述，默认用中文全角括号 （...），
-    // 偶发 rogue 到半角方括号 [...] 或星号 *...*。产品上全部剥除不展示。
-    // 顺序很重要——[tts_style:...] 和 [emotion:...] 已在前两步剥掉，
-    // 此处的半角方括号匹配才不会误伤这两种专用标签。
-    // 半角小括号 (...) 在正文里合法（如 "(yes)"、"(2024)"），不剥。
-    private static final Pattern ACTION_PATTERN =
-            Pattern.compile("（[^）]+）|\\[[^\\]]+\\]|\\*[^*]+\\*");
+    // doubao-seed-character 模型自带动作/神态描述，默认用中文全角括号 （...）。
+    // 产品上全部剥除不展示。只剥中文全角——半角方括号 [...]、星号 *...*、
+    // 书名号《》 等在正文里都可能合法（代码、标签、书名），靠正则兜底会误伤。
+    // 模型偶发 rogue 到其他括号的情况由 system prompt 约束（明确告知只输出
+    // [tts_style:...] 这一种标签），而不是在代码里兜底。
+    private static final Pattern ACTION_PATTERN = Pattern.compile("（[^）]+）");
 
     public record ExtractResult(String cleanText, String ttsStyle) {}
 

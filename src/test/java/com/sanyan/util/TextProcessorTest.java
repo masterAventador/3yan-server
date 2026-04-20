@@ -24,24 +24,6 @@ class TextProcessorTest {
     }
 
     @Test
-    void stripsHalfwidthSquareBracketAction() {
-        assertThat(TextProcessor.extract("嗯……心里呀，还有……[故意停顿，轻笑着]你猜？").cleanText())
-                .isEqualTo("嗯……心里呀，还有……你猜？");
-    }
-
-    @Test
-    void stripsAsteriskAction() {
-        assertThat(TextProcessor.extract("让我想想*歪头*大概是这样。").cleanText())
-                .isEqualTo("让我想想大概是这样。");
-    }
-
-    @Test
-    void stripsMixedActions() {
-        assertThat(TextProcessor.extract("哈哈哈（捂嘴笑）真的假的[惊讶]*挠头*？").cleanText())
-                .isEqualTo("哈哈哈真的假的？");
-    }
-
-    @Test
     void stripsActionsAtStartAndEnd() {
         assertThat(TextProcessor.extract("（害羞地低头）谢谢你呀（开心地跳起来）").cleanText())
                 .isEqualTo("谢谢你呀");
@@ -58,6 +40,28 @@ class TextProcessorTest {
         // 英文小括号在正文里合法（如 "(yes)"、"(2024)"），不能剥
         assertThat(TextProcessor.extract("这是(英文括号)不剥").cleanText())
                 .isEqualTo("这是(英文括号)不剥");
+    }
+
+    @Test
+    void doesNotStripHalfwidthSquareBracket() {
+        // 半角方括号在聊天正文里合法（代码、Markdown 链接、TODO 标签等），不剥。
+        // 靠提示词约束 AI 不生成动作描述标签，正则不兜底。
+        assertThat(TextProcessor.extract("看这个 [TODO] 项").cleanText())
+                .isEqualTo("看这个 [TODO] 项");
+    }
+
+    @Test
+    void doesNotStripAsterisk() {
+        // 星号在 Markdown 斜体和代码里合法，不剥。
+        assertThat(TextProcessor.extract("这个词 *很* 重要").cleanText())
+                .isEqualTo("这个词 *很* 重要");
+    }
+
+    @Test
+    void doesNotStripBookTitleBrackets() {
+        // 书名号在正文里合法（"我在看《xxx》"），不剥。
+        assertThat(TextProcessor.extract("我在看《三体》").cleanText())
+                .isEqualTo("我在看《三体》");
     }
 
     @Test
