@@ -10,7 +10,6 @@ import com.sanyan.util.TextProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +30,6 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final AiCharacterRepository characterRepository;
     private final AiService aiService;
-    private final StringRedisTemplate redisTemplate;
 
     /**
      * Handle user text message: 落 user msg → 调 AI → 落 AI msg → 返回 AI Message
@@ -57,13 +55,6 @@ public class MessageService {
         aiMsg.setContent(TextProcessor.cleanAiReply(aiReply));
         messageRepository.save(aiMsg);
         log.info("AI 回复已保存: userId={}, msgId={}", userId, aiMsg.getId());
-
-        // Track 消息 IDs 给 MemoryScheduler 用于"轮次结束"后异步生成摘要
-        String roundKey = "user:round:" + userId;
-        String roundTsKey = "user:round:" + userId + ":ts";
-        redisTemplate.opsForList().rightPush(roundKey, String.valueOf(userMsg.getId()));
-        redisTemplate.opsForList().rightPush(roundKey, String.valueOf(aiMsg.getId()));
-        redisTemplate.opsForValue().set(roundTsKey, String.valueOf(System.currentTimeMillis()));
 
         return aiMsg;
     }

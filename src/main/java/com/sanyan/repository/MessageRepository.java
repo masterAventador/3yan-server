@@ -10,5 +10,4 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     List<Message> findByUserIdAndIdGreaterThanOrderByIdAsc(Long userId, Long afterId, Pageable pageable);
     List<Message> findByUserIdAndIdLessThanOrderByIdDesc(Long userId, Long beforeId, Pageable pageable);
     List<Message> findByUserIdOrderByIdDesc(Long userId, Pageable pageable);
-    List<Message> findByUserIdAndIdBetweenOrderByIdAsc(Long userId, Long startId, Long endId);
 }
