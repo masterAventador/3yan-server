@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface MemorySummaryRepository extends JpaRepository<MemorySummary, Long> {
-    List<MemorySummary> findByConversationIdOrderByCreatedAtDesc(Long conversationId, Pageable pageable);
+    List<MemorySummary> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 }

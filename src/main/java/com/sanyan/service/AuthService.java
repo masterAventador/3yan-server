@@ -2,7 +2,6 @@ package com.sanyan.service;
 
 import com.sanyan.dto.data.LoginData;
 import com.sanyan.dto.req.LoginReq;
-import com.sanyan.dto.req.PasswordResetReq;
 import com.sanyan.dto.req.RegisterReq;
 import com.sanyan.entity.User;
 import com.sanyan.repository.UserRepository;
@@ -52,17 +51,6 @@ public class AuthService {
         }
         log.info("用户登录成功: userId={}, phone={}", user.getId(), user.getPhone());
         return buildLoginData(user);
-    }
-
-    public void resetPassword(PasswordResetReq req) {
-        if (!smsService.verifyCode(req.getPhone(), req.getCode())) {
-            throw new IllegalArgumentException("验证码错误");
-        }
-        User user = userRepository.findByPhone(req.getPhone())
-                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
-        user.setPassword(passwordEncoder.encode(req.getNewPassword()));
-        userRepository.save(user);
-        log.info("密码重置成功: userId={}, phone={}", user.getId(), user.getPhone());
     }
 
     private LoginData buildLoginData(User user) {

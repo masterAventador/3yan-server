@@ -6,12 +6,10 @@ import lombok.Data;
 public class WsError {
     private final String type = WsEventType.ERROR;
     private String clientMsgId;
-    private Long conversationId;
     private String message;
 
-    public WsError(String clientMsgId, Long conversationId, String message) {
+    public WsError(String clientMsgId, String message) {
         this.clientMsgId = clientMsgId;
-        this.conversationId = conversationId;
         this.message = message;
     }
 }

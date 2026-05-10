@@ -18,11 +18,6 @@ public class AiCharacter {
     private String systemPrompt;
     @Column(columnDefinition = "TEXT")
     private String greeting;
-    @Column(columnDefinition = "TEXT")
-    private String proactiveConfig;
-    @Column(nullable = false, length = 10)
-    private String type; // preset / custom
-    private Long createdBy;
     @CreationTimestamp
     private LocalDateTime createdAt;
 }

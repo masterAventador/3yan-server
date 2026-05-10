@@ -1,7 +1,6 @@
 package com.sanyan.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.dto.data.ConversationData;
 import com.sanyan.dto.data.MessageData;
 import com.sanyan.dto.ws.*;
 import com.sanyan.entity.Message;
@@ -14,7 +13,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.util.*;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
@@ -56,81 +55,48 @@ public class WebSocketHandler extends TextWebSocketHandler {
     }
 
     private void handleSendMessage(Long userId, WsMessage wsMsg, WebSocketSession session) {
-        log.info("收到用户消息: userId={}, convId={}, clientMsgId={}, content={}",
-                userId, wsMsg.getConversationId(), wsMsg.getClientMsgId(),
-                wsMsg.getContent() != null && wsMsg.getContent().length() > 50
-                        ? wsMsg.getContent().substring(0, 50) + "..." : wsMsg.getContent());
+        String preview = wsMsg.getContent() != null && wsMsg.getContent().length() > 50
+                ? wsMsg.getContent().substring(0, 50) + "..." : wsMsg.getContent();
+        log.info("收到用户消息: userId={}, clientMsgId={}, content={}", userId, wsMsg.getClientMsgId(), preview);
 
-        // 1. Send ACK
-        WsAck ack = new WsAck(wsMsg.getClientMsgId());
-        sendObject(session, ack);
-        log.debug("ACK 已发送: clientMsgId={}", wsMsg.getClientMsgId());
+        // 1. ACK
+        sendObject(session, new WsAck(wsMsg.getClientMsgId()));
 
-        // 2. Send typing status
-        WsTyping typing = new WsTyping(wsMsg.getConversationId());
-        sendObject(session, typing);
+        // 2. typing
+        sendObject(session, new WsTyping());
 
-        // 3. Async: call AI, calculate delay, send new_message
+        // 3. async: AI 调用 + 模拟打字延迟 + 推送
         CompletableFuture.runAsync(() -> {
             try {
-                Message aiMsg = messageService.handleUserMessage(
-                        userId, wsMsg.getConversationId(), wsMsg.getContentType(), wsMsg.getContent(),
-                        wsMsg.getMediaUrl(), wsMsg.getDuration());
-
-                long delay;
-                if (MessageContentType.VOICE.equals(aiMsg.getContentType())) {
-                    delay = 500; // Voice messages already had TTS processing time
-                } else {
-                    delay = messageService.calculateTypingDelay(aiMsg.getContent());
-                }
-                log.info("模拟打字延迟: {}ms, convId={}", delay, wsMsg.getConversationId());
+                Message aiMsg = messageService.handleUserMessage(userId, wsMsg.getContent());
+                long delay = messageService.calculateTypingDelay(aiMsg.getContent());
+                log.info("模拟打字延迟: {}ms, userId={}", delay, userId);
                 Thread.sleep(delay);
 
                 MessageData data = messageService.toData(aiMsg);
-                WsNewMessage newMsg = new WsNewMessage(data);
-                sendObject(session, newMsg);
-                log.info("AI 回复已推送: userId={}, convId={}, msgId={}", userId, wsMsg.getConversationId(), aiMsg.getId());
+                sendObject(session, new WsNewMessage(data));
+                log.info("AI 回复已推送: userId={}, msgId={}", userId, aiMsg.getId());
 
             } catch (Exception e) {
                 log.error("处理用户消息失败, userId={}", userId, e);
-                WsError err = new WsError(wsMsg.getClientMsgId(), wsMsg.getConversationId(),
-                        WsErrorMessage.MESSAGE_PROCESSING_FAILED);
-                sendObject(session, err);
+                sendObject(session, new WsError(wsMsg.getClientMsgId(),
+                        WsErrorMessage.MESSAGE_PROCESSING_FAILED));
             }
         });
     }
 
     private void handleSync(Long userId, WsMessage wsMsg, WebSocketSession session) {
         log.info("消息同步请求: userId={}, lastMsgId={}", userId, wsMsg.getLastMsgId());
-        List<ConversationData> conversations = messageService.getUserConversations(userId);
-
-        Map<Long, List<MessageData>> conversationMessages = new LinkedHashMap<>();
-        for (ConversationData conv : conversations) {
-            try {
-                List<Message> messages = messageService.syncMessages(
-                        userId, conv.getId(), wsMsg.getLastMsgId(), 50);
-                if (!messages.isEmpty()) {
-                    conversationMessages.put(conv.getId(),
-                            messages.stream().map(messageService::toData).toList());
-                }
-            } catch (IllegalArgumentException e) {
-                log.warn("syncMessages 跳过会话 convId={}, userId={}, reason={}",
-                        conv.getId(), userId, e.getMessage());
-            }
-        }
-
-        WsSyncResult syncResult = new WsSyncResult(conversationMessages);
-        sendObject(session, syncResult);
-        log.info("消息同步完成: userId={}, 会话数={}, 总消息数={}", userId, conversationMessages.size(),
-                conversationMessages.values().stream().mapToInt(List::size).sum());
+        List<Message> messages = messageService.syncMessages(userId, wsMsg.getLastMsgId(), 50);
+        List<MessageData> data = messages.stream().map(messageService::toData).toList();
+        sendObject(session, new WsSyncResult(data));
+        log.info("消息同步完成: userId={}, 总消息数={}", userId, data.size());
     }
 
     public void sendToSession(WebSocketSession session, String payload) {
         try {
             synchronized (session) {
-                if (session.isOpen()) {
-                    session.sendMessage(new TextMessage(payload));
-                }
+                if (session.isOpen()) session.sendMessage(new TextMessage(payload));
             }
         } catch (Exception e) {
             log.error("WebSocket 发送失败", e);
@@ -139,8 +105,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
     private void sendObject(WebSocketSession session, Object obj) {
         try {
-            String payload = objectMapper.writeValueAsString(obj);
-            sendToSession(session, payload);
+            sendToSession(session, objectMapper.writeValueAsString(obj));
         } catch (Exception e) {
             log.error("WebSocket 序列化发送失败", e);
         }

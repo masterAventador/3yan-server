@@ -7,14 +7,9 @@ import lombok.Data;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class WsMessage {
     private String type;
-    // send_message fields
-    private Long conversationId;
-    private String contentType;
+    // send_message
     private String content;
     private String clientMsgId;
-    // sync fields
+    // sync
     private Long lastMsgId;
-    // voice/video message fields
-    private String mediaUrl;
-    private Integer duration;
 }

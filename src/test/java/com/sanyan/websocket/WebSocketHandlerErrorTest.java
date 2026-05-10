@@ -35,17 +35,15 @@ class WebSocketHandlerErrorTest {
         attrs.put("userId", 1L);
         when(session.getAttributes()).thenReturn(attrs);
         when(session.isOpen()).thenReturn(true);
-        when(messageService.handleUserMessage(any(), any(), any(), any(), any(), any()))
+        when(messageService.handleUserMessage(any(), any()))
                 .thenThrow(new RuntimeException("AI 服务炸了"));
 
         WebSocketHandler handler = new WebSocketHandler(sessionManager, objectMapper, messageService);
 
         WsMessage incoming = new WsMessage();
         incoming.setType(WsEventType.SEND_MESSAGE);
-        incoming.setConversationId(10L);
         incoming.setClientMsgId("cid-xyz");
         incoming.setContent("hi");
-        incoming.setContentType("text");
         handler.handleTextMessage(session, new TextMessage(objectMapper.writeValueAsString(incoming)));
 
         ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);

@@ -3,7 +3,6 @@ package com.sanyan.controller;
 import com.sanyan.dto.ApiResponse;
 import com.sanyan.dto.data.LoginData;
 import com.sanyan.dto.req.LoginReq;
-import com.sanyan.dto.req.PasswordResetReq;
 import com.sanyan.dto.req.RegisterReq;
 import com.sanyan.dto.req.SmsSendReq;
 import com.sanyan.service.AuthService;
@@ -39,16 +38,6 @@ public class AuthController {
     public ApiResponse<LoginData> login(@Valid @RequestBody LoginReq req) {
         try {
             return ApiResponse.ok(authService.login(req));
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.fail(e.getMessage());
-        }
-    }
-
-    @PostMapping("/password/reset")
-    public ApiResponse<Void> resetPassword(@Valid @RequestBody PasswordResetReq req) {
-        try {
-            authService.resetPassword(req);
-            return ApiResponse.ok();
         } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         }

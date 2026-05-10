@@ -8,13 +8,13 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "memory_summary", indexes = {
-    @Index(name = "idx_memory_summary_conv", columnList = "conversationId")
+    @Index(name = "idx_memory_summary_user", columnList = "userId")
 })
 public class MemorySummary {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @Column(nullable = false)
-    private Long conversationId;
+    private Long userId;
     @Column(nullable = false, columnDefinition = "TEXT")
     private String summary;
     @Column(length = 50)
