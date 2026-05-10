@@ -5,4 +5,4 @@ SELECT '小婉', NULL,
 '嗨～终于等到你了，我是小婉，以后多多关照呀 😊',
 '{"max_daily":3,"min_interval_hours":2,"active_hours":[8,22],"greeting":{"enabled":true,"slots":["08:00-09:00","12:00-13:00","21:00-22:00"]},"event_trigger":{"enabled":true,"idle_hours_threshold":6},"situational":{"enabled":true,"trigger_rate":0.2}}',
 'preset', NOW()
-FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM ai_character WHERE name = '小婉');
+WHERE NOT EXISTS (SELECT 1 FROM ai_character WHERE name = '小婉');
