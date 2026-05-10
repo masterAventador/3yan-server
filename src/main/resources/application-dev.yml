@@ -42,7 +42,7 @@ sanyan:
     access-token: ${TTS_ACCESS_TOKEN:VuO0W4r1DVtvxl_7bEfuE3Zbr3iBVuL9}
     voice-type: zh_female_vv_uranus_bigtts
   cos:
-    secret-id: ${COS_SECRET_ID:AKIDMcBZkjW9Zt0ta5SccOw1sXyDHD2g7LOG}
-    secret-key: ${COS_SECRET_KEY:lKhqQo270f8OTO7dz99wVcXEj7IJBsQm}
-    bucket: 3yan-1258800826
-    region: ap-beijing
+    secret-id: ${COS_SECRET_ID:}
+    secret-key: ${COS_SECRET_KEY:}
+    bucket: ${COS_BUCKET:}
+    region: ${COS_REGION:ap-beijing}
