@@ -37,7 +37,7 @@ sanyan:
     app-id: "6383804695"
     access-token: ${ASR_ACCESS_TOKEN:BgkVhS2NOZfEP9TbhuWdREWzbZEjNLHi}
   tts:
-    enabled: true
+    enabled: false
     app-id: "7231248180"
     access-token: ${TTS_ACCESS_TOKEN:VuO0W4r1DVtvxl_7bEfuE3Zbr3iBVuL9}
     voice-type: zh_female_vv_uranus_bigtts
