@@ -1,5 +1,6 @@
 package com.sanyan.util;
 
+import com.sanyan.exception.InvalidTokenException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
@@ -23,9 +24,27 @@ class JwtUtilTest {
     }
 
     @Test
+    void shouldRejectNullToken() {
+        assertThatThrownBy(() -> jwtUtil.parseUserId(null))
+                .isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
+    void shouldRejectEmptyToken() {
+        assertThatThrownBy(() -> jwtUtil.parseUserId(""))
+                .isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
+    void shouldRejectBlankToken() {
+        assertThatThrownBy(() -> jwtUtil.parseUserId("   "))
+                .isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
     void shouldRejectInvalidToken() {
         assertThatThrownBy(() -> jwtUtil.parseUserId("invalid.token.here"))
-                .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(InvalidTokenException.class);
     }
 
     @Test
@@ -34,6 +53,6 @@ class JwtUtilTest {
         String token = shortLived.generateToken(1L);
 
         assertThatThrownBy(() -> shortLived.parseUserId(token))
-                .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(InvalidTokenException.class);
     }
 }
