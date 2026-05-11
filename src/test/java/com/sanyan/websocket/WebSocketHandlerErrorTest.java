@@ -35,7 +35,9 @@ class WebSocketHandlerErrorTest {
         attrs.put("userId", 1L);
         when(session.getAttributes()).thenReturn(attrs);
         when(session.isOpen()).thenReturn(true);
-        when(messageService.handleUserMessage(any(), any()))
+        when(messageService.saveUserMessage(any(), any()))
+                .thenReturn(new com.sanyan.entity.Message());
+        when(messageService.handleAiReply(any()))
                 .thenThrow(new RuntimeException("AI 服务炸了"));
 
         WebSocketHandler handler = new WebSocketHandler(sessionManager, objectMapper, messageService);

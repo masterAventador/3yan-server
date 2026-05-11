@@ -32,17 +32,24 @@ public class MessageService {
     private final AiService aiService;
 
     /**
-     * Handle user text message: 落 user msg → 调 AI → 落 AI msg → 返回 AI Message
+     * 落 user message → 返回 server 端 id（独立事务，便于 ack 即时回传 serverMsgId）
      */
     @Transactional
-    public Message handleUserMessage(Long userId, String content) {
+    public Message saveUserMessage(Long userId, String content) {
         Message userMsg = new Message();
         userMsg.setUserId(userId);
         userMsg.setSenderType(SenderType.USER);
         userMsg.setContent(content != null ? content : "");
         messageRepository.save(userMsg);
         log.info("用户消息已保存: userId={}, msgId={}", userId, userMsg.getId());
+        return userMsg;
+    }
 
+    /**
+     * 调 AI 拿回复 → 落库 → 返回 AI Message
+     */
+    @Transactional
+    public Message handleAiReply(Long userId) {
         AiCharacter character = characterRepository.findById(DEFAULT_CHARACTER_ID)
                 .orElseThrow(() -> new RuntimeException("默认角色不存在（character_id=1）"));
         log.info("调用豆包 AI: userId={}, character={}", userId, character.getName());
@@ -55,7 +62,6 @@ public class MessageService {
         aiMsg.setContent(TextProcessor.cleanAiReply(aiReply));
         messageRepository.save(aiMsg);
         log.info("AI 回复已保存: userId={}, msgId={}", userId, aiMsg.getId());
-
         return aiMsg;
     }
 
