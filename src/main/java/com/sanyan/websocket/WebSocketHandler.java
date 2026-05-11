@@ -59,26 +59,35 @@ public class WebSocketHandler extends TextWebSocketHandler {
                 ? wsMsg.getContent().substring(0, 50) + "..." : wsMsg.getContent();
         log.info("收到用户消息: userId={}, clientMsgId={}, content={}", userId, wsMsg.getClientMsgId(), preview);
 
-        // 1. ACK
-        sendObject(session, new WsAck(wsMsg.getClientMsgId()));
+        // 1. 先落 user 消息，拿到 server 端真实 id
+        Message userMsg;
+        try {
+            userMsg = messageService.saveUserMessage(userId, wsMsg.getContent());
+        } catch (Exception e) {
+            log.error("保存用户消息失败, userId={}", userId, e);
+            sendObject(session, new WsError(wsMsg.getClientMsgId(), WsErrorMessage.MESSAGE_PROCESSING_FAILED));
+            return;
+        }
 
-        // 2. typing
+        // 2. ACK 带 serverMsgId
+        sendObject(session, new WsAck(wsMsg.getClientMsgId(), userMsg.getId()));
+
+        // 3. typing
         sendObject(session, new WsTyping());
 
-        // 3. async: AI 调用 + 模拟打字延迟 + 推送
+        // 4. async: AI 调用 + 模拟打字延迟 + 推送
         CompletableFuture.runAsync(() -> {
             try {
-                Message aiMsg = messageService.handleUserMessage(userId, wsMsg.getContent());
+                Message aiMsg = messageService.handleAiReply(userId);
                 long delay = messageService.calculateTypingDelay(aiMsg.getContent());
                 log.info("模拟打字延迟: {}ms, userId={}", delay, userId);
                 Thread.sleep(delay);
 
-                MessageData data = messageService.toData(aiMsg);
-                sendObject(session, new WsNewMessage(data));
+                sendObject(session, new WsNewMessage(messageService.toData(aiMsg)));
                 log.info("AI 回复已推送: userId={}, msgId={}", userId, aiMsg.getId());
 
             } catch (Exception e) {
-                log.error("处理用户消息失败, userId={}", userId, e);
+                log.error("处理 AI 回复失败, userId={}", userId, e);
                 sendObject(session, new WsError(wsMsg.getClientMsgId(),
                         WsErrorMessage.MESSAGE_PROCESSING_FAILED));
             }
