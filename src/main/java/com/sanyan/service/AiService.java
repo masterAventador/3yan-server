@@ -39,13 +39,14 @@ public class AiService {
 
     /**
      * AI reply to user's text message.
-     * 一期短期上下文：最近 20 条消息。长期记忆（B+C+RAG）按 spec Plan 2 实现。
+     * 一期短期上下文窗口：最近 100 条消息。长期记忆（B+C+RAG）按 spec Plan 2 实现，
+     * 届时窗口收紧到 20-30 条 + 摘要 + 档案 + RAG 召回。
      */
     public String chat(AiCharacter character, Long userId) {
         String systemPrompt = assembleSystemPrompt(character.getSystemPrompt(), formatCurrentTime());
 
         List<Message> recentMessages = messageRepository
-                .findByUserIdOrderByIdDesc(userId, PageRequest.of(0, 20));
+                .findByUserIdOrderByIdDesc(userId, PageRequest.of(0, 100));
         Collections.reverse(recentMessages);
 
         return callDoubao(systemPrompt, recentMessages);
