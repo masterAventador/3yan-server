@@ -1,6 +1,7 @@
-package com.sanyan.dto.ws;
+package com.sanyan.chat.ws;
 
-import com.sanyan.dto.data.MessageData;
+import com.sanyan.chat.web.MessageData;
+import com.sanyan.common.ws.WsEventType;
 import lombok.Data;
 
 import java.util.List;

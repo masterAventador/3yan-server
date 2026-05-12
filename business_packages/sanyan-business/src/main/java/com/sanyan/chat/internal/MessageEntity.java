@@ -1,4 +1,4 @@
-package com.sanyan.entity;
+package com.sanyan.chat.internal;
 
 import jakarta.persistence.*;
 import lombok.Data;
@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
     @Index(name = "idx_message_user", columnList = "userId,id"),
     @Index(name = "idx_message_created_at", columnList = "createdAt")
 })
-public class Message {
+public class MessageEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @Column(nullable = false)

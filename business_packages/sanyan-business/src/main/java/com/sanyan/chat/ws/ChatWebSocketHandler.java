@@ -1,11 +1,14 @@
-package com.sanyan.websocket;
+package com.sanyan.chat.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.dto.data.MessageData;
-import com.sanyan.dto.ws.*;
-import com.sanyan.entity.Message;
-import com.sanyan.service.MessageService;
+import com.sanyan.chat.internal.MessageEntity;
+import com.sanyan.chat.internal.MessageService;
+import com.sanyan.chat.web.MessageData;
 import com.sanyan.common.util.TypingDelayCalculator;
+import com.sanyan.common.ws.SessionManager;
+import com.sanyan.common.ws.WsEventType;
+import com.sanyan.common.ws.WsMessage;
+import com.sanyan.common.ws.WsTyping;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,7 +23,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class WebSocketHandler extends TextWebSocketHandler {
+public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final SessionManager sessionManager;
     private final ObjectMapper objectMapper;
@@ -61,7 +64,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
         log.info("收到用户消息: userId={}, clientMsgId={}, content={}", userId, wsMsg.getClientMsgId(), preview);
 
         // 1. 先落 user 消息，拿到 server 端真实 id
-        Message userMsg;
+        MessageEntity userMsg;
         try {
             userMsg = messageService.saveUserMessage(userId, wsMsg.getContent());
         } catch (Exception e) {
@@ -79,9 +82,9 @@ public class WebSocketHandler extends TextWebSocketHandler {
         // 4. async: AI 调用 + 拆分多条 + 按节奏推送（typing → delay → message → gap → typing → ...）
         CompletableFuture.runAsync(() -> {
             try {
-                List<Message> aiMessages = messageService.handleAiReply(userId);
+                List<MessageEntity> aiMessages = messageService.handleAiReply(userId);
                 for (int i = 0; i < aiMessages.size(); i++) {
-                    Message aiMsg = aiMessages.get(i);
+                    MessageEntity aiMsg = aiMessages.get(i);
                     if (i > 0) {
                         long gap = TypingDelayCalculator.calculateInterMessageGap();
                         Thread.sleep(gap);
@@ -104,7 +107,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
     private void handleSync(Long userId, WsMessage wsMsg, WebSocketSession session) {
         log.info("消息同步请求: userId={}, lastMsgId={}", userId, wsMsg.getLastMsgId());
-        List<Message> messages = messageService.syncMessages(userId, wsMsg.getLastMsgId(), 50);
+        List<MessageEntity> messages = messageService.syncMessages(userId, wsMsg.getLastMsgId(), 50);
         List<MessageData> data = messages.stream().map(messageService::toData).toList();
         sendObject(session, new WsSyncResult(data));
         log.info("消息同步完成: userId={}, 总消息数={}", userId, data.size());

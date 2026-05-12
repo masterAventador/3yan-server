@@ -1,4 +1,4 @@
-package com.sanyan.service;
+package com.sanyan.chat.internal;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;

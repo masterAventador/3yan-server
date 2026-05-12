@@ -1,6 +1,6 @@
-package com.sanyan.service;
+package com.sanyan.chat.internal;
 
-import com.sanyan.dto.ws.SenderType;
+import com.sanyan.chat.ws.SenderType;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -14,7 +14,7 @@ class MessageServiceSenderTypeTest {
     @Test
     void source_noHardcodedAiString() throws IOException {
         String source = Files.readString(Path.of(
-                "src/main/java/com/sanyan/service/MessageService.java"));
+                "src/main/java/com/sanyan/chat/internal/MessageService.java"));
         assertThat(source)
                 .as("应使用 SenderType.AI 常量而不是硬编码 \"ai\"")
                 .doesNotContain("setSenderType(\"ai\")");

@@ -1,9 +1,11 @@
-package com.sanyan.websocket;
+package com.sanyan.chat.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.dto.ws.WsEventType;
-import com.sanyan.dto.ws.WsMessage;
-import com.sanyan.service.MessageService;
+import com.sanyan.chat.internal.MessageEntity;
+import com.sanyan.chat.internal.MessageService;
+import com.sanyan.common.ws.SessionManager;
+import com.sanyan.common.ws.WsEventType;
+import com.sanyan.common.ws.WsMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -36,11 +38,11 @@ class WebSocketHandlerErrorTest {
         when(session.getAttributes()).thenReturn(attrs);
         when(session.isOpen()).thenReturn(true);
         when(messageService.saveUserMessage(any(), any()))
-                .thenReturn(new com.sanyan.entity.Message());
+                .thenReturn(new MessageEntity());
         when(messageService.handleAiReply(any()))
                 .thenThrow(new RuntimeException("AI 服务炸了"));
 
-        WebSocketHandler handler = new WebSocketHandler(sessionManager, objectMapper, messageService);
+        ChatWebSocketHandler handler = new ChatWebSocketHandler(sessionManager, objectMapper, messageService);
 
         WsMessage incoming = new WsMessage();
         incoming.setType(WsEventType.SEND_MESSAGE);

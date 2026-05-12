@@ -1,5 +1,6 @@
-package com.sanyan.dto.ws;
+package com.sanyan.chat.ws;
 
+import com.sanyan.common.ws.WsEventType;
 import lombok.Data;
 
 @Data

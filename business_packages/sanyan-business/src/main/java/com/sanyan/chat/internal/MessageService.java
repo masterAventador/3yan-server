@@ -1,11 +1,10 @@
-package com.sanyan.service;
+package com.sanyan.chat.internal;
 
-import com.sanyan.dto.data.MessageData;
-import com.sanyan.dto.ws.SenderType;
-import com.sanyan.entity.AiCharacter;
-import com.sanyan.entity.Message;
-import com.sanyan.repository.AiCharacterRepository;
-import com.sanyan.repository.MessageRepository;
+import com.sanyan.chat.web.MessageData;
+import com.sanyan.chat.ws.SenderType;
+import com.sanyan.entity.AiCharacter; // TODO M3.2: 改 com.sanyan.character.internal.AiCharacterEntity
+import com.sanyan.repository.AiCharacterRepository; // TODO M3.2: 改 com.sanyan.character.internal.AiCharacterRepository
+import com.sanyan.service.AiService; // TODO M3.3: 改 com.sanyan.llm.internal.AiService
 import com.sanyan.common.util.TextProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,8 +34,8 @@ public class MessageService {
      * 落 user message → 返回 server 端 id（独立事务，便于 ack 即时回传 serverMsgId）
      */
     @Transactional
-    public Message saveUserMessage(Long userId, String content) {
-        Message userMsg = new Message();
+    public MessageEntity saveUserMessage(Long userId, String content) {
+        MessageEntity userMsg = new MessageEntity();
         userMsg.setUserId(userId);
         userMsg.setSenderType(SenderType.USER);
         userMsg.setContent(content != null ? content : "");
@@ -52,7 +51,8 @@ public class MessageService {
      * 调 AI 拿回复 → 清理动作描述 → 按句号/换行拆分 → 多条独立落库 → 返回有序消息列表
      */
     @Transactional
-    public List<Message> handleAiReply(Long userId) {
+    public List<MessageEntity> handleAiReply(Long userId) {
+        // TODO M3.2: 改 throw new BusinessException(CharacterErrCode.CHARACTER_NOT_FOUND);
         AiCharacter character = characterRepository.findById(DEFAULT_CHARACTER_ID)
                 .orElseThrow(() -> new RuntimeException("默认角色不存在（character_id=1）"));
         log.info("调用豆包 AI: userId={}, character={}", userId, character.getName());
@@ -63,25 +63,25 @@ public class MessageService {
 
         if (bubbles.isEmpty()) return Collections.emptyList();
 
-        List<Message> saved = new ArrayList<>(bubbles.size());
+        List<MessageEntity> saved = new ArrayList<>(bubbles.size());
         for (String bubble : bubbles) {
-            Message aiMsg = new Message();
+            MessageEntity aiMsg = new MessageEntity();
             aiMsg.setUserId(userId);
             aiMsg.setSenderType(SenderType.AI);
             aiMsg.setContent(bubble);
             messageRepository.save(aiMsg);
             saved.add(aiMsg);
         }
-        log.info("AI 回复已保存: userId={}, msgIds={}", userId, saved.stream().map(Message::getId).toList());
+        log.info("AI 回复已保存: userId={}, msgIds={}", userId, saved.stream().map(MessageEntity::getId).toList());
         return saved;
     }
 
     /**
      * 拉取 lastMsgId 之后的所有消息（WS sync 用）
      */
-    public List<Message> syncMessages(Long userId, Long afterMsgId, int limit) {
+    public List<MessageEntity> syncMessages(Long userId, Long afterMsgId, int limit) {
         if (afterMsgId == null || afterMsgId <= 0) {
-            List<Message> messages = messageRepository.findByUserIdOrderByIdDesc(
+            List<MessageEntity> messages = messageRepository.findByUserIdOrderByIdDesc(
                     userId, PageRequest.of(0, limit));
             Collections.reverse(messages);
             return messages;
@@ -93,8 +93,8 @@ public class MessageService {
     /**
      * 拉取历史消息（HTTP /api/messages 用，beforeId 游标分页，按时间正序）
      */
-    public List<Message> getHistoryMessages(Long userId, Long beforeMsgId, int limit) {
-        List<Message> messages;
+    public List<MessageEntity> getHistoryMessages(Long userId, Long beforeMsgId, int limit) {
+        List<MessageEntity> messages;
         if (beforeMsgId == null || beforeMsgId <= 0) {
             messages = messageRepository.findByUserIdOrderByIdDesc(userId, PageRequest.of(0, limit));
         } else {
@@ -105,7 +105,7 @@ public class MessageService {
         return messages;
     }
 
-    public MessageData toData(Message msg) {
+    public MessageData toData(MessageEntity msg) {
         MessageData d = new MessageData();
         d.setId(msg.getId());
         d.setSenderType(msg.getSenderType());

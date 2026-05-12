@@ -1,4 +1,4 @@
-package com.sanyan.dto.data;
+package com.sanyan.chat.web;
 
 import lombok.Data;
 import java.time.LocalDateTime;
