@@ -1,4 +1,4 @@
-package com.sanyan.dto.ws;
+package com.sanyan.common.ws;
 
 public final class WsEventType {
     public static final String PING = "ping";

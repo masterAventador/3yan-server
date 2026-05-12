@@ -1,4 +1,4 @@
-package com.sanyan.websocket;
+package com.sanyan.common.ws;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

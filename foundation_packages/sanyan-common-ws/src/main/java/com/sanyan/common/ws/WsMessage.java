@@ -1,4 +1,4 @@
-package com.sanyan.dto.ws;
+package com.sanyan.common.ws;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;

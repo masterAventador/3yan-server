@@ -1,4 +1,4 @@
-package com.sanyan.websocket;
+package com.sanyan.common.ws;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
