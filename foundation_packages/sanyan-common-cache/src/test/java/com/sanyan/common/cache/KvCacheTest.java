@@ -9,6 +9,7 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,5 +56,28 @@ class KvCacheTest {
         when(redis.hasKey("foo")).thenReturn(null);
         KvCache cache = new KvCache(redis);
         assertThat(cache.exists("foo")).isFalse();
+    }
+
+    @Test
+    void get_returnsNullWhenKeyMissing() {
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.get("missing")).thenReturn(null);
+        KvCache cache = new KvCache(redis);
+        assertThat(cache.get("missing")).isNull();
+    }
+
+    @Test
+    void set_throwsWhenTtlIsZero() {
+        KvCache cache = new KvCache(redis);
+        assertThatThrownBy(() -> cache.set("k", "v", Duration.ZERO))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("ttl");
+    }
+
+    @Test
+    void set_throwsWhenTtlIsNull() {
+        KvCache cache = new KvCache(redis);
+        assertThatThrownBy(() -> cache.set("k", "v", null))
+            .isInstanceOf(NullPointerException.class);
     }
 }
