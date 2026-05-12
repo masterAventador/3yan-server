@@ -2,6 +2,7 @@ package com.sanyan.llm.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.character.internal.AiCharacterEntity;
+import com.sanyan.character.internal.AiCharacterTestFixtures;
 import com.sanyan.chat.internal.MessageRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,8 +55,7 @@ class AiServiceTest {
                         "{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}",
                         HttpStatus.OK));
 
-        AiCharacterEntity character = new AiCharacterEntity();
-        character.setName("小婉");
+        AiCharacterEntity character = AiCharacterTestFixtures.xiaowan();
         service.chat(character, 1L);
 
         @SuppressWarnings("unchecked")

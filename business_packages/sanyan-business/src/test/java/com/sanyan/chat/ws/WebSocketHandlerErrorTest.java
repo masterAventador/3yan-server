@@ -1,8 +1,8 @@
 package com.sanyan.chat.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageService;
+import com.sanyan.chat.internal.MessageTestFixtures;
 import com.sanyan.common.ws.SessionManager;
 import com.sanyan.common.ws.WsEventType;
 import com.sanyan.common.ws.WsMessage;
@@ -38,7 +38,7 @@ class WebSocketHandlerErrorTest {
         when(session.getAttributes()).thenReturn(attrs);
         when(session.isOpen()).thenReturn(true);
         when(messageService.saveUserMessage(any(), any()))
-                .thenReturn(new MessageEntity());
+                .thenReturn(MessageTestFixtures.validUserMessage());
         when(messageService.handleAiReply(any()))
                 .thenThrow(new RuntimeException("AI 服务炸了"));
 
