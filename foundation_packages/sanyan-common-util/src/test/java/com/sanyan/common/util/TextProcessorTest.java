@@ -1,4 +1,4 @@
-package com.sanyan.util;
+package com.sanyan.common.util;
 
 import org.junit.jupiter.api.Test;
 

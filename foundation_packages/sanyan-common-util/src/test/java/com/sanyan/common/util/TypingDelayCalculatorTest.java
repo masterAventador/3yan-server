@@ -1,12 +1,11 @@
-package com.sanyan.service;
+package com.sanyan.common.util;
 
-import com.sanyan.util.TypingDelayCalculator;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MessageServiceTimingTest {
+class TypingDelayCalculatorTest {
 
     @Test
     void calculateTypingDelay_nullOrEmpty_returnsFixedShortDelay() {

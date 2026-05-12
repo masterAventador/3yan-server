@@ -6,7 +6,7 @@ import com.sanyan.entity.AiCharacter;
 import com.sanyan.entity.Message;
 import com.sanyan.repository.AiCharacterRepository;
 import com.sanyan.repository.MessageRepository;
-import com.sanyan.util.TextProcessor;
+import com.sanyan.common.util.TextProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;

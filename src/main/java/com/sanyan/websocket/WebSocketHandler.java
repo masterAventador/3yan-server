@@ -5,7 +5,7 @@ import com.sanyan.dto.data.MessageData;
 import com.sanyan.dto.ws.*;
 import com.sanyan.entity.Message;
 import com.sanyan.service.MessageService;
-import com.sanyan.util.TypingDelayCalculator;
+import com.sanyan.common.util.TypingDelayCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
