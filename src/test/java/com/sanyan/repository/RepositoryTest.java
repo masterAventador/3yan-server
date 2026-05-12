@@ -31,8 +31,6 @@ class RepositoryTest {
     void shouldSaveCharacter() {
         AiCharacter c = new AiCharacter();
         c.setName("小满");
-        c.setSystemPrompt("你是小满");
-        c.setGreeting("你好");
         AiCharacter saved = characterRepository.save(c);
 
         assertThat(saved.getId()).isNotNull();

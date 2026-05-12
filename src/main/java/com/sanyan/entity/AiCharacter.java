@@ -14,10 +14,6 @@ public class AiCharacter {
     @Column(nullable = false, length = 50)
     private String name;
     private String avatar;
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String systemPrompt;
-    @Column(columnDefinition = "TEXT")
-    private String greeting;
     @CreationTimestamp
     private LocalDateTime createdAt;
 }
