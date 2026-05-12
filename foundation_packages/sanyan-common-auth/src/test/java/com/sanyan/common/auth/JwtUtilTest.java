@@ -1,6 +1,7 @@
-package com.sanyan.util;
+package com.sanyan.common.auth;
 
-import com.sanyan.exception.InvalidTokenException;
+import com.sanyan.common.error.BusinessException;
+import com.sanyan.common.error.CommonErrCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
@@ -26,25 +27,29 @@ class JwtUtilTest {
     @Test
     void shouldRejectNullToken() {
         assertThatThrownBy(() -> jwtUtil.parseUserId(null))
-                .isInstanceOf(InvalidTokenException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("errCode").isEqualTo(CommonErrCode.TOKEN_INVALID);
     }
 
     @Test
     void shouldRejectEmptyToken() {
         assertThatThrownBy(() -> jwtUtil.parseUserId(""))
-                .isInstanceOf(InvalidTokenException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("errCode").isEqualTo(CommonErrCode.TOKEN_INVALID);
     }
 
     @Test
     void shouldRejectBlankToken() {
         assertThatThrownBy(() -> jwtUtil.parseUserId("   "))
-                .isInstanceOf(InvalidTokenException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("errCode").isEqualTo(CommonErrCode.TOKEN_INVALID);
     }
 
     @Test
     void shouldRejectInvalidToken() {
         assertThatThrownBy(() -> jwtUtil.parseUserId("invalid.token.here"))
-                .isInstanceOf(InvalidTokenException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("errCode").isEqualTo(CommonErrCode.TOKEN_INVALID);
     }
 
     @Test
@@ -53,6 +58,7 @@ class JwtUtilTest {
         String token = shortLived.generateToken(1L);
 
         assertThatThrownBy(() -> shortLived.parseUserId(token))
-                .isInstanceOf(InvalidTokenException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("errCode").isEqualTo(CommonErrCode.TOKEN_INVALID);
     }
 }

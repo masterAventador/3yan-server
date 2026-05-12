@@ -1,8 +1,8 @@
-package com.sanyan.auth;
+package com.sanyan.common.auth;
 
-import com.sanyan.dto.ApiResponse;
-import com.sanyan.exception.GlobalExceptionHandler;
-import com.sanyan.util.JwtUtil;
+import com.sanyan.common.error.CommonErrCode;
+import com.sanyan.common.web.BaseResp;
+import com.sanyan.common.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -49,23 +49,26 @@ class LoginUserArgumentResolverTest {
     }
 
     @Test
-    void shouldReturn401WhenAuthorizationHeaderMissing() throws Exception {
+    void shouldReturnFailureWhenAuthorizationHeaderMissing() throws Exception {
         mvc.perform(get("/test/whoami"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(CommonErrCode.TOKEN_INVALID.getCode()));
     }
 
     @Test
-    void shouldReturn401WhenTokenInvalid() throws Exception {
+    void shouldReturnFailureWhenTokenInvalid() throws Exception {
         mvc.perform(get("/test/whoami").header("Authorization", "Bearer not.a.real.token"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(CommonErrCode.TOKEN_INVALID.getCode()));
     }
 
     @RestController
     static class TestController {
         @GetMapping("/test/whoami")
-        public ApiResponse<Long> whoami(@LoginUser Long userId) {
-            return ApiResponse.ok(userId);
+        public BaseResp<Long> whoami(@LoginUser Long userId) {
+            return BaseResp.success(userId);
         }
     }
 }

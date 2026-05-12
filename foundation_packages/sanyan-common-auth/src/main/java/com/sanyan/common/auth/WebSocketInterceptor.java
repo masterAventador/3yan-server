@@ -1,6 +1,5 @@
-package com.sanyan.websocket;
+package com.sanyan.common.auth;
 
-import com.sanyan.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.server.ServerHttpRequest;

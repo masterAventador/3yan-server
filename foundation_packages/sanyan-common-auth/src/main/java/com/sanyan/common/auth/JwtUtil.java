@@ -1,6 +1,7 @@
-package com.sanyan.util;
+package com.sanyan.common.auth;
 
-import com.sanyan.exception.InvalidTokenException;
+import com.sanyan.common.error.BusinessException;
+import com.sanyan.common.error.CommonErrCode;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,7 +36,7 @@ public class JwtUtil {
 
     public Long parseUserId(String token) {
         if (token == null || token.isBlank()) {
-            throw new InvalidTokenException("token 为空");
+            throw new BusinessException(CommonErrCode.TOKEN_INVALID, "token 为空");
         }
         try {
             Claims claims = Jwts.parser()
@@ -45,7 +46,7 @@ public class JwtUtil {
                     .getPayload();
             return Long.parseLong(claims.getSubject());
         } catch (JwtException | IllegalArgumentException e) {
-            throw new InvalidTokenException("token 无效或已过期", e);
+            throw new BusinessException(CommonErrCode.TOKEN_INVALID, "token 无效或已过期");
         }
     }
 }

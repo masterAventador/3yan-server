@@ -1,6 +1,5 @@
-package com.sanyan.auth;
+package com.sanyan.common.auth;
 
-import com.sanyan.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.MethodParameter;

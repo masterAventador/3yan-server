@@ -1,4 +1,4 @@
-package com.sanyan.auth;
+package com.sanyan.common.auth;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
