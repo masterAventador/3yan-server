@@ -5,12 +5,8 @@ spring:
     password: ${PG_PASSWORD:}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
-    defer-datasource-initialization: true
-  sql:
-    init:
-      mode: always
   data:
     redis:
       host: localhost
