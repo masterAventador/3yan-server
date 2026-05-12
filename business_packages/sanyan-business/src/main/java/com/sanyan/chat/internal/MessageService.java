@@ -2,8 +2,10 @@ package com.sanyan.chat.internal;
 
 import com.sanyan.chat.web.MessageData;
 import com.sanyan.chat.ws.SenderType;
-import com.sanyan.entity.AiCharacter; // TODO M3.2: 改 com.sanyan.character.internal.AiCharacterEntity
-import com.sanyan.repository.AiCharacterRepository; // TODO M3.2: 改 com.sanyan.character.internal.AiCharacterRepository
+import com.sanyan.character.internal.AiCharacterEntity;
+import com.sanyan.character.internal.AiCharacterRepository;
+import com.sanyan.character.internal.CharacterErrCode;
+import com.sanyan.common.error.BusinessException;
 import com.sanyan.service.AiService; // TODO M3.3: 改 com.sanyan.llm.internal.AiService
 import com.sanyan.common.util.TextProcessor;
 import lombok.RequiredArgsConstructor;
@@ -52,9 +54,8 @@ public class MessageService {
      */
     @Transactional
     public List<MessageEntity> handleAiReply(Long userId) {
-        // TODO M3.2: 改 throw new BusinessException(CharacterErrCode.CHARACTER_NOT_FOUND);
-        AiCharacter character = characterRepository.findById(DEFAULT_CHARACTER_ID)
-                .orElseThrow(() -> new RuntimeException("默认角色不存在（character_id=1）"));
+        AiCharacterEntity character = characterRepository.findById(DEFAULT_CHARACTER_ID)
+                .orElseThrow(() -> new BusinessException(CharacterErrCode.CHARACTER_NOT_FOUND));
         log.info("调用豆包 AI: userId={}, character={}", userId, character.getName());
         String rawReply = aiService.chat(character, userId);
         String cleaned = TextProcessor.cleanAiReply(rawReply);
