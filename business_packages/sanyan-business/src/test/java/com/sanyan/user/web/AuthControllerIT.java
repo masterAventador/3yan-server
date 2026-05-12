@@ -83,7 +83,7 @@ class AuthControllerIT {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errMsg").value("验证码错误"));
+                .andExpect(jsonPath("$.message").value("验证码错误"));
     }
 
     @Test
@@ -120,6 +120,6 @@ class AuthControllerIT {
                         .content(objectMapper.writeValueAsString(loginReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errMsg").value("密码错误"));
+                .andExpect(jsonPath("$.message").value("密码错误"));
     }
 }
