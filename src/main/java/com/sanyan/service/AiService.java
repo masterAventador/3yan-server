@@ -5,14 +5,19 @@ import com.sanyan.dto.ws.SenderType;
 import com.sanyan.entity.AiCharacter;
 import com.sanyan.entity.Message;
 import com.sanyan.repository.MessageRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -35,14 +40,28 @@ public class AiService {
     @Value("${sanyan.doubao.endpoint:https://ark.cn-beijing.volces.com/api/v3/chat/completions}")
     private String endpoint;
 
+    @Value("classpath:prompts/xiaowan-system.md")
+    private Resource systemPromptResource;
+
+    private String systemPromptTemplate;
+
     static final String AI_FALLBACK_MESSAGE = "抱歉，我现在有点走神了，等下再聊吧~";
+
+    @PostConstruct
+    void loadSystemPrompt() {
+        try (InputStream is = systemPromptResource.getInputStream()) {
+            this.systemPromptTemplate = new String(is.readAllBytes(), StandardCharsets.UTF_8).trim();
+        } catch (IOException e) {
+            throw new IllegalStateException("加载人设资源文件失败: " + systemPromptResource, e);
+        }
+    }
 
     /**
      * AI reply to user's text message.
      * 一期短期上下文：最近 20 条消息。长期记忆（B+C+RAG）按 spec Plan 2 实现。
      */
     public String chat(AiCharacter character, Long userId) {
-        String systemPrompt = assembleSystemPrompt(character.getSystemPrompt(), formatCurrentTime());
+        String systemPrompt = assembleSystemPrompt(systemPromptTemplate, formatCurrentTime());
 
         List<Message> recentMessages = messageRepository
                 .findByUserIdOrderByIdDesc(userId, PageRequest.of(0, 20));

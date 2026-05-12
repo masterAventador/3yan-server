@@ -5,6 +5,7 @@ import com.sanyan.dto.data.MessageData;
 import com.sanyan.dto.ws.*;
 import com.sanyan.entity.Message;
 import com.sanyan.service.MessageService;
+import com.sanyan.util.TypingDelayCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -75,16 +76,23 @@ public class WebSocketHandler extends TextWebSocketHandler {
         // 3. typing
         sendObject(session, new WsTyping());
 
-        // 4. async: AI 调用 + 模拟打字延迟 + 推送
+        // 4. async: AI 调用 + 拆分多条 + 按节奏推送（typing → delay → message → gap → typing → ...）
         CompletableFuture.runAsync(() -> {
             try {
-                Message aiMsg = messageService.handleAiReply(userId);
-                long delay = messageService.calculateTypingDelay(aiMsg.getContent());
-                log.info("模拟打字延迟: {}ms, userId={}", delay, userId);
-                Thread.sleep(delay);
-
-                sendObject(session, new WsNewMessage(messageService.toData(aiMsg)));
-                log.info("AI 回复已推送: userId={}, msgId={}", userId, aiMsg.getId());
+                List<Message> aiMessages = messageService.handleAiReply(userId);
+                for (int i = 0; i < aiMessages.size(); i++) {
+                    Message aiMsg = aiMessages.get(i);
+                    if (i > 0) {
+                        long gap = TypingDelayCalculator.calculateInterMessageGap();
+                        Thread.sleep(gap);
+                        sendObject(session, new WsTyping());
+                    }
+                    long delay = TypingDelayCalculator.calculateTypingDelay(aiMsg.getContent());
+                    Thread.sleep(delay);
+                    sendObject(session, new WsNewMessage(messageService.toData(aiMsg)));
+                    log.info("AI 回复气泡推送: userId={}, msgId={}, idx={}/{}",
+                            userId, aiMsg.getId(), i + 1, aiMessages.size());
+                }
 
             } catch (Exception e) {
                 log.error("处理 AI 回复失败, userId={}", userId, e);

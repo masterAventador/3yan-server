@@ -13,9 +13,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
 @Service
@@ -45,33 +45,35 @@ public class MessageService {
         return userMsg;
     }
 
+    /** AI 回复最多拆分多少条气泡（Plan-1 F7.3） */
+    public static final int MAX_AI_BUBBLES = 4;
+
     /**
-     * 调 AI 拿回复 → 落库 → 返回 AI Message
+     * 调 AI 拿回复 → 清理动作描述 → 按句号/换行拆分 → 多条独立落库 → 返回有序消息列表
      */
     @Transactional
-    public Message handleAiReply(Long userId) {
+    public List<Message> handleAiReply(Long userId) {
         AiCharacter character = characterRepository.findById(DEFAULT_CHARACTER_ID)
                 .orElseThrow(() -> new RuntimeException("默认角色不存在（character_id=1）"));
         log.info("调用豆包 AI: userId={}, character={}", userId, character.getName());
-        String aiReply = aiService.chat(character, userId);
-        log.info("豆包 AI 回复: userId={}, replyLength={}", userId, aiReply.length());
+        String rawReply = aiService.chat(character, userId);
+        String cleaned = TextProcessor.cleanAiReply(rawReply);
+        List<String> bubbles = TextProcessor.splitIntoBubbles(cleaned, MAX_AI_BUBBLES);
+        log.info("豆包 AI 回复: userId={}, rawLen={}, bubbles={}", userId, rawReply.length(), bubbles.size());
 
-        Message aiMsg = new Message();
-        aiMsg.setUserId(userId);
-        aiMsg.setSenderType(SenderType.AI);
-        aiMsg.setContent(TextProcessor.cleanAiReply(aiReply));
-        messageRepository.save(aiMsg);
-        log.info("AI 回复已保存: userId={}, msgId={}", userId, aiMsg.getId());
-        return aiMsg;
-    }
+        if (bubbles.isEmpty()) return Collections.emptyList();
 
-    /**
-     * 模拟打字延迟（按字数估算 100-150ms/字，封顶 8s）
-     */
-    public long calculateTypingDelay(String content) {
-        if (content == null || content.isEmpty()) return 1000;
-        int perCharMs = ThreadLocalRandom.current().nextInt(100, 151);
-        return Math.min((long) content.length() * perCharMs, 8000);
+        List<Message> saved = new ArrayList<>(bubbles.size());
+        for (String bubble : bubbles) {
+            Message aiMsg = new Message();
+            aiMsg.setUserId(userId);
+            aiMsg.setSenderType(SenderType.AI);
+            aiMsg.setContent(bubble);
+            messageRepository.save(aiMsg);
+            saved.add(aiMsg);
+        }
+        log.info("AI 回复已保存: userId={}, msgIds={}", userId, saved.stream().map(Message::getId).toList());
+        return saved;
     }
 
     /**
