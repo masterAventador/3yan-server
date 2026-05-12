@@ -6,8 +6,8 @@ import com.sanyan.character.internal.AiCharacterEntity;
 import com.sanyan.character.internal.AiCharacterRepository;
 import com.sanyan.character.internal.CharacterErrCode;
 import com.sanyan.common.error.BusinessException;
-import com.sanyan.service.AiService; // TODO M3.3: 改 com.sanyan.llm.internal.AiService
 import com.sanyan.common.util.TextProcessor;
+import com.sanyan.llm.internal.AiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;

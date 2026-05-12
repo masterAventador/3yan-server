@@ -1,8 +1,8 @@
-package com.sanyan.service;
+package com.sanyan.llm.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.entity.AiCharacter;
-import com.sanyan.repository.MessageRepository;
+import com.sanyan.character.internal.AiCharacterEntity;
+import com.sanyan.chat.internal.MessageRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -54,7 +54,7 @@ class AiServiceTest {
                         "{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}",
                         HttpStatus.OK));
 
-        AiCharacter character = new AiCharacter();
+        AiCharacterEntity character = new AiCharacterEntity();
         character.setName("小婉");
         service.chat(character, 1L);
 

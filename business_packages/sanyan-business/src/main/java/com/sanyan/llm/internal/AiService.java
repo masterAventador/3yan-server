@@ -1,10 +1,10 @@
-package com.sanyan.service;
+package com.sanyan.llm.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.dto.ws.SenderType;
-import com.sanyan.entity.AiCharacter;
-import com.sanyan.entity.Message;
-import com.sanyan.repository.MessageRepository;
+import com.sanyan.chat.ws.SenderType;
+import com.sanyan.character.internal.AiCharacterEntity;
+import com.sanyan.chat.internal.MessageEntity;
+import com.sanyan.chat.internal.MessageRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,10 +60,10 @@ public class AiService {
      * AI reply to user's text message.
      * 一期短期上下文：最近 20 条消息。长期记忆（B+C+RAG）按 spec Plan 2 实现。
      */
-    public String chat(AiCharacter character, Long userId) {
+    public String chat(AiCharacterEntity character, Long userId) {
         String systemPrompt = assembleSystemPrompt(systemPromptTemplate, formatCurrentTime());
 
-        List<Message> recentMessages = messageRepository
+        List<MessageEntity> recentMessages = messageRepository
                 .findByUserIdOrderByIdDesc(userId, PageRequest.of(0, 20));
         Collections.reverse(recentMessages);
 
@@ -74,7 +74,7 @@ public class AiService {
         return characterPrompt + "\n\n[当前时间] " + time;
     }
 
-    public String callDoubao(String systemPrompt, List<Message> messages) {
+    public String callDoubao(String systemPrompt, List<MessageEntity> messages) {
         return callDoubaoRaw(buildChatMessages(systemPrompt, messages));
     }
 
@@ -109,11 +109,11 @@ public class AiService {
         }
     }
 
-    static List<Map<String, String>> buildChatMessages(String systemPrompt, List<Message> messages) {
+    static List<Map<String, String>> buildChatMessages(String systemPrompt, List<MessageEntity> messages) {
         List<Map<String, String>> chatMessages = new ArrayList<>();
         chatMessages.add(Map.of("role", "system", "content", systemPrompt));
         if (messages != null) {
-            for (Message msg : messages) {
+            for (MessageEntity msg : messages) {
                 String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
                 chatMessages.add(Map.of("role", role, "content", msg.getContent() == null ? "" : msg.getContent()));
             }
