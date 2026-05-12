@@ -1,32 +1,36 @@
-package com.sanyan.controller;
+package com.sanyan.user.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.dto.req.LoginReq;
-import com.sanyan.dto.req.RegisterReq;
-import com.sanyan.dto.req.SmsSendReq;
-import com.sanyan.service.SmsService;
+import com.sanyan.common.error.BusinessException;
+import com.sanyan.user.internal.SmsCodeSendService;
+import com.sanyan.user.internal.UserErrCode;
+import com.sanyan.user.internal.UserLoginService;
+import com.sanyan.user.internal.UserRegisterService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-class AuthControllerTest {
+class AuthControllerIT {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
-    @MockBean private SmsService smsService;
-    @MockBean private StringRedisTemplate stringRedisTemplate;
+
+    @MockBean private UserRegisterService userRegisterService;
+    @MockBean private UserLoginService userLoginService;
+    @MockBean private SmsCodeSendService smsCodeSendService;
 
     @Test
     void shouldSendSmsCode() throws Exception {
@@ -39,12 +43,16 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(smsService).sendCode("13800138000");
+        verify(smsCodeSendService).sendCode("13800138000");
     }
 
     @Test
     void shouldRegisterNewUser() throws Exception {
-        when(smsService.verifyCode("13800138001", "123456")).thenReturn(true);
+        LoginData loginData = new LoginData();
+        loginData.setUserId(1001L);
+        loginData.setToken("fake-token");
+        loginData.setNickname("小明");
+        when(userRegisterService.register(any(RegisterReq.class))).thenReturn(loginData);
 
         RegisterReq req = new RegisterReq();
         req.setPhone("13800138001");
@@ -57,12 +65,13 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.token").isNotEmpty());
+                .andExpect(jsonPath("$.data.token").value("fake-token"));
     }
 
     @Test
     void shouldRejectRegisterWithWrongCode() throws Exception {
-        when(smsService.verifyCode(anyString(), anyString())).thenReturn(false);
+        when(userRegisterService.register(any(RegisterReq.class)))
+                .thenThrow(new BusinessException(UserErrCode.SMS_CODE_INVALID));
 
         RegisterReq req = new RegisterReq();
         req.setPhone("13800138002");
@@ -79,17 +88,11 @@ class AuthControllerTest {
 
     @Test
     void shouldLoginWithPassword() throws Exception {
-        // 先注册
-        when(smsService.verifyCode("13800138003", "123456")).thenReturn(true);
-        RegisterReq regReq = new RegisterReq();
-        regReq.setPhone("13800138003");
-        regReq.setCode("123456");
-        regReq.setPassword("mypassword");
-        mockMvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(regReq)));
+        LoginData loginData = new LoginData();
+        loginData.setUserId(2002L);
+        loginData.setToken("login-token");
+        when(userLoginService.login(any(LoginReq.class))).thenReturn(loginData);
 
-        // 再登录
         LoginReq loginReq = new LoginReq();
         loginReq.setPhone("13800138003");
         loginReq.setPassword("mypassword");
@@ -99,23 +102,15 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(loginReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.token").isNotEmpty())
-                .andExpect(jsonPath("$.data.userId").isNotEmpty());
+                .andExpect(jsonPath("$.data.token").value("login-token"))
+                .andExpect(jsonPath("$.data.userId").value(2002));
     }
 
     @Test
     void shouldRejectWrongPassword() throws Exception {
-        // 先注册
-        when(smsService.verifyCode("13800138004", "123456")).thenReturn(true);
-        RegisterReq regReq = new RegisterReq();
-        regReq.setPhone("13800138004");
-        regReq.setCode("123456");
-        regReq.setPassword("mypassword");
-        mockMvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(regReq)));
+        when(userLoginService.login(any(LoginReq.class)))
+                .thenThrow(new BusinessException(UserErrCode.WRONG_PASSWORD));
 
-        // 错误密码登录
         LoginReq loginReq = new LoginReq();
         loginReq.setPhone("13800138004");
         loginReq.setPassword("wrongpassword");
@@ -124,6 +119,7 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(loginReq)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errMsg").value("密码错误"));
     }
 }

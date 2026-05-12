@@ -1,4 +1,4 @@
-package com.sanyan.service;
+package com.sanyan.user.internal;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,35 +15,35 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class SmsServiceTest {
+class SmsCodeSendServiceTest {
 
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOps;
 
-    private SmsService smsService;
+    private SmsCodeSendService smsCodeSendService;
 
     @BeforeEach
     void setUp() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        smsService = new SmsService(redisTemplate);
+        smsCodeSendService = new SmsCodeSendService(redisTemplate);
     }
 
     @Test
     void shouldSendAndStoreCode() {
-        smsService.sendCode("13800138000");
+        smsCodeSendService.sendCode("13800138000");
         verify(valueOps).set(eq("sms:code:13800138000"), anyString(), eq(5L), eq(TimeUnit.MINUTES));
     }
 
     @Test
     void shouldVerifyCorrectCode() {
         when(valueOps.get("sms:code:13800138000")).thenReturn("123456");
-        assertThat(smsService.verifyCode("13800138000", "123456")).isTrue();
+        assertThat(smsCodeSendService.verifyCode("13800138000", "123456")).isTrue();
         verify(redisTemplate).delete("sms:code:13800138000");
     }
 
     @Test
     void shouldRejectWrongCode() {
         when(valueOps.get("sms:code:13800138000")).thenReturn("123456");
-        assertThat(smsService.verifyCode("13800138000", "000000")).isFalse();
+        assertThat(smsCodeSendService.verifyCode("13800138000", "000000")).isFalse();
     }
 }

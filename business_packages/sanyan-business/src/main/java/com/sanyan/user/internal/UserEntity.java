@@ -1,4 +1,4 @@
-package com.sanyan.entity;
+package com.sanyan.user.internal;
 
 import jakarta.persistence.*;
 import lombok.Data;
@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Table(name = "users", indexes = {
     @Index(name = "idx_user_phone", columnList = "phone", unique = true)
 })
-public class User {
+public class UserEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @Column(nullable = false, unique = true, length = 20)

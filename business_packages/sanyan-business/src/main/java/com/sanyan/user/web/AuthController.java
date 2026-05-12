@@ -1,12 +1,10 @@
-package com.sanyan.controller;
+package com.sanyan.user.web;
 
-import com.sanyan.dto.ApiResponse;
-import com.sanyan.dto.data.LoginData;
-import com.sanyan.dto.req.LoginReq;
-import com.sanyan.dto.req.RegisterReq;
-import com.sanyan.dto.req.SmsSendReq;
-import com.sanyan.service.AuthService;
-import com.sanyan.service.SmsService;
+import com.sanyan.common.error.BusinessException;
+import com.sanyan.dto.ApiResponse; // TODO M3.6: 替换为 BaseResp
+import com.sanyan.user.internal.SmsCodeSendService;
+import com.sanyan.user.internal.UserLoginService;
+import com.sanyan.user.internal.UserRegisterService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -16,20 +14,21 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthService authService;
-    private final SmsService smsService;
+    private final UserRegisterService userRegisterService;
+    private final UserLoginService userLoginService;
+    private final SmsCodeSendService smsCodeSendService;
 
     @PostMapping("/sms/send")
     public ApiResponse<Void> sendSms(@Valid @RequestBody SmsSendReq req) {
-        smsService.sendCode(req.getPhone());
+        smsCodeSendService.sendCode(req.getPhone());
         return ApiResponse.ok();
     }
 
     @PostMapping("/register")
     public ApiResponse<LoginData> register(@Valid @RequestBody RegisterReq req) {
         try {
-            return ApiResponse.ok(authService.register(req));
-        } catch (IllegalArgumentException e) {
+            return ApiResponse.ok(userRegisterService.register(req));
+        } catch (BusinessException e) {
             return ApiResponse.fail(e.getMessage());
         }
     }
@@ -37,8 +36,8 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<LoginData> login(@Valid @RequestBody LoginReq req) {
         try {
-            return ApiResponse.ok(authService.login(req));
-        } catch (IllegalArgumentException e) {
+            return ApiResponse.ok(userLoginService.login(req));
+        } catch (BusinessException e) {
             return ApiResponse.fail(e.getMessage());
         }
     }

@@ -1,4 +1,4 @@
-package com.sanyan.service;
+package com.sanyan.user.internal;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,10 +8,11 @@ import org.springframework.stereotype.Service;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
+// TODO M2.4 后续切到 KvCache 封装，当前保留 StringRedisTemplate 暂时不动
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class SmsService {
+public class SmsCodeSendService {
 
     private final StringRedisTemplate redisTemplate;
     private static final String CODE_PREFIX = "sms:code:";

@@ -1,4 +1,4 @@
-package com.sanyan.dto.data;
+package com.sanyan.user.web;
 
 import lombok.Data;
 

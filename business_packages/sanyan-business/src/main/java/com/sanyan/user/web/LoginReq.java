@@ -1,9 +1,10 @@
-package com.sanyan.dto.req;
+package com.sanyan.user.web;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
-public class SmsSendReq {
+public class LoginReq {
     @NotBlank private String phone;
+    @NotBlank private String password;
 }
