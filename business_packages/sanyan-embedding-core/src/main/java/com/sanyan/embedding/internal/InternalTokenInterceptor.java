@@ -24,7 +24,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Component
 public class InternalTokenInterceptor implements HandlerInterceptor {
 
-    static final String TOKEN_HEADER = "X-Internal-Token";
+    public static final String TOKEN_HEADER = "X-Internal-Token";
 
     private final String configuredToken;
 

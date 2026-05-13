@@ -34,7 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>token 缺失 → 401（拦截器拦下，Controller 未触发）</li>
  *   <li>token 错误 → 401</li>
  *   <li>token 正确 + 合法 body → 200 + 业务向量数据</li>
- *   <li>token 正确 + 空 list → 400（{@link jakarta.validation.constraints.NotEmpty}）</li>
+ *   <li>token 正确 + 空 list → 200 + {@code BaseResp.code=410}
+ *       （{@link jakarta.validation.constraints.NotEmpty} 经 {@link GlobalExceptionHandler} 包装）</li>
  *   <li>token 正确 + adapter 抛 {@link EmbeddingErrCode#MODEL_NOT_READY}
  *       → 200 HTTP，body {@code success=false, code=6001}（{@link GlobalExceptionHandler} 处理）</li>
  * </ul>
@@ -75,7 +76,7 @@ class EmbeddingControllerIT {
         String body = objectMapper.writeValueAsString(new EmbedRequest(List.of("你好世界")));
 
         mockMvc.perform(post(EMBED_PATH)
-                        .header("X-Internal-Token", "wrong-token")
+                        .header(InternalTokenInterceptor.TOKEN_HEADER, "wrong-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isUnauthorized());
@@ -93,7 +94,7 @@ class EmbeddingControllerIT {
         String body = objectMapper.writeValueAsString(new EmbedRequest(List.of("你好世界")));
 
         mockMvc.perform(post(EMBED_PATH)
-                        .header("X-Internal-Token", VALID_TOKEN)
+                        .header(InternalTokenInterceptor.TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
@@ -110,7 +111,7 @@ class EmbeddingControllerIT {
         String body = objectMapper.writeValueAsString(new EmbedRequest(List.of()));
 
         mockMvc.perform(post(EMBED_PATH)
-                        .header("X-Internal-Token", VALID_TOKEN)
+                        .header(InternalTokenInterceptor.TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
@@ -128,7 +129,7 @@ class EmbeddingControllerIT {
         String body = objectMapper.writeValueAsString(new EmbedRequest(List.of("你好世界")));
 
         mockMvc.perform(post(EMBED_PATH)
-                        .header("X-Internal-Token", VALID_TOKEN)
+                        .header(InternalTokenInterceptor.TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
