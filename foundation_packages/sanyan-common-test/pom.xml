@@ -56,6 +56,14 @@
             <artifactId>flyway-database-postgresql</artifactId>
             <scope>compile</scope>
         </dependency>
+
+        <!-- MockWebServer：用 compile scope 暴露给下游 test 模块，
+             让 HTTP 客户端测试可以 mock 上游服务（如 DeepSeek、embedding-server） -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>mockwebserver</artifactId>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 
     <build>

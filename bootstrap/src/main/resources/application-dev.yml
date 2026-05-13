@@ -20,6 +20,12 @@ sanyan:
     api-key: ${DOUBAO_API_KEY:76022745-db00-4016-9613-880c4318e5d4}
     model: ep-20260408102845-f86mb
     endpoint: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+  llm:
+    deepseek:
+      # BACKGROUND 任务（摘要 / 档案抽取）用 DeepSeek V4-Flash；API key 由环境变量注入，未配置时 adapter 仍能装配但调用会被上游 401 拒绝
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com
+      model: deepseek-v4-flash
   sms:
     access-key-id: ${SMS_ACCESS_KEY_ID:}
     access-key-secret: ${SMS_ACCESS_KEY_SECRET:}
