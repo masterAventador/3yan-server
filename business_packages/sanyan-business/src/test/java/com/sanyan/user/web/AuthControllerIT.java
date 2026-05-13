@@ -2,6 +2,7 @@ package com.sanyan.user.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.common.error.BusinessException;
+import com.sanyan.common.test.TestApplication;
 import com.sanyan.common.web.GlobalExceptionHandler;
 import com.sanyan.user.internal.SmsCodeSendService;
 import com.sanyan.user.internal.UserErrCode;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -23,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = AuthController.class)
+@ContextConfiguration(classes = TestApplication.class)
 @Import({AuthController.class, GlobalExceptionHandler.class})
 class AuthControllerIT {
 

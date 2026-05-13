@@ -16,7 +16,7 @@ public class UserLoginService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final BCryptPasswordEncoder passwordEncoder;
 
     public LoginData login(LoginReq req) {
         UserEntity user = userRepository.findByPhone(req.getPhone())

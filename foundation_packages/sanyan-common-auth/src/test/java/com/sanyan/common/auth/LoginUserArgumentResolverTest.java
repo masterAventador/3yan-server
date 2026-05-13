@@ -1,74 +1,81 @@
 package com.sanyan.common.auth;
 
+import com.sanyan.common.error.BusinessException;
 import com.sanyan.common.error.CommonErrCode;
-import com.sanyan.common.web.BaseResp;
-import com.sanyan.common.web.GlobalExceptionHandler;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.context.request.NativeWebRequest;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
+/**
+ * LoginUserArgumentResolver 纯 Mockito 单测，只验证 resolveArgument 行为本身。
+ * "BusinessException → BaseResp.failed" 的映射由 common-web 的 GlobalExceptionHandlerTest 单独覆盖。
+ */
+@ExtendWith(MockitoExtension.class)
 class LoginUserArgumentResolverTest {
 
     private static final String SECRET = "test-secret-key-at-least-256-bits-long-for-hmac-sha";
 
-    private MockMvc mvc;
+    @Mock private NativeWebRequest webRequest;
+    @Mock private HttpServletRequest httpRequest;
+
     private JwtUtil jwtUtil;
+    private LoginUserArgumentResolver resolver;
 
     @BeforeEach
     void setUp() {
         jwtUtil = new JwtUtil(SECRET, 30);
-        LoginUserArgumentResolver resolver = new LoginUserArgumentResolver(jwtUtil);
-        mvc = MockMvcBuilders.standaloneSetup(new TestController())
-                .setCustomArgumentResolvers(resolver)
-                .setControllerAdvice(new GlobalExceptionHandler())
-                .build();
+        resolver = new LoginUserArgumentResolver(jwtUtil);
     }
 
     @Test
-    void shouldResolveUserIdFromValidBearerToken() throws Exception {
+    void resolveArgument_shouldReturnUserIdForValidBearerToken() {
         String token = jwtUtil.generateToken(99L);
-        mvc.perform(get("/test/whoami").header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data").value(99));
+        when(webRequest.getNativeRequest(HttpServletRequest.class)).thenReturn(httpRequest);
+        when(httpRequest.getHeader("Authorization")).thenReturn("Bearer " + token);
+
+        Object result = resolver.resolveArgument(null, null, webRequest, null);
+
+        assertThat(result).isEqualTo(99L);
     }
 
     @Test
-    void shouldAcceptTokenWithoutBearerPrefix() throws Exception {
+    void resolveArgument_shouldReturnUserIdWhenTokenHasNoBearerPrefix() {
         String token = jwtUtil.generateToken(7L);
-        mvc.perform(get("/test/whoami").header("Authorization", token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").value(7));
+        when(webRequest.getNativeRequest(HttpServletRequest.class)).thenReturn(httpRequest);
+        when(httpRequest.getHeader("Authorization")).thenReturn(token);
+
+        Object result = resolver.resolveArgument(null, null, webRequest, null);
+
+        assertThat(result).isEqualTo(7L);
     }
 
     @Test
-    void shouldReturnFailureWhenAuthorizationHeaderMissing() throws Exception {
-        mvc.perform(get("/test/whoami"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code").value(CommonErrCode.TOKEN_INVALID.getCode()));
+    void resolveArgument_shouldThrowBusinessExceptionWhenAuthorizationHeaderMissing() {
+        when(webRequest.getNativeRequest(HttpServletRequest.class)).thenReturn(httpRequest);
+        when(httpRequest.getHeader("Authorization")).thenReturn(null);
+
+        assertThatThrownBy(() -> resolver.resolveArgument(null, null, webRequest, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrCode())
+                .isEqualTo(CommonErrCode.TOKEN_INVALID);
     }
 
     @Test
-    void shouldReturnFailureWhenTokenInvalid() throws Exception {
-        mvc.perform(get("/test/whoami").header("Authorization", "Bearer not.a.real.token"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code").value(CommonErrCode.TOKEN_INVALID.getCode()));
-    }
+    void resolveArgument_shouldThrowBusinessExceptionWhenTokenInvalid() {
+        when(webRequest.getNativeRequest(HttpServletRequest.class)).thenReturn(httpRequest);
+        when(httpRequest.getHeader("Authorization")).thenReturn("Bearer not.a.real.token");
 
-    @RestController
-    static class TestController {
-        @GetMapping("/test/whoami")
-        public BaseResp<Long> whoami(@LoginUser Long userId) {
-            return BaseResp.success(userId);
-        }
+        assertThatThrownBy(() -> resolver.resolveArgument(null, null, webRequest, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrCode())
+                .isEqualTo(CommonErrCode.TOKEN_INVALID);
     }
 }

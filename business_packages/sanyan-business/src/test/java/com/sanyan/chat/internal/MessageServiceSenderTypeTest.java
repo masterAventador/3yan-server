@@ -1,6 +1,5 @@
 package com.sanyan.chat.internal;
 
-import com.sanyan.chat.ws.SenderType;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

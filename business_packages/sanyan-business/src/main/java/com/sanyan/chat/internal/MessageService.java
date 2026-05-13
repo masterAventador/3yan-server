@@ -1,7 +1,6 @@
 package com.sanyan.chat.internal;
 
 import com.sanyan.chat.web.MessageData;
-import com.sanyan.chat.ws.SenderType;
 import com.sanyan.character.internal.AiCharacterEntity;
 import com.sanyan.character.internal.AiCharacterRepository;
 import com.sanyan.character.internal.CharacterErrCode;
