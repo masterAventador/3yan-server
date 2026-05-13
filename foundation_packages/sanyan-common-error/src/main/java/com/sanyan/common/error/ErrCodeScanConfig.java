@@ -1,5 +1,6 @@
 package com.sanyan.common.error;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -7,14 +8,16 @@ import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.core.type.classreading.CachingMetadataReaderFactory;
 import org.springframework.core.type.classreading.MetadataReader;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Configuration
-public class ErrCodeAutoConfig {
+public class ErrCodeScanConfig {
 
     @Bean
-    public List<Class<? extends ErrCode>> errCodeEnums() throws Exception {
+    public List<Class<? extends ErrCode>> errCodeEnums() throws IOException {
         List<Class<? extends ErrCode>> result = new ArrayList<>();
         ResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory(resolver);
@@ -22,8 +25,12 @@ public class ErrCodeAutoConfig {
             MetadataReader reader = factory.getMetadataReader(res);
             String className = reader.getClassMetadata().getClassName();
             Class<?> clazz;
-            try { clazz = Class.forName(className); }
-            catch (Throwable e) { continue; }
+            try {
+                clazz = Class.forName(className);
+            } catch (Throwable e) {
+                log.warn("跳过无法加载的 class: {}, 原因: {}", className, e.getMessage());
+                continue;
+            }
             if (clazz.isEnum() && ErrCode.class.isAssignableFrom(clazz)) {
                 @SuppressWarnings("unchecked")
                 Class<? extends ErrCode> typed = (Class<? extends ErrCode>) clazz;
