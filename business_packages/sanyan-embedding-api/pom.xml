@@ -14,10 +14,38 @@
     <packaging>jar</packaging>
 
     <!--
-        Plan 2 Task L0：模块空壳，仅注册到父 pom。
-        Task M2a 会填充 EmbeddingApi 接口 + EmbedRequest / EmbedResponse DTO。
-        协议契约模块，主服务（new）和 embedding-server（old）都依赖它。
+        Plan 2 Task M2a：协议契约模块。
+        仅含 EmbeddingApi 接口 + EmbedRequest / EmbedResponse DTO + Bean Validation 注解。
+        主服务 (new) 和 embedding-server (old) 双方依赖本模块，保证协议同构。
+        约束：不允许出现任何实现代码 / Spring 注解 / 数据库代码（-api 模块铁律）。
     -->
     <dependencies>
+        <!-- Bean Validation 注解（@NotEmpty / @Size 等）；版本由 Spring Boot parent 管理 -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
+
+        <!--
+            测试：Hibernate Validator 真实运行注解校验。
+            EL 实现选 org.glassfish.expressly:expressly（Hibernate Validator 8 默认）。
+            Spring Boot 3.2.5 BOM 未管理 expressly，故显式指定版本（与 HV 8 的 jakarta.el 5.x 范围兼容）。
+        -->
+        <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.expressly</groupId>
+            <artifactId>expressly</artifactId>
+            <version>5.0.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
