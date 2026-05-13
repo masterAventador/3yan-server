@@ -11,7 +11,7 @@ spring:
     show-sql: false
   flyway:
     enabled: true
-    baseline-on-migrate: true
+    baseline-on-migrate: true  # 生产首次启动 baseline 后，建议改 false 防止误删 schema 后自动 re-baseline
     baseline-version: 1
     locations: classpath:db/migration
   sql:

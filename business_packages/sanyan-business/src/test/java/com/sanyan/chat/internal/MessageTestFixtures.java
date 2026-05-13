@@ -1,7 +1,5 @@
 package com.sanyan.chat.internal;
 
-import com.sanyan.chat.ws.SenderType;
-
 /**
  * MessageEntity Object Mother (java-backend-business-layer.md §5.2)。
  * 测试中需要 MessageEntity 时一律通过这里构造，不允许裸 new。

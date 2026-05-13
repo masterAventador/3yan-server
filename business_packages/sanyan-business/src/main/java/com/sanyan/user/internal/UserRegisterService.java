@@ -18,7 +18,7 @@ public class UserRegisterService {
     private final UserRepository userRepository;
     private final SmsCodeSendService smsCodeSendService;
     private final JwtUtil jwtUtil;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final BCryptPasswordEncoder passwordEncoder;
 
     @Transactional
     public LoginData register(RegisterReq req) {

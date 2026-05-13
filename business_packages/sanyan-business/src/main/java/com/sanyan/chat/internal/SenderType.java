@@ -1,4 +1,4 @@
-package com.sanyan.chat.ws;
+package com.sanyan.chat.internal;
 
 public final class SenderType {
     public static final String USER = "user";

@@ -1,7 +1,7 @@
 package com.sanyan.llm.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.chat.ws.SenderType;
+import com.sanyan.chat.internal.SenderType;
 import com.sanyan.character.internal.AiCharacterEntity;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
