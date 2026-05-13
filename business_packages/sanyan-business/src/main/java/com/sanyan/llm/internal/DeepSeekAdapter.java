@@ -4,8 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sanyan.common.error.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -55,18 +53,9 @@ public class DeepSeekAdapter implements LLMProvider {
             @Value("${sanyan.llm.deepseek.read-timeout:PT30S}") Duration readTimeout) {
         this.apiKey = apiKey;
         this.model = model;
-        this.restClient = buildRestClient(baseUrl, connectTimeout, readTimeout);
-    }
-
-    private static RestClient buildRestClient(String baseUrl, Duration connectTimeout, Duration readTimeout) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout((int) connectTimeout.toMillis());
-        factory.setReadTimeout((int) readTimeout.toMillis());
-        return RestClient.builder()
-                .baseUrl(baseUrl)
-                .requestFactory(factory)
-                .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                .build();
+        // M2c 重构：与 RemoteBgeM3Provider 共用 LlmHttpClients 工厂，消除重复的
+        // RestClient + SimpleClientHttpRequestFactory 构造（M1 code review 指出的预警）
+        this.restClient = LlmHttpClients.newClient(baseUrl, connectTimeout, readTimeout);
     }
 
     @Override

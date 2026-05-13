@@ -26,6 +26,21 @@ sanyan:
       api-key: ${DEEPSEEK_API_KEY:}
       base-url: https://api.deepseek.com
       model: deepseek-v4-flash
+  # 远程 embedding 服务（M2b 部署到 old，M2c 实现的 RemoteBgeM3Provider HTTP 客户端读取本配置）
+  embedding:
+    # dev 默认指向本机；生产部署时由 systemd EnvironmentFile 注入 SANYAN_EMBEDDING_BASE_URL=http://154.8.162.83:8080
+    base-url: ${SANYAN_EMBEDDING_BASE_URL:http://localhost:8080}
+    # 与 embedding-server 共享的 token，由 /etc/sanyan/embedding-token.env 注入；dev 无 token 时调用会被服务端 401 拒绝
+    internal-token: ${EMBEDDING_INTERNAL_TOKEN:}
+    http:
+      # 公网 RTT ~12-15ms（new ↔ old），connect 给 3s 足够覆盖偶发抖动
+      connect-timeout-ms: 3000
+      # embedding 计算耗时 100-500ms（取决于 batch 大小），10s 是充足的兜底
+      read-timeout-ms: 10000
+      # 5xx / 网络异常重试 2 次（共 3 次尝试），4xx 不重试
+      max-retries: 2
+      # 首次退避 500ms，按 2 倍指数增长（500 → 1000 → 2000）
+      retry-backoff-ms: 500
   sms:
     access-key-id: ${SMS_ACCESS_KEY_ID:}
     access-key-secret: ${SMS_ACCESS_KEY_SECRET:}
