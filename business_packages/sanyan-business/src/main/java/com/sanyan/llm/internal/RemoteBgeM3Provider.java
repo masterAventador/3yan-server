@@ -31,12 +31,13 @@ import java.util.List;
  *   <li>200 但 {@code BaseResp.success=false} → 算业务错误，不重试，直接抛</li>
  * </ul>
  *
- * <p><b>重试实现：</b>使用 Spring Retry 的 {@code RetryTemplate} <b>程序化调用</b>而非
- * {@code @Retryable} 注解切面。原因：
+ * <p><b>重试实现：</b>程序化重试（手写 for-loop + 指数退避），不依赖 Spring AOP / RetryTemplate。
+ * 原因：
  * <ul>
  *   <li>{@code @Retryable} 依赖 AOP 代理，单元测试中 {@code new RemoteBgeM3Provider(...)} 直接
  *       new 出来的实例没有代理，重试不会生效——会让"503 重试"测试无法验证。</li>
- *   <li>{@code RetryTemplate} 是普通对象，单测和生产行为完全一致，零代理依赖。</li>
+ *   <li>手写 for-loop 是普通 Java 代码，单测和生产行为完全一致，零代理依赖，也无需引入
+ *       {@code spring-retry} / {@code spring-aspects} 这两个本来就用不上的依赖。</li>
  * </ul>
  *
  * <p><b>降级语义：</b>本类不返回空向量绕过 RAG，所有失败一律抛异常。降级由调用方

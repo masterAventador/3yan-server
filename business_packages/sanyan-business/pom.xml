@@ -24,10 +24,6 @@
         <!-- 业务契约：远程 embedding 服务协议（EmbedRequest / EmbedResponse / EmbeddingApi） -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-api</artifactId></dependency>
 
-        <!-- Spring Retry：RemoteBgeM3Provider 重试 5xx / 网络异常（与 spring-aspects 配合做 AOP，但本项目用 RetryTemplate 程序化调用） -->
-        <dependency><groupId>org.springframework.retry</groupId><artifactId>spring-retry</artifactId></dependency>
-        <dependency><groupId>org.springframework</groupId><artifactId>spring-aspects</artifactId></dependency>
-
         <!-- Spring Boot 业务必备 -->
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
