@@ -14,10 +14,129 @@
     <packaging>jar</packaging>
 
     <!--
-        Plan 2 Task L0：模块空壳，仅注册到父 pom。
-        Task M2b 会填充 EmbeddingController + BgeM3FastembedAdapter + InternalTokenInterceptor + EmbeddingApiImpl。
+        Plan 2 Task M2b：embedding 服务实现层。
+        EmbeddingController + BgeM3DjlAdapter（DJL + ONNX Runtime 加载 BGE-M3）
+        + InternalTokenInterceptor + EmbeddingHealthIndicator + EmbeddingErrCode + EmbeddingApiImpl。
+
+        关于"为什么用 DJL 而不是 plan 里写的 fastembed-java"：
+        - fastembed-java 在 Maven Central 不存在（fastembed 生态有 python/rust/go/js/ruby，唯独没有 Java）
+        - DJL（Deep Java Library）+ HuggingFace tokenizers + ONNX Runtime 引擎是 Java 加载
+          sentence-transformers 模型的事实标准
+        - DJL 通过 ai.djl.huggingface:tokenizers 的 DeferredTranslatorFactory 直接消费
+          HuggingFace 上的 BAAI/bge-m3 模型，输出 float[] 向量
+        - 协议契约（EmbeddingApi / EmbedRequest / EmbedResponse）保持完全不变；
+          主服务侧 RemoteBgeM3Provider 与本服务的通信不受影响
+
         部署单元：embedding-bootstrap 打包后 scp 到 old 服务器。
     -->
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- DJL BOM 锁版本 0.33.0（Maven Central 当前最新稳定版） -->
+            <dependency>
+                <groupId>ai.djl</groupId>
+                <artifactId>bom</artifactId>
+                <version>0.33.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
+        <!-- 协议契约 -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-embedding-api</artifactId>
+        </dependency>
+
+        <!-- 业务异常 + 统一响应体 -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-common-error</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-common-web</artifactId>
+        </dependency>
+
+        <!-- Spring Web / Validation / Actuator -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+            DJL（Deep Java Library） + ONNX Runtime 引擎 + HuggingFace tokenizers。
+            ai.djl.huggingface:tokenizers 提供 DeferredTranslatorFactory，
+            自动从 HuggingFace Hub 解析 sentence-transformers 模型（如 BAAI/bge-m3）。
+        -->
+        <dependency>
+            <groupId>ai.djl</groupId>
+            <artifactId>api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ai.djl.huggingface</groupId>
+            <artifactId>tokenizers</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ai.djl.onnxruntime</groupId>
+            <artifactId>onnxruntime-engine</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- 测试依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Awaitility：BgeM3DjlAdapterIT 等待模型 ready 用 -->
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Surefire 跑 *Test（快测试）。@Tag("slow") 标记的测试默认排除——
+                BgeM3DjlAdapterIT 真实加载 ~1 GiB 模型 + 几十秒下载，只在 CI 显式
+                覆写 -DexcludedGroups= 时才跑。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>slow</excludedGroups>
+                </configuration>
+            </plugin>
+            <!--
+                Failsafe 跑 *IT（集成测试）。EmbeddingControllerIT 走 @WebMvcTest，
+                不需要真实模型。BgeM3DjlAdapterIT 同样靠 @Tag("slow") 默认排除。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>slow</excludedGroups>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

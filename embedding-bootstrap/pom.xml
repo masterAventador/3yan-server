@@ -44,6 +44,17 @@
     <build>
         <finalName>sanyan-embedding-${project.version}</finalName>
         <plugins>
+            <!--
+                启用 failsafe 跑 *IT。EmbeddingApplicationContextIT 是 Spring Boot
+                完整上下文启动冒烟测试，确保依赖装配（含 common-error 自动配置）OK。
+                BgeM3DjlAdapter 异步加载 @Tag("slow") IT 已经在 sanyan-embedding-core 包
+                里跑了，这里不重复。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+
             <!-- 打 fat jar 部署到 old 服务器。mainClass 由 Spring Boot 自动从 @SpringBootApplication 注解的类推断。 -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>

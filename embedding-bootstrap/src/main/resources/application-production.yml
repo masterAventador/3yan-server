@@ -1,0 +1,17 @@
+# Plan 2 Task M2b：生产环境（old 服务器）覆盖配置。
+# 部署时 systemd 设置 SPRING_PROFILES_ACTIVE=production 即可启用。
+#
+# 主要差异：
+# - 日志写到文件 /var/log/sanyan-embedding/server.log（与 systemd 的
+#   StandardOutput=append:/var/log/sanyan-embedding.log 并存，便于排查）
+# - 日志级别保持 INFO，调试时手动改 DEBUG
+
+logging:
+  level:
+    root: INFO
+    com.sanyan.embedding: INFO
+    ai.djl: INFO
+  file:
+    name: /var/log/sanyan-embedding/server.log
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
