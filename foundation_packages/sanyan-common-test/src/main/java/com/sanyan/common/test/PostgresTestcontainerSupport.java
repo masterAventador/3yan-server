@@ -1,7 +1,15 @@
 package com.sanyan.common.test;
 
+import org.flywaydb.core.Flyway;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 共享 Postgres Testcontainer。
@@ -25,14 +33,21 @@ import org.testcontainers.utility.DockerImageName;
  *   class V5MigrationIT extends PostgresTestcontainerSupport {
  *       @Test
  *       void schemaIsCreated() throws Exception {
- *           Flyway.configure()
- *                 .dataSource(jdbcUrl(), username(), password())
- *                 .load()
- *                 .migrate();
+ *           runMigrationsUpTo("5");
+ *           Map<String, ColumnSpec> cols = describeColumns("memory_summaries");
  *           // assertions...
  *       }
  *   }
  * }</pre>
+ *
+ * <p>本基类还提供两个常用 helper：
+ * <ul>
+ *   <li>{@link #runMigrationsUpTo(String)}：跑 Flyway 到指定版本，先 clean 再 migrate
+ *       保证用例隔离</li>
+ *   <li>{@link #describeColumns(String)}：查 information_schema 拿表字段类型 / nullability，
+ *       并自动识别 BIGSERIAL 伪类型（底层 udt_name 是 int8，但有 serial sequence 时归类
+ *       为 bigserial）</li>
+ * </ul>
  */
 public abstract class PostgresTestcontainerSupport {
 
@@ -71,4 +86,77 @@ public abstract class PostgresTestcontainerSupport {
     protected static String password() {
         return postgres().getPassword();
     }
+
+    // ============ shared helpers ============
+
+    /**
+     * 取一个新的 JDBC 连接（调用方负责 close）。
+     */
+    protected static Connection newConnection() throws Exception {
+        return DriverManager.getConnection(jdbcUrl(), username(), password());
+    }
+
+    /**
+     * 跑 Flyway migration 到指定版本，先 {@code clean()} 再 {@code migrate()}，
+     * 保证用例之间互相隔离，不依赖执行顺序。
+     *
+     * @param targetVersion Flyway target 版本号字符串，例如 {@code "5"} / {@code "6"}
+     */
+    protected static void runMigrationsUpTo(String targetVersion) {
+        Flyway flyway = Flyway.configure()
+                .dataSource(jdbcUrl(), username(), password())
+                .locations("classpath:db/migration")
+                .target(targetVersion)
+                .cleanDisabled(false)
+                .load();
+        flyway.clean();
+        flyway.migrate();
+    }
+
+    /**
+     * 查指定表的字段类型 / nullability，返回 {@code 字段名 → ColumnSpec}。
+     *
+     * <p>对 {@code BIGSERIAL} 伪类型做特殊处理：底层 {@code udt_name} 是 {@code int8}，
+     * 若该列有 serial sequence（{@code pg_get_serial_sequence} 非 null）则归类为
+     * {@code bigserial}，否则归类为 {@code bigint}。
+     */
+    protected static Map<String, ColumnSpec> describeColumns(String tableName) throws Exception {
+        Map<String, ColumnSpec> result = new LinkedHashMap<>();
+        try (Connection conn = newConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT column_name, udt_name, is_nullable "
+                             + "FROM information_schema.columns "
+                             + "WHERE table_schema = 'public' AND table_name = ?")) {
+            ps.setString(1, tableName);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String name = rs.getString("column_name");
+                    String udt = rs.getString("udt_name");
+                    boolean nullable = "YES".equalsIgnoreCase(rs.getString("is_nullable"));
+                    String displayType = udt;
+                    if ("int8".equalsIgnoreCase(udt)) {
+                        try (PreparedStatement seqCheck = conn.prepareStatement(
+                                "SELECT pg_get_serial_sequence(?, ?)")) {
+                            seqCheck.setString(1, tableName);
+                            seqCheck.setString(2, name);
+                            try (ResultSet sr = seqCheck.executeQuery()) {
+                                if (sr.next() && sr.getString(1) != null) {
+                                    displayType = "bigserial";
+                                } else {
+                                    displayType = "bigint";
+                                }
+                            }
+                        }
+                    }
+                    result.put(name, new ColumnSpec(displayType, nullable));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 字段元信息：类型名（PG 视角，参考 {@link #describeColumns}）+ 是否可空。
+     */
+    public record ColumnSpec(String typeName, boolean nullable) {}
 }
