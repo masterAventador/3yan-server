@@ -2,15 +2,16 @@ package com.sanyan.user.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.common.error.BusinessException;
+import com.sanyan.common.web.GlobalExceptionHandler;
 import com.sanyan.user.internal.SmsCodeSendService;
 import com.sanyan.user.internal.UserErrCode;
 import com.sanyan.user.internal.UserLoginService;
 import com.sanyan.user.internal.UserRegisterService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -21,8 +22,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@WebMvcTest(controllers = AuthController.class)
+@Import({AuthController.class, GlobalExceptionHandler.class})
 class AuthControllerIT {
 
     @Autowired private MockMvc mockMvc;
