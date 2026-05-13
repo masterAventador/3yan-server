@@ -24,7 +24,12 @@
         <module>foundation_packages/sanyan-common-test</module>
         <module>foundation_packages/sanyan-common-ws</module>
         <module>business_packages/sanyan-business</module>
+        <module>business_packages/sanyan-memory-api</module>
+        <module>business_packages/sanyan-memory-core</module>
+        <module>business_packages/sanyan-embedding-api</module>
+        <module>business_packages/sanyan-embedding-core</module>
         <module>bootstrap</module>
+        <module>embedding-bootstrap</module>
     </modules>
 
     <properties>
@@ -46,6 +51,10 @@
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-ws</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-business</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-core</artifactId><version>${project.version}</version></dependency>
 
             <!-- 第三方库锁版本 -->
             <dependency>

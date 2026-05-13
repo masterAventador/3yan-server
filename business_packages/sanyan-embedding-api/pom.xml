@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-embedding-api</artifactId>
+    <name>sanyan-embedding-api</name>
+    <packaging>jar</packaging>
+
+    <!--
+        Plan 2 Task L0：模块空壳，仅注册到父 pom。
+        Task M2a 会填充 EmbeddingApi 接口 + EmbedRequest / EmbedResponse DTO。
+        协议契约模块，主服务（new）和 embedding-server（old）都依赖它。
+    -->
+    <dependencies>
+    </dependencies>
+</project>

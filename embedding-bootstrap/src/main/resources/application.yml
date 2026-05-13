@@ -1,0 +1,8 @@
+# Plan 2 Task L0：最简启动配置。
+# Task M2b 会扩充 fastembed 配置、token、actuator 等。
+spring:
+  application:
+    name: sanyan-embedding
+
+server:
+  port: 8080

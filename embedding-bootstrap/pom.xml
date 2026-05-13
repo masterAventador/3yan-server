@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>embedding-bootstrap</artifactId>
+    <name>sanyan-embedding-bootstrap</name>
+    <packaging>jar</packaging>
+
+    <!--
+        Plan 2 Task L0：独立启动工程 stub。
+        Task M2b 会填充实际业务依赖（sanyan-embedding-core + fastembed-java + Spring Boot Web/Actuator）。
+        当前最小依赖只够 Spring Boot 启动 + 让 spring-boot-maven-plugin repackage 产出 fat jar。
+
+        Enforcer 守护：embedding-bootstrap 禁止依赖主业务包，违规 mvn validate 失败。
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-embedding-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-embedding-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>sanyan-embedding-${project.version}</finalName>
+        <plugins>
+            <!-- 打 fat jar 部署到 old 服务器。mainClass 由 Spring Boot 自动从 @SpringBootApplication 注解的类推断。 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.sanyan.embedding.EmbeddingApplication</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Enforcer：embedding-bootstrap 禁止依赖主业务包（sanyan-business / sanyan-memory-api / sanyan-memory-core）。
+                违规则 mvn validate 失败。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-embedding-bootstrap-isolation</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>com.sanyan:sanyan-business</exclude>
+                                        <exclude>com.sanyan:sanyan-memory-api</exclude>
+                                        <exclude>com.sanyan:sanyan-memory-core</exclude>
+                                    </excludes>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

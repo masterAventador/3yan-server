@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-memory-core</artifactId>
+    <name>sanyan-memory-core</name>
+    <packaging>jar</packaging>
+
+    <!--
+        Plan 2 Task L0：模块空壳，仅注册到父 pom。
+        后续 Task N1-Q4 会填充 summary / profile / rag / orchestrator 子包。
+        注意：sanyan-memory-core 需要依赖 sanyan-business（订阅 MessagePersistedEvent + 调 LLM router），
+        这是 Plan 1 未拆 chat -api/-core 的妥协，Plan 3 会修复。该例外的 Enforcer 允许放行写在本 pom 里。
+    -->
+    <dependencies>
+    </dependencies>
+</project>

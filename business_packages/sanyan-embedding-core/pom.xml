@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-embedding-core</artifactId>
+    <name>sanyan-embedding-core</name>
+    <packaging>jar</packaging>
+
+    <!--
+        Plan 2 Task L0：模块空壳，仅注册到父 pom。
+        Task M2b 会填充 EmbeddingController + BgeM3FastembedAdapter + InternalTokenInterceptor + EmbeddingApiImpl。
+        部署单元：embedding-bootstrap 打包后 scp 到 old 服务器。
+    -->
+    <dependencies>
+    </dependencies>
+</project>
