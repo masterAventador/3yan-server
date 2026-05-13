@@ -14,7 +14,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 echo "==> [1/4] 本地打包..."
 mvn clean package -DskipTests -q
 
-LOCAL_JAR="target/$JAR_NAME"
+LOCAL_JAR="bootstrap/target/$JAR_NAME"
 [[ -f "$LOCAL_JAR" ]] || { echo "打包失败：$LOCAL_JAR 不存在" >&2; exit 1; }
 
 echo "==> [2/4] 上传 jar 到 $SERVER..."

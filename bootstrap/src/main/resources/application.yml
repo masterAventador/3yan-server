@@ -1,0 +1,24 @@
+spring:
+  profiles:
+    active: dev
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
+  sql:
+    init:
+      mode: never
+
+sanyan:
+  jwt:
+    secret: ${JWT_SECRET:your-256-bit-secret-key-for-sanyan-app-change-in-production}
+    expiration-days: 30
