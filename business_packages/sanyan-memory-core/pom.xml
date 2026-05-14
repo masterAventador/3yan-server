@@ -25,6 +25,10 @@
                  LLMProviderRouter + 引用 MessageEntity/SenderType/LLMTaskType。理由同上：
                  Plan 1 没把 chat 拆 -api/-core，所以现阶段只能整包依赖；Plan 3 拆完后改成
                  只依赖 sanyan-chat-api（拿到 MessageDto + LLM 路由契约）。
+
+        Task O4：补 sanyan-common-cache —— UserMessageProfileExtractListener 用 KvCache.setIfAbsent
+                 做 5 分钟节流（同一 user/character 5 分钟内最多触发一次档案抽取）。
+                 不直接用 RedisTemplate，遵守 foundation-layer 规则（业务代码统一走 KvCache 封装）。
     -->
     <dependencies>
         <!--
@@ -34,6 +38,12 @@
         <dependency>
             <groupId>com.sanyan</groupId>
             <artifactId>sanyan-business</artifactId>
+        </dependency>
+
+        <!-- O4：Redis 节流走 common-cache 的 KvCache（不直接碰 RedisTemplate） -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-common-cache</artifactId>
         </dependency>
 
         <!-- 主代码：JPA Entity + Repository -->
