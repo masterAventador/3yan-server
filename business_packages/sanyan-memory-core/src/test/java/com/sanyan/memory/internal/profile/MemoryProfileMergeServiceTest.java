@@ -1,7 +1,7 @@
 package com.sanyan.memory.internal.profile;
 
 import com.sanyan.common.error.BusinessException;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.MemoryErrCode;
 import com.sanyan.memory.internal.profile.dto.ProfileExtraction;
 import com.sanyan.memory.internal.profile.fixtures.MemoryProfileTestFixtures;

@@ -4,7 +4,7 @@ import com.sanyan.chat.event.MessagePersistedEvent;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
 import com.sanyan.chat.internal.SenderType;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.summary.fixtures.MemorySummaryTestFixtures;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

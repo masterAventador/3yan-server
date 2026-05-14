@@ -4,7 +4,7 @@ import com.sanyan.common.error.BusinessException;
 import com.sanyan.llm.internal.EmbeddingProvider;
 import com.sanyan.llm.internal.LlmErrCode;
 import com.sanyan.memory.dto.MemoryFragment;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.MemoryErrCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

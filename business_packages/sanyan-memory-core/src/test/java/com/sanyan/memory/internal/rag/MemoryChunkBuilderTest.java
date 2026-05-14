@@ -2,7 +2,7 @@ package com.sanyan.memory.internal.rag;
 
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.SenderType;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

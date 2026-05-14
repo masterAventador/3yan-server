@@ -3,6 +3,7 @@ package com.sanyan.llm.internal;
 import com.sanyan.character.internal.AiCharacterEntity;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
+import com.sanyan.memory.MemoryConstants;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * AI 对话编排层。
@@ -27,12 +29,18 @@ import java.util.Locale;
  * 的逻辑搬到 {@link LLMProviderRouter}。AiService 退化为薄编排层，只负责：
  * <ol>
  *   <li>加载人设资源文件 + 拼接当前时间组装 system prompt</li>
- *   <li>从 {@link MessageRepository} 拉取短期上下文（最近 20 条）</li>
+ *   <li>从 {@link MessageRepository} 拉取短期上下文（最近 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条）</li>
+ *   <li>用 {@link PromptBuilder} 拼成 OpenAI 兼容消息数组</li>
  *   <li>委托给 {@link LLMProviderRouter}（task type = USER_FACING → 走豆包）</li>
  * </ol>
  *
- * <p>原 {@code callDoubao} / {@code callDoubaoRaw} / {@code buildChatMessages} / fallback 字符串
- * / 直接 @Value 注入的豆包配置全部移除——router + adapter 接管。
+ * <p>Q3 task 改动：
+ * <ul>
+ *   <li>短期窗口从硬编码 {@code 20} 改为 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE}（= 32），
+ *       与摘要触发阈值的对齐铁律落地（{@code SHORT_TERM_WINDOW_SIZE > SUMMARY_TRIGGER_THRESHOLD}）</li>
+ *   <li>消息拼装走 {@link PromptBuilder}，统一所有调用方（包括 -memory-core 后台 service）的拼装逻辑</li>
+ *   <li>{@code memoryContext} 暂传 null，Q4 task 才注入 {@code MemoryApi} 拿真实上下文</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -41,6 +49,7 @@ public class AiService {
 
     private final MessageRepository messageRepository;
     private final LLMProviderRouter llmRouter;
+    private final PromptBuilder promptBuilder;
 
     @Value("classpath:prompts/xiaowan-system.md")
     private Resource systemPromptResource;
@@ -59,16 +68,21 @@ public class AiService {
     /**
      * AI 回复用户消息。
      *
-     * <p>一期短期上下文：最近 20 条消息。长期记忆（B+C+RAG）按 Plan 2 后续 Phase 实现。
+     * <p>短期上下文：最近 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条消息。
+     * 长期记忆（profile + summary + RAG）由 Q4 task 通过 {@code MemoryApi} 注入。
      */
     public String chat(AiCharacterEntity character, Long userId) {
         String systemPrompt = assembleSystemPrompt(systemPromptTemplate, formatCurrentTime());
 
         List<MessageEntity> recentMessages = messageRepository
-                .findByUserIdOrderByIdDesc(userId, PageRequest.of(0, 20));
+                .findByUserIdOrderByIdDesc(userId, PageRequest.of(0, MemoryConstants.SHORT_TERM_WINDOW_SIZE));
         Collections.reverse(recentMessages);
 
-        return llmRouter.chat(LLMTaskType.USER_FACING, systemPrompt, recentMessages);
+        // memoryContext = null：本 task（Q3）只完成 PromptBuilder 抽取 + 短期窗口对齐。
+        // Q4 task 才注入 MemoryApi 拿到真实 MemoryContext 传给 PromptBuilder。
+        List<Map<String, String>> openAiMessages =
+                promptBuilder.build(systemPrompt, null, recentMessages);
+        return llmRouter.chat(LLMTaskType.USER_FACING, openAiMessages);
     }
 
     public String assembleSystemPrompt(String characterPrompt, String time) {

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.chat.event.MessagePersistedEvent;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.rag.MemoryChunkBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

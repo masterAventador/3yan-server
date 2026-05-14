@@ -1,7 +1,7 @@
-package com.sanyan.memory.internal;
+package com.sanyan.memory;
 
 /**
- * Memory 模块关键常量集中位置。
+ * Memory 模块关键常量集中位置（跨模块共享契约）。
  *
  * <p>对齐铁律: {@code SHORT_TERM_WINDOW_SIZE} 必须严格 &gt; {@code SUMMARY_TRIGGER_THRESHOLD}，
  * 防止"夹缝消息"（短期窗口够不到、摘要又因为异步落库延迟还没覆盖到的消息）。详见
@@ -9,6 +9,12 @@ package com.sanyan.memory.internal;
  *
  * <p>所有引用方（{@code AiService} / {@code SummaryScheduler} / RAG 相关 service）必须从本类取值，
  * 禁止任何地方硬编码字面量（遵守全局 CLAUDE.md「代码复用原则 - 值复用」）。
+ *
+ * <p>位置约束（Q3 task 调整）：
+ * 本类放在 {@code sanyan-memory-api} 模块。原因是 Q3 task 让 {@code sanyan-business}
+ * 的 {@code AiService} 也要用 {@link #SHORT_TERM_WINDOW_SIZE}——而 {@code sanyan-business}
+ * 不能依赖 {@code sanyan-memory-core}（后者已反向依赖前者，会形成循环依赖）。
+ * 常量本身是无 Spring 依赖的纯不变量，放在 -api 模块（契约层）是最合理的位置。
  */
 public final class MemoryConstants {
 

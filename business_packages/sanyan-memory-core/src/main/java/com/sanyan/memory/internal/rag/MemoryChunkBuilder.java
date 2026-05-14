@@ -1,7 +1,7 @@
 package com.sanyan.memory.internal.rag;
 
 import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;

@@ -1,10 +1,7 @@
 package com.sanyan.llm.internal;
 
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.error.BusinessException;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Map;
@@ -19,15 +16,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Task M3：{@link LLMProviderRouter} 单元测试。
+ * Task M3：{@link LLMProviderRouter} 单元测试（Q3 简化）。
  *
- * <p>测试用 mock {@link LLMProvider} 验证按 {@link LLMTaskType} 路由的逻辑：
+ * <p>Q3 task 把 OpenAI 消息拼装从 router 抽出到 {@link PromptBuilder}，router 退化为
+ * 纯路由层。本测试只验证路由逻辑：
  * <ul>
  *   <li>USER_FACING → 走 supports(USER_FACING) = true 的 provider（豆包）</li>
  *   <li>BACKGROUND → 走 supports(BACKGROUND) = true 的 provider（DeepSeek）</li>
  *   <li>无 provider 匹配 → 抛 {@link BusinessException}(LLM_PROVIDER_NOT_FOUND)</li>
- *   <li>多个 provider 匹配 → 取首个，并 warn 日志</li>
- *   <li>chat 入参的 systemPrompt + messages 必须正确组装成 OpenAI 兼容格式</li>
+ *   <li>多个 provider 匹配 → 取首个</li>
+ *   <li>入参的 openAiMessages 原样透传给 provider（不再加工）</li>
  * </ul>
  */
 class LLMProviderRouterTest {
@@ -45,7 +43,7 @@ class LLMProviderRouterTest {
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(userFacing, background));
 
-        String reply = router.chat(LLMTaskType.USER_FACING, "你是小婉", List.of());
+        String reply = router.chat(LLMTaskType.USER_FACING, List.of(Map.of("role", "system", "content", "你是小婉")));
 
         assertThat(reply).isEqualTo("user-reply");
         verify(background, never()).chat(any());
@@ -65,7 +63,7 @@ class LLMProviderRouterTest {
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(userFacing, background));
 
-        String reply = router.chat(LLMTaskType.BACKGROUND, "你是摘要助手", List.of());
+        String reply = router.chat(LLMTaskType.BACKGROUND, List.of(Map.of("role", "system", "content", "你是摘要助手")));
 
         assertThat(reply).isEqualTo("bg-summary");
         verify(userFacing, never()).chat(any());
@@ -73,31 +71,20 @@ class LLMProviderRouterTest {
     }
 
     @Test
-    void chat_shouldBuildOpenAiMessagesFromSystemPromptAndMessageEntities() {
+    void chat_shouldPassMessagesThroughUnchanged() {
         LLMProvider provider = mock(LLMProvider.class);
         when(provider.supports(LLMTaskType.USER_FACING)).thenReturn(true);
         when(provider.chat(any())).thenReturn("ok");
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(provider));
 
-        MessageEntity userMsg = new MessageEntity();
-        userMsg.setSenderType(SenderType.USER);
-        userMsg.setContent("早上好");
-        MessageEntity aiMsg = new MessageEntity();
-        aiMsg.setSenderType(SenderType.AI);
-        aiMsg.setContent("早上好呀");
+        List<Map<String, String>> input = List.of(
+                Map.of("role", "system", "content", "sys"),
+                Map.of("role", "user", "content", "hello")
+        );
+        router.chat(LLMTaskType.USER_FACING, input);
 
-        router.chat(LLMTaskType.USER_FACING, "你是小婉", List.of(userMsg, aiMsg));
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
-        verify(provider).chat(captor.capture());
-        List<Map<String, String>> sent = captor.getValue();
-
-        assertThat(sent).hasSize(3);
-        assertThat(sent.get(0)).containsEntry("role", "system").containsEntry("content", "你是小婉");
-        assertThat(sent.get(1)).containsEntry("role", "user").containsEntry("content", "早上好");
-        assertThat(sent.get(2)).containsEntry("role", "assistant").containsEntry("content", "早上好呀");
+        verify(provider).chat(input);
     }
 
     @Test
@@ -107,7 +94,7 @@ class LLMProviderRouterTest {
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(only));
 
-        assertThatThrownBy(() -> router.chat(LLMTaskType.USER_FACING, "x", List.of()))
+        assertThatThrownBy(() -> router.chat(LLMTaskType.USER_FACING, List.of()))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
                 .isEqualTo(LlmErrCode.LLM_PROVIDER_NOT_FOUND);
@@ -117,7 +104,7 @@ class LLMProviderRouterTest {
     void chat_shouldThrowWhenProvidersListEmpty() {
         LLMProviderRouter router = new LLMProviderRouter(List.of());
 
-        assertThatThrownBy(() -> router.chat(LLMTaskType.BACKGROUND, "x", List.of()))
+        assertThatThrownBy(() -> router.chat(LLMTaskType.BACKGROUND, List.of()))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
                 .isEqualTo(LlmErrCode.LLM_PROVIDER_NOT_FOUND);
@@ -134,31 +121,9 @@ class LLMProviderRouterTest {
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(first, second));
 
-        String reply = router.chat(LLMTaskType.USER_FACING, "sys", List.of());
+        String reply = router.chat(LLMTaskType.USER_FACING, List.of());
 
         assertThat(reply).isEqualTo("first-wins");
         verify(second, never()).chat(any());
-    }
-
-    @Test
-    void chat_shouldHandleNullMessageContentSafely() {
-        LLMProvider provider = mock(LLMProvider.class);
-        when(provider.supports(LLMTaskType.USER_FACING)).thenReturn(true);
-        when(provider.chat(any())).thenReturn("ok");
-
-        LLMProviderRouter router = new LLMProviderRouter(List.of(provider));
-
-        MessageEntity nullContent = new MessageEntity();
-        nullContent.setSenderType(SenderType.USER);
-        nullContent.setContent(null);
-
-        router.chat(LLMTaskType.USER_FACING, "sys", List.of(nullContent));
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
-        verify(provider).chat(captor.capture());
-        List<Map<String, String>> sent = captor.getValue();
-        assertThat(sent).hasSize(2);
-        assertThat(sent.get(1)).containsEntry("role", "user").containsEntry("content", "");
     }
 }

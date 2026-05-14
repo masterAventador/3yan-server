@@ -24,6 +24,14 @@
         <!-- 业务契约：远程 embedding 服务协议（EmbedRequest / EmbedResponse / EmbeddingApi） -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-api</artifactId></dependency>
 
+        <!--
+            Plan 2 Q3：sanyan-memory-api 契约（MemoryContext DTO + MemoryConstants 跨模块共享常量）。
+            PromptBuilder 注入长期记忆需要 MemoryContext，AiService 短期窗口对齐需要 MemoryConstants.SHORT_TERM_WINDOW_SIZE。
+            禁止依赖 sanyan-memory-core（后者已反向依赖 sanyan-business，加上正向会形成循环依赖；
+            常量与 DTO 放在 -api 是 java-backend rule 推荐方向：业务 -core 只依赖其他业务的 -api）。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-api</artifactId></dependency>
+
         <!-- Spring Boot 业务必备 -->
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>

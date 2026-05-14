@@ -3,11 +3,13 @@ package com.sanyan.memory.internal.summary;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.llm.internal.LLMProviderRouter;
 import com.sanyan.llm.internal.LLMTaskType;
+import com.sanyan.llm.internal.PromptBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Plan 2 Task N2：把一段对话历史压成"对话纪要"。
@@ -26,8 +28,9 @@ import java.util.List;
  * <p>service 本身不对 LLM 输出做加工——LLM 返回什么就写什么进 memory_summaries.summary_text。
  * 后续 Phase N3（SummaryScheduler）调本 service 然后写库。
  *
- * <p>messages 列表也不在本层做任何加工，直接交给 router——router 内部 buildOpenAiMessages
- * 负责组装成 OpenAI 兼容的 {@code [{role, content}, ...]}，组装逻辑集中在 router 这一处。
+ * <p>Q3 task 改动：消息拼装从 router 内部抽出到 {@link PromptBuilder}，本 service 调
+ * {@code promptBuilder.build} 拼好 OpenAI 兼容 messages 后传给 router。所有 LLM 调用方共用
+ * 一份拼装逻辑（值复用 + 逻辑复用），避免每个 service 自己重复实现。
  */
 @Service
 @RequiredArgsConstructor
@@ -46,14 +49,17 @@ public class MemorySummaryService {
             """;
 
     private final LLMProviderRouter llmRouter;
+    private final PromptBuilder promptBuilder;
 
     /**
      * 对传入的对话历史生成一段"对话纪要"文本。
      *
-     * @param messages 用户与 AI 的对话列表（通常 30 条，{@link com.sanyan.memory.internal.MemoryConstants#SUMMARY_TRIGGER_THRESHOLD}）
+     * @param messages 用户与 AI 的对话列表（通常 30 条，{@link com.sanyan.memory.MemoryConstants#SUMMARY_TRIGGER_THRESHOLD}）
      * @return LLM 生成的纪要文本，service 不做任何加工原样返回
      */
     public String summarize(List<MessageEntity> messages) {
-        return llmRouter.chat(LLMTaskType.BACKGROUND, SYSTEM_PROMPT, messages);
+        List<Map<String, String>> openAiMessages =
+                promptBuilder.build(SYSTEM_PROMPT, null, messages);
+        return llmRouter.chat(LLMTaskType.BACKGROUND, openAiMessages);
     }
 }

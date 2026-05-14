@@ -1,5 +1,6 @@
 package com.sanyan.memory.internal;
 
+import com.sanyan.memory.MemoryConstants;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 

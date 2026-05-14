@@ -8,7 +8,7 @@ import com.sanyan.common.error.BusinessException;
 import com.sanyan.llm.internal.EmbeddingProvider;
 import com.sanyan.llm.internal.LlmErrCode;
 import com.sanyan.memory.dto.MemoryFragment;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.MemoryErrCode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

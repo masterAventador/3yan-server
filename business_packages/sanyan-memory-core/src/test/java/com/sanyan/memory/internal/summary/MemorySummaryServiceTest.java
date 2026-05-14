@@ -4,34 +4,37 @@ import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.SenderType;
 import com.sanyan.llm.internal.LLMProviderRouter;
 import com.sanyan.llm.internal.LLMTaskType;
+import com.sanyan.llm.internal.PromptBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Plan 2 Task N2：MemorySummaryService 单元测试。
+ * Plan 2 Task N2：MemorySummaryService 单元测试（Q3 适配新签名）。
  *
- * <p>纯 Mockito 单测，验证：
+ * <p>Q3 task 改动：router 签名变更为 {@code chat(taskType, openAiMessages)}，service 通过
+ * 真实 {@link PromptBuilder}（无状态 + 纯函数，可直接 new）拼好 messages 后传给 router。
+ *
+ * <p>验证：
  * <ul>
  *   <li>调 {@link LLMProviderRouter#chat} 时，task type 必须为 {@link LLMTaskType#BACKGROUND}
  *       （摘要属于后台任务，路由到 DeepSeek V4-Flash，低成本大吞吐）</li>
  *   <li>system prompt 模板必须包含关键约束词："小婉"、"100-200 字"、"对话纪要"——
  *       这些是产品定义的硬要求，prompt 改动出错时测试要能 catch 住</li>
  *   <li>service 返回值必须直接是 router 返回的 LLM 输出（service 不应对 LLM 输出做任何加工）</li>
- *   <li>传入的 messages 列表必须原样传给 router（router 内部会做 OpenAI 格式组装，service 不要重复加工）</li>
+ *   <li>PromptBuilder 输出的 messages 第一条必须是 system role + SYSTEM_PROMPT 内容</li>
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
@@ -40,48 +43,56 @@ class MemorySummaryServiceTest {
     @Mock
     private LLMProviderRouter llmRouter;
 
-    @InjectMocks
+    private final PromptBuilder promptBuilder = new PromptBuilder();
     private MemorySummaryService service;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        service = new MemorySummaryService(llmRouter, promptBuilder);
+    }
 
     @Test
     void summarize_shouldRouteToBackgroundTaskType() {
         List<MessageEntity> messages = buildFixtureMessages(30);
-        when(llmRouter.chat(any(LLMTaskType.class), anyString(), any())).thenReturn("摘要内容");
+        when(llmRouter.chat(any(LLMTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
 
         ArgumentCaptor<LLMTaskType> taskTypeCaptor = ArgumentCaptor.forClass(LLMTaskType.class);
-        verify(llmRouter).chat(taskTypeCaptor.capture(), anyString(), any());
+        verify(llmRouter).chat(taskTypeCaptor.capture(), any());
         assertThat(taskTypeCaptor.getValue())
                 .as("摘要属于后台任务，必须路由到 BACKGROUND（DeepSeek V4-Flash）")
                 .isEqualTo(LLMTaskType.BACKGROUND);
     }
 
     @Test
-    void summarize_shouldPassMessagesUnchangedToRouter() {
+    void summarize_shouldPassMessagesViaPromptBuilder() {
         List<MessageEntity> messages = buildFixtureMessages(30);
-        when(llmRouter.chat(any(LLMTaskType.class), anyString(), any())).thenReturn("摘要内容");
+        when(llmRouter.chat(any(LLMTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<MessageEntity>> messagesCaptor = ArgumentCaptor.forClass(List.class);
-        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), anyString(), messagesCaptor.capture());
-        assertThat(messagesCaptor.getValue())
-                .as("service 不应该对 messages 做任何加工，原样传给 router")
-                .isSameAs(messages);
+        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), captor.capture());
+        List<Map<String, String>> sent = captor.getValue();
+        // 1 system + 30 history
+        assertThat(sent).hasSize(31);
+        assertThat(sent.get(0)).containsEntry("role", "system");
+        // 后续 30 条历史消息按 user/assistant role 映射
+        assertThat(sent.get(1)).containsEntry("role", "user");
+        assertThat(sent.get(2)).containsEntry("role", "assistant");
     }
 
     @Test
     void summarize_systemPromptShouldContainCharacterNameXiaoWan() {
         List<MessageEntity> messages = buildFixtureMessages(30);
-        when(llmRouter.chat(any(LLMTaskType.class), anyString(), any())).thenReturn("摘要内容");
+        when(llmRouter.chat(any(LLMTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
 
-        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
-        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), promptCaptor.capture(), any());
-        assertThat(promptCaptor.getValue())
+        String systemMessageContent = captureSystemMessageContent();
+        assertThat(systemMessageContent)
                 .as("prompt 模板必须包含 AI 角色名「小婉」")
                 .contains("小婉");
     }
@@ -89,13 +100,11 @@ class MemorySummaryServiceTest {
     @Test
     void summarize_systemPromptShouldContainLengthConstraint() {
         List<MessageEntity> messages = buildFixtureMessages(30);
-        when(llmRouter.chat(any(LLMTaskType.class), anyString(), any())).thenReturn("摘要内容");
+        when(llmRouter.chat(any(LLMTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
 
-        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
-        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), promptCaptor.capture(), any());
-        assertThat(promptCaptor.getValue())
+        assertThat(captureSystemMessageContent())
                 .as("prompt 模板必须约束摘要长度为 100-200 字")
                 .contains("100-200 字");
     }
@@ -103,13 +112,11 @@ class MemorySummaryServiceTest {
     @Test
     void summarize_systemPromptShouldContainSummaryKeyword() {
         List<MessageEntity> messages = buildFixtureMessages(30);
-        when(llmRouter.chat(any(LLMTaskType.class), anyString(), any())).thenReturn("摘要内容");
+        when(llmRouter.chat(any(LLMTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
 
-        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
-        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), promptCaptor.capture(), any());
-        assertThat(promptCaptor.getValue())
+        assertThat(captureSystemMessageContent())
                 .as("prompt 模板必须出现「对话纪要」这个产品定义的输出形式词")
                 .contains("对话纪要");
     }
@@ -118,13 +125,20 @@ class MemorySummaryServiceTest {
     void summarize_shouldReturnRouterOutputUnchanged() {
         List<MessageEntity> messages = buildFixtureMessages(30);
         String fakeLlmOutput = "用户聊到了周三的技术面试，情绪比较焦虑，希望小婉帮忙加油打气。";
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyString(), any())).thenReturn(fakeLlmOutput);
+        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn(fakeLlmOutput);
 
         String result = service.summarize(messages);
 
         assertThat(result)
                 .as("service 不应对 LLM 输出做任何加工，直接返回")
                 .isEqualTo(fakeLlmOutput);
+    }
+
+    private String captureSystemMessageContent() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), captor.capture());
+        return captor.getValue().get(0).get("content");
     }
 
     /**

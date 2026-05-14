@@ -4,7 +4,7 @@ import com.sanyan.common.test.PostgresTestcontainerSupport;
 import com.sanyan.common.test.TestApplication;
 import com.sanyan.llm.internal.EmbeddingProvider;
 import com.sanyan.memory.dto.MemoryFragment;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.domain.EntityScan;

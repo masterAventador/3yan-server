@@ -3,7 +3,7 @@ package com.sanyan.memory.internal.summary;
 import com.sanyan.chat.event.MessagePersistedEvent;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;

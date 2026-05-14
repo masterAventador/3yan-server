@@ -6,12 +6,14 @@ import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.common.error.BusinessException;
 import com.sanyan.llm.internal.LLMProviderRouter;
 import com.sanyan.llm.internal.LLMTaskType;
+import com.sanyan.llm.internal.PromptBuilder;
 import com.sanyan.memory.internal.profile.dto.ProfileExtraction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Plan 2 Task O2：从用户最近 N 条消息里抽取结构化档案更新候选（{@link ProfileExtraction}）。
@@ -63,6 +65,7 @@ public class MemoryProfileExtractService {
 
     private final LLMProviderRouter llmRouter;
     private final ObjectMapper objectMapper;
+    private final PromptBuilder promptBuilder;
 
     /**
      * 从对话片段抽取结构化档案更新候选。
@@ -77,7 +80,9 @@ public class MemoryProfileExtractService {
 
         String llmOutput;
         try {
-            llmOutput = llmRouter.chat(LLMTaskType.BACKGROUND, SYSTEM_PROMPT, recentMessages);
+            List<Map<String, String>> openAiMessages =
+                    promptBuilder.build(SYSTEM_PROMPT, null, recentMessages);
+            llmOutput = llmRouter.chat(LLMTaskType.BACKGROUND, openAiMessages);
         } catch (BusinessException e) {
             log.warn("Profile 抽取 LLM 调用失败，跳过: errCode={}, msg={}",
                     e.getErrCode().getCode(), e.getMessage());

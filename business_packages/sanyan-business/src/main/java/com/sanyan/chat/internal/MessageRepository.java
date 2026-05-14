@@ -14,7 +14,7 @@ public interface MessageRepository extends JpaRepository<MessageEntity, Long> {
      * Plan 2 Task N3：统计某用户自指定 messageId 之后的消息条数。
      *
      * <p>SummaryScheduler 用此查询判断"自上次摘要以来"的新消息累积量是否达到
-     * {@link com.sanyan.memory.internal.MemoryConstants#SUMMARY_TRIGGER_THRESHOLD}。
+     * {@link com.sanyan.memory.MemoryConstants#SUMMARY_TRIGGER_THRESHOLD}。
      *
      * <p>注意：MVP 单角色阶段 MessageEntity 没有 character_id 列（系统硬编码 character=1L），
      * 所以查询不带 character 过滤；Plan 3 拆多角色后再加。

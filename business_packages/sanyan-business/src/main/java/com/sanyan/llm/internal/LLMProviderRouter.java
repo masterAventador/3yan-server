@@ -1,17 +1,14 @@
 package com.sanyan.llm.internal;
 
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.error.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * LLM Provider 路由层（M3 task）。
+ * LLM Provider 路由层（M3 task；Q3 task 进一步收窄职责）。
  *
  * <p>按 {@link LLMTaskType} 在所有 {@link LLMProvider} 实现中挑出第一个匹配的：
  * <ul>
@@ -20,8 +17,8 @@ import java.util.Map;
  * </ul>
  *
  * <p>装配方式：Spring 通过 {@code List<LLMProvider>} 收集所有 {@code @Component} 的 provider
- * 实现，按字段定义顺序构造注入。调用方（{@link AiService} / 后续 Phase N/O 的摘要档案 service）
- * 只依赖 router 这一层，不直接 import 具体 adapter。
+ * 实现，按字段定义顺序构造注入。调用方（{@link AiService} / N2/O2 的后台 service）只依赖
+ * router 这一层，不直接 import 具体 adapter。
  *
  * <p>错误语义：
  * <ul>
@@ -30,8 +27,10 @@ import java.util.Map;
  *   <li>多个 provider 匹配 → log.warn + 取首个，行为可预期（按 Spring 注入顺序）</li>
  * </ul>
  *
- * <p>chat 入参 {@code systemPrompt} + {@code messages} 在 router 层组装成 OpenAI 兼容的
- * {@code [{role, content}, ...]} 格式后传给 provider——这样组装逻辑只写一次，所有 provider 共享。
+ * <p><b>Q3 task 重构：</b>原 {@code buildOpenAiMessages} 拼装逻辑搬到 {@link PromptBuilder}。
+ * router 退化为纯路由层，只接受调用方已经拼好的 OpenAI 兼容消息数组，不再做任何加工。
+ * 这样 PromptBuilder 成为唯一的"消息拼装入口"，所有调用方（AiService / MemorySummaryService /
+ * MemoryProfileExtractService）共用拼装逻辑（值复用 + 逻辑复用）。
  */
 @Slf4j
 @Component
@@ -46,13 +45,12 @@ public class LLMProviderRouter {
     /**
      * 路由到匹配的 provider 并发起一次 chat 调用。
      *
-     * @param taskType     任务类型，决定走哪个 provider
-     * @param systemPrompt system 消息内容（人设、当前时间等）
-     * @param messages     用户与 AI 的历史对话（按时间正序）
+     * @param taskType       任务类型，决定走哪个 provider
+     * @param openAiMessages 已经由 {@link PromptBuilder} 拼好的 OpenAI 兼容消息数组
      * @return provider 返回的助手回复文本
      * @throws BusinessException 找不到匹配 provider，或 provider 上游异常向上传递
      */
-    public String chat(LLMTaskType taskType, String systemPrompt, List<MessageEntity> messages) {
+    public String chat(LLMTaskType taskType, List<Map<String, String>> openAiMessages) {
         List<LLMProvider> matched = providers.stream()
                 .filter(p -> p.supports(taskType))
                 .toList();
@@ -69,28 +67,6 @@ public class LLMProviderRouter {
         }
 
         LLMProvider provider = matched.get(0);
-        List<Map<String, String>> chatMessages = buildOpenAiMessages(systemPrompt, messages);
-        return provider.chat(chatMessages);
-    }
-
-    /**
-     * 把 system prompt + Plan 1 时代的 {@link MessageEntity} 列表组装成 OpenAI 兼容的
-     * {@code [{role, content}, ...]} 结构。
-     *
-     * <p>从原 {@code AiService.buildChatMessages} 搬迁，逻辑保持一致：USER 消息映射成
-     * {@code role=user}，其余（AI）映射成 {@code role=assistant}；{@code null} content 替换为空串。
-     */
-    static List<Map<String, String>> buildOpenAiMessages(
-            String systemPrompt, List<MessageEntity> messages) {
-        List<Map<String, String>> chatMessages = new ArrayList<>();
-        chatMessages.add(Map.of("role", "system", "content", systemPrompt));
-        if (messages != null) {
-            for (MessageEntity msg : messages) {
-                String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
-                String content = msg.getContent() == null ? "" : msg.getContent();
-                chatMessages.add(Map.of("role", role, "content", content));
-            }
-        }
-        return chatMessages;
+        return provider.chat(openAiMessages);
     }
 }

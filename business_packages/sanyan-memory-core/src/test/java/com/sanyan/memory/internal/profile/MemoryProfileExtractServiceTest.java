@@ -7,6 +7,7 @@ import com.sanyan.common.error.BusinessException;
 import com.sanyan.llm.internal.LLMProviderRouter;
 import com.sanyan.llm.internal.LLMTaskType;
 import com.sanyan.llm.internal.LlmErrCode;
+import com.sanyan.llm.internal.PromptBuilder;
 import com.sanyan.memory.internal.profile.dto.ProfileExtraction;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,18 +17,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Plan 2 Task O2：MemoryProfileExtractService 单元测试。
+ * Plan 2 Task O2：MemoryProfileExtractService 单元测试（Q3 适配新签名）。
  *
- * <p>纯 Mockito 单测，验证：
+ * <p>Q3 task 改动：router 签名变更为 {@code chat(taskType, openAiMessages)}，service 通过真实
+ * {@link PromptBuilder}（无状态 + 纯函数，可直接 new）拼好 messages 后传给 router。
+ *
+ * <p>验证：
  * <ul>
  *   <li>合法 JSON → 正确解析为 {@link ProfileExtraction}（含全部 4 个字段）</li>
  *   <li>字段部分缺失 JSON → 仍正常返回（缺失字段为 null）</li>
@@ -44,17 +48,16 @@ class MemoryProfileExtractServiceTest {
     @Mock
     private LLMProviderRouter llmRouter;
 
-    private MemoryProfileExtractService service;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final PromptBuilder promptBuilder = new PromptBuilder();
 
     private MemoryProfileExtractService newService() {
-        return new MemoryProfileExtractService(llmRouter, objectMapper);
+        return new MemoryProfileExtractService(llmRouter, objectMapper, promptBuilder);
     }
 
     @Test
     void extract_shouldParseValidJsonWithAllFields() {
-        service = newService();
+        MemoryProfileExtractService service = newService();
         String llmJson = """
                 {
                   "basic_info_updates": {"occupation": "前端工程师", "age": null, "hometown": "杭州"},
@@ -63,7 +66,7 @@ class MemoryProfileExtractServiceTest {
                   "emotion_signal": "焦虑"
                 }
                 """;
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyString(), any())).thenReturn(llmJson);
+        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn(llmJson);
 
         ProfileExtraction result = service.extract(buildFixtureMessages(3));
 
@@ -83,12 +86,12 @@ class MemoryProfileExtractServiceTest {
 
     @Test
     void extract_shouldParsePartialFieldsAsNullable() {
-        service = newService();
+        MemoryProfileExtractService service = newService();
         // 只有 emotion_signal，其余字段缺失
         String llmJson = """
                 {"emotion_signal": "平静"}
                 """;
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyString(), any())).thenReturn(llmJson);
+        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn(llmJson);
 
         ProfileExtraction result = service.extract(buildFixtureMessages(3));
 
@@ -101,9 +104,9 @@ class MemoryProfileExtractServiceTest {
 
     @Test
     void extract_shouldReturnNullForInvalidJson() {
-        service = newService();
+        MemoryProfileExtractService service = newService();
         String invalidJson = "this is not json at all { broken";
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyString(), any())).thenReturn(invalidJson);
+        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn(invalidJson);
 
         ProfileExtraction result = service.extract(buildFixtureMessages(3));
 
@@ -114,8 +117,8 @@ class MemoryProfileExtractServiceTest {
 
     @Test
     void extract_shouldReturnNullForBlankOutput() {
-        service = newService();
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyString(), any())).thenReturn("   ");
+        MemoryProfileExtractService service = newService();
+        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn("   ");
 
         ProfileExtraction result = service.extract(buildFixtureMessages(3));
 
@@ -124,8 +127,8 @@ class MemoryProfileExtractServiceTest {
 
     @Test
     void extract_shouldReturnNullWhenLlmThrowsBusinessException() {
-        service = newService();
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyString(), any()))
+        MemoryProfileExtractService service = newService();
+        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any()))
                 .thenThrow(new BusinessException(LlmErrCode.LLM_UPSTREAM_UNAVAILABLE));
 
         ProfileExtraction result = service.extract(buildFixtureMessages(3));
@@ -137,7 +140,7 @@ class MemoryProfileExtractServiceTest {
 
     @Test
     void extract_shouldReturnNullForEmptyMessages() {
-        service = newService();
+        MemoryProfileExtractService service = newService();
 
         assertThat(service.extract(null)).as("null 输入 → null").isNull();
         assertThat(service.extract(List.of())).as("空列表输入 → null").isNull();
@@ -145,13 +148,13 @@ class MemoryProfileExtractServiceTest {
 
     @Test
     void extract_shouldRouteToBackgroundTaskType() {
-        service = newService();
-        when(llmRouter.chat(any(LLMTaskType.class), anyString(), any())).thenReturn("{}");
+        MemoryProfileExtractService service = newService();
+        when(llmRouter.chat(any(LLMTaskType.class), any())).thenReturn("{}");
 
         service.extract(buildFixtureMessages(3));
 
         ArgumentCaptor<LLMTaskType> taskTypeCaptor = ArgumentCaptor.forClass(LLMTaskType.class);
-        verify(llmRouter).chat(taskTypeCaptor.capture(), anyString(), any());
+        verify(llmRouter).chat(taskTypeCaptor.capture(), any());
         assertThat(taskTypeCaptor.getValue())
                 .as("档案抽取属于后台任务，必须路由到 BACKGROUND（DeepSeek V4-Flash）")
                 .isEqualTo(LLMTaskType.BACKGROUND);
@@ -159,14 +162,15 @@ class MemoryProfileExtractServiceTest {
 
     @Test
     void extract_systemPromptShouldContainSchemaKeyFields() {
-        service = newService();
-        when(llmRouter.chat(any(LLMTaskType.class), anyString(), any())).thenReturn("{}");
+        MemoryProfileExtractService service = newService();
+        when(llmRouter.chat(any(LLMTaskType.class), any())).thenReturn("{}");
 
         service.extract(buildFixtureMessages(3));
 
-        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
-        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), promptCaptor.capture(), any());
-        String prompt = promptCaptor.getValue();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), captor.capture());
+        String prompt = captor.getValue().get(0).get("content");
         assertThat(prompt)
                 .as("prompt 模板必须列出 JSON schema 的 4 个关键字段")
                 .contains("basic_info_updates")

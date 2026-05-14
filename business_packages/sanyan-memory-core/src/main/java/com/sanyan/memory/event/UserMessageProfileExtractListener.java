@@ -5,7 +5,7 @@ import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
 import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.cache.KvCache;
-import com.sanyan.memory.internal.MemoryConstants;
+import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.profile.MemoryProfileExtractService;
 import com.sanyan.memory.internal.profile.MemoryProfileMergeService;
 import com.sanyan.memory.internal.profile.dto.ProfileExtraction;
