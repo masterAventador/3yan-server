@@ -1,5 +1,6 @@
 package com.sanyan.chat.internal;
 
+import com.sanyan.chat.event.MessagePersistedEvent;
 import com.sanyan.chat.web.MessageData;
 import com.sanyan.character.internal.AiCharacterEntity;
 import com.sanyan.character.internal.AiCharacterRepository;
@@ -9,6 +10,7 @@ import com.sanyan.common.util.TextProcessor;
 import com.sanyan.llm.internal.AiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,13 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final AiCharacterRepository characterRepository;
     private final AiService aiService;
+    /**
+     * Plan 2 Task N3：消息落库后发布 {@link MessagePersistedEvent}，
+     * 让 sanyan-memory-core 的 SummaryScheduler / 后续档案抽取 / RAG 索引等订阅方
+     * 通过 {@code @TransactionalEventListener(phase = AFTER_COMMIT)} + {@code @Async}
+     * 异步接收，避免事务回滚状态不一致 + 不阻塞主对话。
+     */
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 落 user message → 返回 server 端 id（独立事务，便于 ack 即时回传 serverMsgId）
@@ -42,6 +51,8 @@ public class MessageService {
         userMsg.setContent(content != null ? content : "");
         messageRepository.save(userMsg);
         log.info("用户消息已保存: userId={}, msgId={}", userId, userMsg.getId());
+        eventPublisher.publishEvent(new MessagePersistedEvent(
+                userMsg.getId(), userId, DEFAULT_CHARACTER_ID, SenderType.USER));
         return userMsg;
     }
 
@@ -73,6 +84,10 @@ public class MessageService {
             saved.add(aiMsg);
         }
         log.info("AI 回复已保存: userId={}, msgIds={}", userId, saved.stream().map(MessageEntity::getId).toList());
+        for (MessageEntity aiMsg : saved) {
+            eventPublisher.publishEvent(new MessagePersistedEvent(
+                    aiMsg.getId(), userId, DEFAULT_CHARACTER_ID, SenderType.AI));
+        }
         return saved;
     }
 
