@@ -21,8 +21,21 @@
 
         Task N0：补 junit-jupiter + assertj-core 用于 MemoryConstants 对齐铁律测试。
         Task N1：补 spring-boot-starter-data-jpa（Entity + Repository）+ Postgres driver + sanyan-common-test（Testcontainers PG）。
+        Task N2：补 sanyan-business（compile scope）——MemorySummaryService 需要调
+                 LLMProviderRouter + 引用 MessageEntity/SenderType/LLMTaskType。理由同上：
+                 Plan 1 没把 chat 拆 -api/-core，所以现阶段只能整包依赖；Plan 3 拆完后改成
+                 只依赖 sanyan-chat-api（拿到 MessageDto + LLM 路由契约）。
     -->
     <dependencies>
+        <!--
+            Plan 2 妥协依赖：调 LLM router + 引用 chat 的 MessageEntity / SenderType。
+            未来 Plan 3 把 sanyan-business 拆 -api/-core 后，本依赖改成只引 chat-api / llm-api。
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-business</artifactId>
+        </dependency>
+
         <!-- 主代码：JPA Entity + Repository -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
