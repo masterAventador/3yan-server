@@ -17,6 +17,16 @@
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
+        <!--
+            Plan 2 Task R1：端到端 IT（Plan2EndToEndIT）需要直接访问 memory-core 的
+            SummaryScheduler / UserMessageProfileExtractListener / MemorySummaryRepository /
+            MemoryProfileRepository / ChatEmbeddingRepository / MemoryApiImpl，验证三条
+            长期记忆链路（summary / profile / RAG）串通。
+
+            **test scope** 限制：仅 IT 测试可见，不会被 spring-boot-maven-plugin repackage 打进
+            生产 fat jar，不影响生产 deploy 行为（生产环境 memory-core 的装配问题由独立任务处理）。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-core</artifactId><scope>test</scope></dependency>
     </dependencies>
 
     <build>
@@ -43,6 +53,25 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                    <environmentVariables>
+                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                    </environmentVariables>
+                </configuration>
+            </plugin>
+            <!--
+                R1 task：failsafe 派生 JVM 需要与 surefire 同样的 docker-java api.version + Ryuk 禁用
+                环境，否则 *IT 跑 Testcontainers PG 时报 "Could not find a valid Docker environment"。
+                父 pom 的 pluginManagement 只定义了 failsafe 的 includes / executions 绑定，没含
+                Testcontainers 配置；各 IT-using 子模块（如 sanyan-memory-core）都自己在 failsafe
+                上显式补这两块配置。bootstrap 一直缺这块，R1 写第一个 IT 时暴露并补齐。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
                 <configuration>
                     <systemPropertyVariables>
                         <api.version>1.44</api.version>
