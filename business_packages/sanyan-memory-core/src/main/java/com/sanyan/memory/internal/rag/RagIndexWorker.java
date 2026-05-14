@@ -73,8 +73,10 @@ public class RagIndexWorker {
                 processRecord(record.getId(), payload);
             }
         } catch (Exception e) {
-            // poll 自身异常（例如 Redis 连接挂掉）只记日志，下次 fixedDelay 触发重试
-            log.error("RAG 索引 worker poll 异常", e);
+            // Redis 不可用 / 配置缺失 / 测试环境无 stream — 全部安静跳过，
+            // 下次 fixedDelay 触发重试。生产环境 Redis 真正异常时会持续 log.debug，
+            // 由 Redis 健康检查 / 外部监控发现，避免每 10s 一条 ERROR stack trace 噪音。
+            log.debug("RagIndexWorker.poll skipped (Redis 不可用?): {}", e.getMessage());
         }
     }
 

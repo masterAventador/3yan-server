@@ -18,15 +18,12 @@
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
         <!--
-            Plan 2 Task R1：端到端 IT（Plan2EndToEndIT）需要直接访问 memory-core 的
-            SummaryScheduler / UserMessageProfileExtractListener / MemorySummaryRepository /
-            MemoryProfileRepository / ChatEmbeddingRepository / MemoryApiImpl，验证三条
-            长期记忆链路（summary / profile / RAG）串通。
-
-            **test scope** 限制：仅 IT 测试可见，不会被 spring-boot-maven-plugin repackage 打进
-            生产 fat jar，不影响生产 deploy 行为（生产环境 memory-core 的装配问题由独立任务处理）。
+            sanyan-memory-core compile scope：MemoryApiImpl (Q2) 是 MemoryApi 的唯一实现，
+            AiService (Q4) 通过 @Autowired MemoryApi 注入，生产 fat jar 必须包含 memory-core
+            才能完成 DI 装配。L0/L1 Enforcer 规则只限制 embedding-core 不能进 bootstrap，
+            没有禁止 memory-core，所以 compile scope 合规。
         -->
-        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-core</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-core</artifactId></dependency>
     </dependencies>
 
     <build>
