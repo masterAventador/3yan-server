@@ -1,7 +1,5 @@
 package com.sanyan.llm.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.character.internal.AiCharacterEntity;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
@@ -11,41 +9,43 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
 
+/**
+ * AI 对话编排层。
+ *
+ * <p>M3 task 重构：把豆包 HTTP 调用抽到 {@link DoubaoAdapter}，按 {@link LLMTaskType} 路由
+ * 的逻辑搬到 {@link LLMProviderRouter}。AiService 退化为薄编排层，只负责：
+ * <ol>
+ *   <li>加载人设资源文件 + 拼接当前时间组装 system prompt</li>
+ *   <li>从 {@link MessageRepository} 拉取短期上下文（最近 20 条）</li>
+ *   <li>委托给 {@link LLMProviderRouter}（task type = USER_FACING → 走豆包）</li>
+ * </ol>
+ *
+ * <p>原 {@code callDoubao} / {@code callDoubaoRaw} / {@code buildChatMessages} / fallback 字符串
+ * / 直接 @Value 注入的豆包配置全部移除——router + adapter 接管。
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiService {
 
     private final MessageRepository messageRepository;
-    private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
-
-    @Value("${sanyan.doubao.api-key:}")
-    private String apiKey;
-
-    @Value("${sanyan.doubao.model:doubao-seed-character}")
-    private String model;
-
-    @Value("${sanyan.doubao.endpoint:https://ark.cn-beijing.volces.com/api/v3/chat/completions}")
-    private String endpoint;
+    private final LLMProviderRouter llmRouter;
 
     @Value("classpath:prompts/xiaowan-system.md")
     private Resource systemPromptResource;
 
     private String systemPromptTemplate;
-
-    static final String AI_FALLBACK_MESSAGE = "抱歉，我现在有点走神了，等下再聊吧~";
 
     @PostConstruct
     void loadSystemPrompt() {
@@ -57,8 +57,9 @@ public class AiService {
     }
 
     /**
-     * AI reply to user's text message.
-     * 一期短期上下文：最近 20 条消息。长期记忆（B+C+RAG）按 spec Plan 2 实现。
+     * AI 回复用户消息。
+     *
+     * <p>一期短期上下文：最近 20 条消息。长期记忆（B+C+RAG）按 Plan 2 后续 Phase 实现。
      */
     public String chat(AiCharacterEntity character, Long userId) {
         String systemPrompt = assembleSystemPrompt(systemPromptTemplate, formatCurrentTime());
@@ -67,58 +68,11 @@ public class AiService {
                 .findByUserIdOrderByIdDesc(userId, PageRequest.of(0, 20));
         Collections.reverse(recentMessages);
 
-        return callDoubao(systemPrompt, recentMessages);
+        return llmRouter.chat(LLMTaskType.USER_FACING, systemPrompt, recentMessages);
     }
 
     public String assembleSystemPrompt(String characterPrompt, String time) {
         return characterPrompt + "\n\n[当前时间] " + time;
-    }
-
-    public String callDoubao(String systemPrompt, List<MessageEntity> messages) {
-        return callDoubaoRaw(buildChatMessages(systemPrompt, messages));
-    }
-
-    public String callDoubaoRaw(List<Map<String, String>> chatMessages) {
-        try {
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("model", model);
-            requestBody.put("messages", chatMessages);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
-
-            HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(requestBody), headers);
-
-            log.info("豆包 API 请求: model={}, messagesCount={}", model, chatMessages.size());
-            long start = System.currentTimeMillis();
-            ResponseEntity<String> response = restTemplate.exchange(endpoint, HttpMethod.POST, entity, String.class);
-            log.info("豆包 API 响应: status={}, 耗时={}ms", response.getStatusCode(), System.currentTimeMillis() - start);
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> responseMap = objectMapper.readValue(response.getBody(), Map.class);
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> choices = (List<Map<String, Object>>) responseMap.get("choices");
-            @SuppressWarnings("unchecked")
-            Map<String, String> message = (Map<String, String>) choices.get(0).get("message");
-            return message.get("content");
-
-        } catch (Exception e) {
-            log.error("豆包 API 调用失败", e);
-            return AI_FALLBACK_MESSAGE;
-        }
-    }
-
-    static List<Map<String, String>> buildChatMessages(String systemPrompt, List<MessageEntity> messages) {
-        List<Map<String, String>> chatMessages = new ArrayList<>();
-        chatMessages.add(Map.of("role", "system", "content", systemPrompt));
-        if (messages != null) {
-            for (MessageEntity msg : messages) {
-                String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
-                chatMessages.add(Map.of("role", role, "content", msg.getContent() == null ? "" : msg.getContent()));
-            }
-        }
-        return chatMessages;
     }
 
     private String formatCurrentTime() {

@@ -17,9 +17,10 @@ server:
 
 sanyan:
   doubao:
+    # USER_FACING 任务（用户对话）走豆包 doubao-seed-character；M3 task 把豆包抽到 DoubaoAdapter，按 LLMProvider 接口接入 LLMProviderRouter
     api-key: ${DOUBAO_API_KEY:76022745-db00-4016-9613-880c4318e5d4}
+    base-url: https://ark.cn-beijing.volces.com/api/v3
     model: ep-20260408102845-f86mb
-    endpoint: https://ark.cn-beijing.volces.com/api/v3/chat/completions
   llm:
     deepseek:
       # BACKGROUND 任务（摘要 / 档案抽取）用 DeepSeek V4-Flash；API key 由环境变量注入，未配置时 adapter 仍能装配但调用会被上游 401 拒绝
