@@ -6,3 +6,5 @@ target/
 *.war
 *.log
 .DS_Store
+**/embedding-token*
+**/*.env

@@ -19,9 +19,10 @@ sanyan:
     # 内部 token：必须从环境变量注入。缺失时拦截器返回 500 拒绝所有请求。
     internal-token: ${EMBEDDING_INTERNAL_TOKEN:}
     model:
-      # DJL HuggingFace ONNX Runtime 模型 URL（默认 BAAI/bge-m3）
-      url: djl://ai.djl.huggingface.onnxruntime/BAAI/bge-m3
-      # DJL 模型 / ONNX Runtime 库的缓存目录
+      # DJL HuggingFace PyTorch 模型 URL（默认 BAAI/bge-m3，1024 维）
+      # 注：onnxruntime zoo 没有 bge-m3，所以走 pytorch zoo
+      url: djl://ai.djl.huggingface.pytorch/BAAI/bge-m3
+      # DJL 模型 + PyTorch native 库的缓存目录
       cache-dir: ${EMBEDDING_MODEL_CACHE_DIR:/var/cache/fastembed}
 
 # DJL 引擎缓存目录从环境变量映射（DJL 自身读 DJL_CACHE_DIR / ENGINE_CACHE_DIR）。

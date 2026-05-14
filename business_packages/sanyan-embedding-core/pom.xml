@@ -75,9 +75,15 @@
         </dependency>
 
         <!--
-            DJL（Deep Java Library） + ONNX Runtime 引擎 + HuggingFace tokenizers。
+            DJL（Deep Java Library） + PyTorch 引擎 + HuggingFace tokenizers。
             ai.djl.huggingface:tokenizers 提供 DeferredTranslatorFactory，
-            自动从 HuggingFace Hub 解析 sentence-transformers 模型（如 BAAI/bge-m3）。
+            自动从 DJL 模型仓库（mlrepo.djl.ai）加载预转换的 sentence-transformers 模型（如 BAAI/bge-m3）。
+
+            为什么用 PyTorch 引擎而不是 ONNX Runtime：
+            - DJL 维护的预转换模型索引 (mlrepo.djl.ai/.../onnxruntime/models.json) 里
+              **BAAI/bge-m3 只发布在 pytorch zoo 下**（onnxruntime 下只有 bge-base/bge-large-v1.5 等 768 维变体）
+            - 切到 ONNX 只能用 768 维模型，与契约约定的 1024 维 BGE-M3 不兼容
+            - PyTorch native lib 体积 ~250MB，在 old 服务器内存（3.6GiB + 2GiB swap）和打包都可以接受
         -->
         <dependency>
             <groupId>ai.djl</groupId>
@@ -88,9 +94,15 @@
             <artifactId>tokenizers</artifactId>
         </dependency>
         <dependency>
-            <groupId>ai.djl.onnxruntime</groupId>
-            <artifactId>onnxruntime-engine</artifactId>
+            <groupId>ai.djl.pytorch</groupId>
+            <artifactId>pytorch-engine</artifactId>
         </dependency>
+        <!--
+            不显式声明 pytorch-native-cpu / pytorch-jni：
+            DJL 启动时会按当前 OS/arch 自动从 pytorch.org 镜像下载对应 native 库到
+            EMBEDDING_MODEL_CACHE_DIR (DJL_CACHE_DIR)。这样同一份 jar 可以本机（mac/arm64）跑
+            集成测试，也可以在 old（linux/x86_64）上跑生产，避免 fat jar 包死平台导致跨平台失败。
+        -->
 
         <dependency>
             <groupId>org.projectlombok</groupId>

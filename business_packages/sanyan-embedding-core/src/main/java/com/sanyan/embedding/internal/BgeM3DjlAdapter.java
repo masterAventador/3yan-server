@@ -33,8 +33,10 @@ import java.util.List;
  *       推理过程出错抛 {@link EmbeddingErrCode#EMBEDDING_FAILED}。</li>
  * </ul>
  *
- * <p>模型 URL：{@code djl://ai.djl.huggingface.onnxruntime/BAAI/bge-m3}
- * （DJL 官方维护的 BGE-M3 ONNX 转写版本）。
+ * <p>模型 URL：{@code djl://ai.djl.huggingface.pytorch/BAAI/bge-m3}
+ * （DJL 官方维护的 BGE-M3 TorchScript 转写版本，已上传到 mlrepo.djl.ai，约 2.3 GB）。
+ * 注：onnxruntime zoo 下没有 bge-m3（只有 bge-base/bge-large-v1.5 等 768 维变体），
+ * 所以这里走 pytorch zoo（1024 维与契约一致）。
  */
 @Slf4j
 @Component
@@ -42,7 +44,7 @@ public class BgeM3DjlAdapter {
 
     private static final int EXPECTED_DIM = 1024;
     private static final String DEFAULT_MODEL_URL =
-            "djl://ai.djl.huggingface.onnxruntime/BAAI/bge-m3";
+            "djl://ai.djl.huggingface.pytorch/BAAI/bge-m3";
 
     private final String modelUrl;
 
