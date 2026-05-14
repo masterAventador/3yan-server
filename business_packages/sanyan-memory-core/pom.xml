@@ -20,8 +20,21 @@
         这是 Plan 1 未拆 chat -api/-core 的妥协，Plan 3 会修复。该例外的 Enforcer 允许放行写在本 pom 里。
 
         Task N0：补 junit-jupiter + assertj-core 用于 MemoryConstants 对齐铁律测试。
+        Task N1：补 spring-boot-starter-data-jpa（Entity + Repository）+ Postgres driver + sanyan-common-test（Testcontainers PG）。
     -->
     <dependencies>
+        <!-- 主代码：JPA Entity + Repository -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <!-- Entity 用 @Data / @NoArgsConstructor / @AllArgsConstructor 减少样板 -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
+        <!-- 测试基础 -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -32,5 +45,60 @@
             <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Postgres JDBC driver（仅测试时通过 Testcontainers 用） -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 共享 Testcontainer PG 基类 + TestApplication（@SpringBootConfiguration 上下文根） -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-common-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Testcontainers 在 surefire/failsafe 派生 JVM 里的两块配置：
+                  1. systemPropertyVariables.api.version=1.44：docker-java 3.4.x 客户端默认
+                     声明 API 版本 1.32，与 Docker Engine 25+ 最小要求 1.44 不兼容。
+                  2. environmentVariables.TESTCONTAINERS_RYUK_DISABLED=true：开发机 Colima
+                     rootless Docker 上 Ryuk 无法清理，依赖 JVM 退出时容器自清理。
+                配置与 bootstrap/pom.xml 保持一致（参考 V5MigrationIT 的工作模式）。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                    <environmentVariables>
+                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                    </environmentVariables>
+                </configuration>
+            </plugin>
+            <!-- *IT 用 failsafe 跑（Repository 集成测试需要 Testcontainer PG） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                    <environmentVariables>
+                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                    </environmentVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
