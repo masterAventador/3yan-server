@@ -18,7 +18,19 @@
         后续 Task N1-Q4 会填充 summary / profile / rag / orchestrator 子包。
         注意：sanyan-memory-core 需要依赖 sanyan-business（订阅 MessagePersistedEvent + 调 LLM router），
         这是 Plan 1 未拆 chat -api/-core 的妥协，Plan 3 会修复。该例外的 Enforcer 允许放行写在本 pom 里。
+
+        Task N0：补 junit-jupiter + assertj-core 用于 MemoryConstants 对齐铁律测试。
     -->
     <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
