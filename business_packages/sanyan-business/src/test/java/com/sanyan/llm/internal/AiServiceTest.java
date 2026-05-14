@@ -5,7 +5,9 @@ import com.sanyan.character.internal.AiCharacterTestFixtures;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
 import com.sanyan.chat.internal.SenderType;
+import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.MemoryConstants;
+import com.sanyan.memory.dto.MemoryContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,18 +47,23 @@ class AiServiceTest {
 
     @Mock MessageRepository messageRepository;
     @Mock LLMProviderRouter llmRouter;
+    @Mock MemoryApi memoryApi;
 
     private AiService service;
 
     private static final String SYSTEM_PROMPT_MARKER = "MARKER_FROM_RESOURCE_FILE";
+    private static final Long DEFAULT_CHARACTER_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        // Q3 起 AiService 直接持有 PromptBuilder（无状态 Spring Bean，可在测试里直接 new）
-        service = new AiService(messageRepository, llmRouter, new PromptBuilder());
+        // Q3 起 AiService 直接持有 PromptBuilder（无状态 Spring Bean，可在测试里直接 new）。
+        // Q4 起再注入 MemoryApi，主对话前调 getRelevantContext 拿长期记忆 context。
+        service = new AiService(messageRepository, llmRouter, new PromptBuilder(), memoryApi);
         Resource resource = new ByteArrayResource(
                 SYSTEM_PROMPT_MARKER.getBytes(StandardCharsets.UTF_8));
         ReflectionTestUtils.setField(service, "systemPromptResource", resource);
+        // Q4：MVP 单角色，默认 characterId = 1L，通过 @Value 注入，测试里用 ReflectionTestUtils 显式塞
+        ReflectionTestUtils.setField(service, "defaultCharacterId", DEFAULT_CHARACTER_ID);
         ReflectionTestUtils.invokeMethod(service, "loadSystemPrompt");
     }
 
@@ -140,6 +147,152 @@ class AiServiceTest {
                 .as("短期窗口大小必须从 MemoryConstants.SHORT_TERM_WINDOW_SIZE 取，禁止字面量")
                 .isEqualTo(MemoryConstants.SHORT_TERM_WINDOW_SIZE);
         assertThat(pageCaptor.getValue().getPageNumber()).isZero();
+    }
+
+    // ------------------------------------------------------------------
+    // Q4：AiService 注入 MemoryApi —— 调用 / 降级 / 参数传递
+    // ------------------------------------------------------------------
+
+    @Test
+    void chat_shouldStillWorkWhenMemoryApiReturnsNull() {
+        // MemoryApi 三层皆空时合约约定返回 null，AiService 必须照常工作（PromptBuilder 接受 null memoryContext）
+        when(messageRepository.findByUserIdOrderByIdDesc(anyLong(), any()))
+                .thenReturn(new ArrayList<>(List.of()));
+        when(memoryApi.getRelevantContext(anyLong(), anyLong(), any()))
+                .thenReturn(null);
+        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+                .thenReturn("ok");
+
+        String reply = service.chat(AiCharacterTestFixtures.xiaowan(), 42L);
+        assertThat(reply).isEqualTo("ok");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmRouter).chat(eq(LLMTaskType.USER_FACING), captor.capture());
+        List<Map<String, String>> sent = captor.getValue();
+        // 只有人设 system 消息，没有「她对你的记忆：」段
+        assertThat(sent).hasSize(1);
+        assertThat(sent.get(0)).containsEntry("role", "system");
+        assertThat(sent.get(0).get("content")).doesNotContain(PromptBuilder.MEMORY_PREFIX);
+    }
+
+    @Test
+    void chat_shouldInjectMemoryContextIntoPromptWhenAvailable() {
+        MessageEntity userMsg = new MessageEntity();
+        userMsg.setSenderType(SenderType.USER);
+        userMsg.setContent("我最近想去北海道");
+        when(messageRepository.findByUserIdOrderByIdDesc(eq(42L), any()))
+                .thenReturn(new ArrayList<>(List.of(userMsg)));
+        when(memoryApi.getRelevantContext(eq(42L), eq(DEFAULT_CHARACTER_ID), eq("我最近想去北海道")))
+                .thenReturn(new MemoryContext("她记得你喜欢滑雪"));
+        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+                .thenReturn("好呀我陪你");
+
+        service.chat(AiCharacterTestFixtures.xiaowan(), 42L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmRouter).chat(eq(LLMTaskType.USER_FACING), captor.capture());
+        List<Map<String, String>> sent = captor.getValue();
+        // 期望顺序：[0]人设 system / [1]记忆 system / [2]user 消息
+        assertThat(sent).hasSize(3);
+        assertThat(sent.get(0)).containsEntry("role", "system");
+        assertThat(sent.get(0).get("content")).contains(SYSTEM_PROMPT_MARKER);
+        assertThat(sent.get(1)).containsEntry("role", "system");
+        assertThat(sent.get(1).get("content"))
+                .as("Memory context 必须以固定前缀注入，避免污染人设")
+                .startsWith(PromptBuilder.MEMORY_PREFIX)
+                .contains("她记得你喜欢滑雪");
+        assertThat(sent.get(2)).containsEntry("role", "user").containsEntry("content", "我最近想去北海道");
+    }
+
+    @Test
+    void chat_shouldPassLatestUserMessageContentAsRagQuery() {
+        // 历史：user("早") → ai("早呀") → user("帮我推荐去东京的路线") ←最新的 user 消息
+        MessageEntity oldestUser = new MessageEntity();
+        oldestUser.setSenderType(SenderType.USER);
+        oldestUser.setContent("早");
+        MessageEntity aiReply = new MessageEntity();
+        aiReply.setSenderType(SenderType.AI);
+        aiReply.setContent("早呀");
+        MessageEntity latestUser = new MessageEntity();
+        latestUser.setSenderType(SenderType.USER);
+        latestUser.setContent("帮我推荐去东京的路线");
+        // Repository 按 id desc 返回（最新在前），AiService 内部会 reverse 成时间正序
+        when(messageRepository.findByUserIdOrderByIdDesc(eq(7L), any()))
+                .thenReturn(new ArrayList<>(List.of(latestUser, aiReply, oldestUser)));
+        when(memoryApi.getRelevantContext(anyLong(), anyLong(), any())).thenReturn(null);
+        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any())).thenReturn("ok");
+
+        AiCharacterEntity character = AiCharacterTestFixtures.xiaowan();  // id = 1L
+        service.chat(character, 7L);
+
+        // 必须用「最新的 user 消息内容」作为 RAG query，characterId 用 character.getId()
+        verify(memoryApi).getRelevantContext(eq(7L), eq(1L), eq("帮我推荐去东京的路线"));
+    }
+
+    @Test
+    void chat_shouldFallbackToDefaultCharacterIdWhenEntityHasNoId() {
+        AiCharacterEntity withoutId = new AiCharacterEntity();
+        withoutId.setName("无 id 的角色");
+        withoutId.setId(null);
+
+        MessageEntity userMsg = new MessageEntity();
+        userMsg.setSenderType(SenderType.USER);
+        userMsg.setContent("你好");
+        when(messageRepository.findByUserIdOrderByIdDesc(eq(9L), any()))
+                .thenReturn(new ArrayList<>(List.of(userMsg)));
+        when(memoryApi.getRelevantContext(anyLong(), anyLong(), any())).thenReturn(null);
+        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any())).thenReturn("ok");
+
+        service.chat(withoutId, 9L);
+
+        // character.getId() 为 null 时回落到 defaultCharacterId (=1L)
+        verify(memoryApi).getRelevantContext(eq(9L), eq(DEFAULT_CHARACTER_ID), eq("你好"));
+    }
+
+    @Test
+    void chat_shouldDegradeGracefullyWhenMemoryApiThrows() {
+        // MemoryApi 异常不能影响主对话——catch + log + 继续走 PromptBuilder（memoryContext=null）
+        MessageEntity userMsg = new MessageEntity();
+        userMsg.setSenderType(SenderType.USER);
+        userMsg.setContent("hi");
+        when(messageRepository.findByUserIdOrderByIdDesc(anyLong(), any()))
+                .thenReturn(new ArrayList<>(List.of(userMsg)));
+        when(memoryApi.getRelevantContext(anyLong(), anyLong(), any()))
+                .thenThrow(new RuntimeException("embedding 服务挂了"));
+        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+                .thenReturn("ok");
+
+        String reply = service.chat(AiCharacterTestFixtures.xiaowan(), 1L);
+        assertThat(reply).isEqualTo("ok");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmRouter).chat(eq(LLMTaskType.USER_FACING), captor.capture());
+        List<Map<String, String>> sent = captor.getValue();
+        // 没有「她对你的记忆」段（降级），但人设 system + 1 条 user 消息仍存在
+        assertThat(sent).hasSize(2);
+        assertThat(sent.get(0)).containsEntry("role", "system");
+        assertThat(sent.get(0).get("content")).doesNotContain(PromptBuilder.MEMORY_PREFIX);
+        assertThat(sent.get(1)).containsEntry("role", "user").containsEntry("content", "hi");
+    }
+
+    @Test
+    void chat_shouldUseEmptyStringAsRagQueryWhenNoUserMessageExists() {
+        // 边界场景：用户首次对话还没发消息（recent 全是 AI 系统欢迎语之类）
+        MessageEntity aiOnly = new MessageEntity();
+        aiOnly.setSenderType(SenderType.AI);
+        aiOnly.setContent("欢迎");
+        when(messageRepository.findByUserIdOrderByIdDesc(anyLong(), any()))
+                .thenReturn(new ArrayList<>(List.of(aiOnly)));
+        when(memoryApi.getRelevantContext(anyLong(), anyLong(), any())).thenReturn(null);
+        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any())).thenReturn("ok");
+
+        service.chat(AiCharacterTestFixtures.xiaowan(), 1L);
+
+        // 没有 user 消息时，RAG query 用空串占位（不传 null，避免 -core 端 NPE）
+        verify(memoryApi).getRelevantContext(eq(1L), eq(DEFAULT_CHARACTER_ID), eq(""));
     }
 
     @Test
