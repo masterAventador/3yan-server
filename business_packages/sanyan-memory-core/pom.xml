@@ -34,8 +34,19 @@
                  plan spec 写的 0.1.7 暂未发布）—— 提供 PGvector 包装类用于 JDBC 与 PG vector 类型互转。
                  ChatEmbeddingEntity 的 embedding float[] 字段通过 PgVectorType（Hibernate 6 UserType）
                  走 PGvector 序列化。
+
+        Task P4：补 sanyan-memory-api —— MemoryRagSearchService.search 返回 List<MemoryFragment>，
+                 MemoryFragment record 是跨模块 DTO 契约，定义在 sanyan-memory-api/dto。
     -->
     <dependencies>
+        <!--
+            P4：跨模块 DTO（MemoryFragment）契约 + Q2 阶段的 MemoryApi 接口都定义在 sanyan-memory-api。
+            -core 实现侧依赖 -api 是 java-backend rule 默认允许的方向（业务的 -core → 同业务的 -api）。
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-memory-api</artifactId>
+        </dependency>
         <!--
             Plan 2 妥协依赖：调 LLM router + 引用 chat 的 MessageEntity / SenderType。
             未来 Plan 3 把 sanyan-business 拆 -api/-core 后，本依赖改成只引 chat-api / llm-api。
