@@ -19,7 +19,7 @@ import com.sanyan.memory.internal.rag.RagIndexWorker;
 import com.sanyan.memory.internal.summary.MemorySummaryEntity;
 import com.sanyan.memory.internal.summary.MemorySummaryRepository;
 import com.sanyan.memory.internal.summary.SummaryScheduler;
-import com.sanyan.memory.event.UserMessageProfileExtractListener;
+import com.sanyan.memory.event.UserMessageProfileRefreshListener;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,7 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,9 +58,9 @@ import static org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTest
  * <ol>
  *   <li><b>Summary 30 条触发</b>：插 30 条 user/ai 交替消息 → 调
  *       {@link SummaryScheduler#onMessagePersisted} → 验证 {@code memory_summaries} 表落库一条</li>
- *   <li><b>Profile 抽取链路</b>：插一条 "我家有只猫，名字叫橘子" → 调
- *       {@link UserMessageProfileExtractListener#onMessagePersisted} →
- *       验证 {@code memory_profiles.profile_jsonb.events} 含相应 event</li>
+ *   <li><b>Profile 刷新链路</b>：插一条 "我家有只猫，名字叫橘子" → 调
+ *       {@link UserMessageProfileRefreshListener#onMessagePersisted} →
+ *       验证 {@code memory_profiles.summary_text} 含 LLM 输出的自然语言画像</li>
  *   <li><b>RAG 检索召回</b>：插若干 {@link ChatEmbeddingEntity}（含 fixture vector +
  *       chunk_text，其中一条 chunk_text 含"橘子"）→ 用 mock embedding provider 让 query
  *       向量与"橘子" chunk 高度相似 → 调 {@link MemoryApi#getRelevantContext} →
@@ -180,7 +179,7 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
     private SummaryScheduler summaryScheduler;
 
     @Autowired
-    private UserMessageProfileExtractListener profileExtractListener;
+    private UserMessageProfileRefreshListener profileRefreshListener;
 
     @Autowired
     private MemoryApi memoryApi;
@@ -246,28 +245,17 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
     }
 
     /**
-     * 链路 2：用户消息触发 profile 抽取。
+     * 链路 2：用户消息触发 profile 刷新（Plan 2.5 free-form summary）。
      *
-     * <p>流程：插一条 user 消息 "我家有只猫，名字叫橘子" → mock LLM 返回结构化抽取 JSON
-     * （events_appended 含 pet event）→ 直接调
-     * {@link UserMessageProfileExtractListener#onMessagePersisted} → 验证
-     * {@code memory_profiles.profile_jsonb.events} 含相应 event。
+     * <p>流程：插一条 user 消息 "我家有只猫，名字叫橘子" → mock LLM 返回自然语言画像 →
+     * 直接调 {@link UserMessageProfileRefreshListener#onMessagePersisted} → 验证
+     * {@code memory_profiles.summary_text} 是 LLM 输出的画像段落。
      */
     @Test
     @Transactional
-    void profile_extractsFromUserMessage() {
-        // mock LLM 返回符合 ProfileExtraction schema 的 JSON
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyList()))
-                .thenReturn("""
-                        {
-                          "basic_info_updates": null,
-                          "preferences_appended": null,
-                          "events_appended": [
-                            {"type": "pet", "content": "我家有只猫，名字叫橘子"}
-                          ],
-                          "emotion_signal": null
-                        }
-                        """);
+    void profile_refreshesFromUserMessage() {
+        String llmSummary = "用户家里养了一只名叫橘子的猫，喜欢分享日常宠物趣事。";
+        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyList())).thenReturn(llmSummary);
 
         // 插入一条 user 消息
         MessageEntity userMsg = new MessageEntity();
@@ -277,23 +265,20 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
         messageRepository.save(userMsg);
 
         // 直接调 listener 同步方法（绕过 @Async + @TransactionalEventListener）
-        UserMessageProfileExtractListener rawListener =
-                AopTestUtils.getTargetObject(profileExtractListener);
+        UserMessageProfileRefreshListener rawListener =
+                AopTestUtils.getTargetObject(profileRefreshListener);
         rawListener.onMessagePersisted(new MessagePersistedEvent(
                 userMsg.getId(), USER_ID_PROFILE, CHARACTER_ID, SenderType.USER));
 
-        // 验证 memory_profiles 表新增/更新一条，profile_jsonb.events 含橘子相关 event
+        // 验证 memory_profiles 表新增/更新一条，summary_text 是 LLM 输出
         MemoryProfileEntity profile = profileRepository
                 .findByUserIdAndCharacterId(USER_ID_PROFILE, CHARACTER_ID)
                 .orElseThrow(() -> new AssertionError(
                         "profile 链路应当为 user=" + USER_ID_PROFILE + " 落库一条 profile"));
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> events =
-                (List<Map<String, Object>>) profile.getProfileJsonb().get("events");
-        assertThat(events).as("events 应至少含一条").isNotEmpty();
-        assertThat(events)
-                .anyMatch(e -> "我家有只猫，名字叫橘子".equals(e.get("content")));
+        assertThat(profile.getSummaryText())
+                .as("summary_text 应该是 LLM 输出的自然语言画像")
+                .isEqualTo(llmSummary);
     }
 
     /**

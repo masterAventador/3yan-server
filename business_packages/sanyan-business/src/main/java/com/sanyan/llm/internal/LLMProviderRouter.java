@@ -30,7 +30,7 @@ import java.util.Map;
  * <p><b>Q3 task 重构：</b>原 {@code buildOpenAiMessages} 拼装逻辑搬到 {@link PromptBuilder}。
  * router 退化为纯路由层，只接受调用方已经拼好的 OpenAI 兼容消息数组，不再做任何加工。
  * 这样 PromptBuilder 成为唯一的"消息拼装入口"，所有调用方（AiService / MemorySummaryService /
- * MemoryProfileExtractService）共用拼装逻辑（值复用 + 逻辑复用）。
+ * MemoryProfileRefreshService）共用拼装逻辑（值复用 + 逻辑复用）。
  */
 @Slf4j
 @Component

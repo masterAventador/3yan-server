@@ -26,7 +26,7 @@ public interface MemoryApi {
      *
      * <p>三层来源（由 -core 的 {@code MemoryContextBuilder} 编排）：
      * <ol>
-     *   <li><b>结构化档案</b>（{@code memory_profiles.profile_jsonb}）—— "她记得的关于你的事"</li>
+     *   <li><b>自然语言画像</b>（{@code memory_profiles.summary_text}）—— "她记得的关于你的事"</li>
      *   <li><b>滚动摘要</b>（{@code memory_summaries} 最新一段）—— "最近的对话纪要"</li>
      *   <li><b>RAG 检索</b>（{@code chat_embeddings} 语义召回 Top K）—— "相关历史片段"</li>
      * </ol>

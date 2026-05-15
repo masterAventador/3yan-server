@@ -11,7 +11,7 @@ package com.sanyan.chat.event;
  * <p>当前订阅方（Plan 2 P 阶段陆续接入）：
  * <ul>
  *   <li>{@code SummaryScheduler}（N3）：累积 30 条新消息触发摘要</li>
- *   <li>{@code UserMessageProfileExtractListener}（O4）：每条用户消息触发档案抽取</li>
+ *   <li>{@code UserMessageProfileRefreshListener}（Plan 2.5）：每条用户消息触发画像刷新</li>
  *   <li>{@code MessageEmbeddingIndexListener}（P5）：累积 chunk 后送 RAG 索引队列</li>
  * </ul>
  *

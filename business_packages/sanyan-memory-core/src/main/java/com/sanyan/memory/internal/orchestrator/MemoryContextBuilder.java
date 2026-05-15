@@ -9,25 +9,23 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Plan 2 Task Q1：长期记忆三层整合编排器。
+ * Plan 2 Task Q1：长期记忆三层整合编排器（Plan 2.5 适配 free-form summary）。
  *
  * <p>把三条长期记忆通道整合成一段拼好的纯文本，下游 {@code PromptBuilder}（Q3）作为
  * 「她对你的记忆」段塞进 system prompt，介于角色 basePrompt 与短期对话窗口之间：
  *
  * <pre>
- *   profile_jsonb（结构化档案）  ─┐
- *   memory_summaries（最新一段）  ├─►  MemoryContextBuilder ─►  MemoryContext.text  ─►  PromptBuilder
- *   chat_embeddings（RAG Top K）─┘
+ *   summary_text（自然语言画像）  ─┐
+ *   memory_summaries（最新一段）   ├─►  MemoryContextBuilder ─►  MemoryContext.text  ─►  PromptBuilder
+ *   chat_embeddings（RAG Top K）  ─┘
  * </pre>
  *
  * <h2>三段顺序（spec §Q1 / 测试用例约定）</h2>
  * <ol>
- *   <li>profile：「她记得的关于你的事」—— 用户身份 + 偏好 + 大事件，最稳定的长期记忆</li>
+ *   <li>profile：「她记得的关于你的事」—— LLM 直接维护的自然语言画像，最稳定的长期记忆</li>
  *   <li>summary：「最近的对话纪要」—— 跨越短期窗口的中期上下文</li>
  *   <li>RAG：「相关历史片段」—— 语义检索召回的远程历史</li>
  * </ol>
@@ -68,13 +66,12 @@ public class MemoryContextBuilder {
         StringBuilder sb = new StringBuilder();
 
         // ── profile 段：「她记得的关于你的事」 ──
-        profileRepository.findByUserIdAndCharacterId(userId, characterId).ifPresent(profile -> {
-            String profileText = formatProfile(profile.getProfileJsonb());
-            if (!profileText.isBlank()) {
-                sb.append(SECTION_PROFILE_TITLE).append("\n")
-                        .append(profileText).append("\n\n");
-            }
-        });
+        // Plan 2.5: summary_text 已是 LLM 维护的自然语言画像段落，blank 时跳过；不再做结构化格式化。
+        profileRepository.findByUserIdAndCharacterId(userId, characterId)
+                .map(MemoryProfileEntityAccessor::summaryTextOrNull)
+                .filter(text -> text != null && !text.isBlank())
+                .ifPresent(text -> sb.append(SECTION_PROFILE_TITLE).append("\n")
+                        .append(text).append("\n\n"));
 
         // ── summary 段：最新一段「最近的对话纪要」 ──
         summaryRepository
@@ -99,89 +96,13 @@ public class MemoryContextBuilder {
     }
 
     /**
-     * profile JSONB → 纯文本格式化。
-     *
-     * <p>schema 见 V6 头注释 / {@code MemoryProfileTestFixtures.defaultEmptyJsonb}：
-     * <ul>
-     *   <li>{@code basic_info}：name / age / occupation / hometown，拼成「你叫XX，YY岁，从事ZZ，来自WW」</li>
-     *   <li>{@code preferences}：foods / movies / colors / music，每种非空数组单独一行</li>
-     *   <li>{@code events}：最近最多 5 条 events.content，前缀「最近发生：」</li>
-     *   <li>{@code emotion_line}：（占位）—— Q1 范围内先不输出，等 O 模块抽取规则稳定再决定怎么呈现</li>
-     * </ul>
-     * 任一段全空就跳过；整个 profile 全空时返回空字符串，由调用方决定是否输出段头。
+     * 为 {@code Optional.map} 提供方法引用入口的小帮手（避免 lambda 嵌套 null 处理）。
+     * 抽出来纯粹是为了让上面的链式 {@code .map(...).filter(...).ifPresent(...)} 阅读清晰。
      */
-    @SuppressWarnings("unchecked")
-    private static String formatProfile(Map<String, Object> profile) {
-        if (profile == null || profile.isEmpty()) {
-            return "";
+    private static final class MemoryProfileEntityAccessor {
+        private MemoryProfileEntityAccessor() {}
+        static String summaryTextOrNull(com.sanyan.memory.internal.profile.MemoryProfileEntity p) {
+            return p == null ? null : p.getSummaryText();
         }
-
-        StringBuilder out = new StringBuilder();
-
-        // basic_info
-        Object basic = profile.get("basic_info");
-        if (basic instanceof Map<?, ?> basicMap && !basicMap.isEmpty()) {
-            List<String> parts = new ArrayList<>();
-            if (basicMap.get("name") != null) {
-                parts.add("叫" + basicMap.get("name"));
-            }
-            if (basicMap.get("age") != null) {
-                parts.add(basicMap.get("age") + "岁");
-            }
-            if (basicMap.get("occupation") != null) {
-                parts.add("从事" + basicMap.get("occupation"));
-            }
-            if (basicMap.get("hometown") != null) {
-                parts.add("来自" + basicMap.get("hometown"));
-            }
-            if (!parts.isEmpty()) {
-                out.append("你").append(String.join("，", parts)).append("。\n");
-            }
-        }
-
-        // preferences
-        Object prefs = profile.get("preferences");
-        if (prefs instanceof Map<?, ?> prefsMap) {
-            List<String> prefLines = new ArrayList<>();
-            prefsMap.forEach((k, v) -> {
-                if (v instanceof List<?> list && !list.isEmpty()) {
-                    String label = switch (k.toString()) {
-                        case "foods" -> "喜欢吃";
-                        case "movies" -> "喜欢的电影";
-                        case "colors" -> "喜欢的颜色";
-                        case "music" -> "喜欢的音乐";
-                        default -> k.toString();
-                    };
-                    List<String> values = list.stream().map(Object::toString).toList();
-                    prefLines.add(label + "：" + String.join("、", values));
-                }
-            });
-            if (!prefLines.isEmpty()) {
-                out.append(String.join("\n", prefLines)).append("\n");
-            }
-        }
-
-        // events（取最近最多 5 条）
-        Object events = profile.get("events");
-        if (events instanceof List<?> eventList && !eventList.isEmpty()) {
-            int total = eventList.size();
-            int max = Math.min(5, total);
-            int start = total - max;
-            List<String> eventLines = new ArrayList<>();
-            for (int i = start; i < total; i++) {
-                Object e = eventList.get(i);
-                if (e instanceof Map<?, ?> em && em.get("content") != null) {
-                    eventLines.add("- " + em.get("content"));
-                }
-            }
-            if (!eventLines.isEmpty()) {
-                out.append("最近发生：\n");
-                for (String line : eventLines) {
-                    out.append(line).append("\n");
-                }
-            }
-        }
-
-        return out.toString().trim();
     }
 }

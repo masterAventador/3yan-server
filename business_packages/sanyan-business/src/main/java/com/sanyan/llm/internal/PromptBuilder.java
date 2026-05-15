@@ -17,7 +17,7 @@ import java.util.Map;
  * 需要在 system 段注入长期记忆（{@link MemoryContext}），并且短期窗口必须严格限制在
  * {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE}（= 32）条以内。把拼装抽到独立类有两个好处：
  * <ul>
- *   <li>{@code AiService} / {@code MemorySummaryService} / {@code MemoryProfileExtractService}
+ *   <li>{@code AiService} / {@code MemorySummaryService} / {@code MemoryProfileRefreshService}
  *       共用同一份拼装逻辑（值复用 / 逻辑复用 双重）</li>
  *   <li>Router 退化为纯路由层，只关心"task type → provider 选择"，不再混入拼装</li>
  * </ul>
