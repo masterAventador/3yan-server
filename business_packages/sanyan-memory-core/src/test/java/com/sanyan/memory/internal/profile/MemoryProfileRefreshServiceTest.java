@@ -199,6 +199,19 @@ class MemoryProfileRefreshServiceTest {
     }
 
     @Test
+    void systemPromptTemplate_includesTemporalMarkingRule() {
+        // 守护：当用户事实变化（换工作、搬家、新偏好）时，prompt 必须要求 LLM
+        // 用"曾经/现在"或"原本/后来"显式标注时序，而不是直接覆盖旧事实。
+        String template = MemoryProfileRefreshService.SYSTEM_PROMPT_TEMPLATE;
+        assertThat(template)
+                .as("prompt 必须包含'曾经/现在'示例，指引 LLM 显式标注时序")
+                .contains("曾经/现在");
+        assertThat(template)
+                .as("prompt 必须出现'时序'一词，明确这是时序标注规则")
+                .contains("时序");
+    }
+
+    @Test
     void refresh_systemPromptShouldContainCurrentSummaryAndRecentMessages() {
         MemoryProfileRefreshService service = newService();
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("张三是工程师");
