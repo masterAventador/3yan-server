@@ -739,6 +739,8 @@ def ssh_old(cmd: str, ssh_target: str) -> tuple[int, str, str]:
     """
     result = subprocess.run(
         ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
+         "-o", "StrictHostKeyChecking=accept-new",
+         "-o", "UserKnownHostsFile=/tmp/.dogfood_known_hosts",
          ssh_target, cmd],
         capture_output=True, text=True, timeout=60,
     )

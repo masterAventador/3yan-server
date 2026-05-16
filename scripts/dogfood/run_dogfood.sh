@@ -34,12 +34,26 @@ trap cleanup EXIT
 
 echo "==> ssh $SERVER 跑 dogfood_test.py $*"
 
-# 把本机的 SANYAN_OLD_SSH 透传给 new 上的 python 进程；本机有 old 别名时通常会传
-# 'old'，但 new 上一般没配 old，所以这里默认用 IP，由用户在本机也可以覆盖
-OLD_SSH_FORWARD="${SANYAN_OLD_SSH:-}"
+# 把本机的 SANYAN_OLD_SSH 透传给 new 上的 python 进程。new 上没配 old 别名，所以
+# 默认用 IP root@154.8.162.83。配合 ssh -A agent forwarding，让 python 在 new 上
+# ssh 到 old 时用本机的 key 鉴权（new 上没 old 的私钥）。
+OLD_SSH_FORWARD="${SANYAN_OLD_SSH:-root@154.8.162.83}"
 
+# 启动 ssh-agent 并加载 key 用于 agent forwarding（new 上 ssh 到 old 需要本机 key）
+if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
+    echo "==> 启动 ssh-agent"
+    eval "$(ssh-agent -s)" >/dev/null
+fi
+if ! ssh-add -l >/dev/null 2>&1; then
+    echo "==> 加载本机 SSH key (id_ed25519 / id_rsa) 到 agent"
+    for keyfile in ~/.ssh/id_ed25519 ~/.ssh/id_rsa ~/.ssh/id_ecdsa; do
+        [[ -f "$keyfile" ]] && ssh-add "$keyfile" 2>/dev/null || true
+    done
+fi
+
+# -A: agent forwarding，让 new 上的 ssh 命令能用本机 key 连 old
 # 不加 -t 因为我们用 python3 -u 强制 unbuffered 输出，避免 tty 错乱
 exit_code=0
-ssh "$SERVER" "SANYAN_OLD_SSH='$OLD_SSH_FORWARD' python3 -u $REMOTE_SCRIPT $*" || exit_code=$?
+ssh -A "$SERVER" "SANYAN_OLD_SSH='$OLD_SSH_FORWARD' python3 -u $REMOTE_SCRIPT $*" || exit_code=$?
 
 exit "$exit_code"
