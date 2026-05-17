@@ -17,7 +17,8 @@
         S3 Phase 3：llm 域实现层。
         含 LlmApiImpl（薄）+ 5 个内部类（DoubaoAdapter / DeepSeekAdapter / LLMProvider /
         LLMProviderRouter / LlmErrCode）+ 冒烟 IT。
-        embedding / PromptBuilder / AiService 仍留在 sanyan-business（Phase 4/5 处理）。
+        embedding 已在 Phase 4 拆出独立 sanyan-embedding-core；
+        AiService + PromptBuilder 已在 Phase 5 搬到 sanyan-chat-core/internal/（本质属 chat 域）。
     -->
     <dependencies>
         <!-- 本域 -api 契约 -->
