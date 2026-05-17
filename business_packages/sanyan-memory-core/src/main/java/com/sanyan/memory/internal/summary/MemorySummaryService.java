@@ -1,21 +1,24 @@
 package com.sanyan.memory.internal.summary;
 
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.llm.internal.LLMProviderRouter;
-import com.sanyan.llm.internal.LLMTaskType;
-import com.sanyan.llm.internal.PromptBuilder;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
+import com.sanyan.llm.LlmApi;
+import com.sanyan.llm.LlmTaskType;
+import com.sanyan.llm.dto.ChatMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Plan 2 Task N2：把一段对话历史压成"对话纪要"。
  *
- * <p>调用 {@link LLMProviderRouter} 并把任务类型钉死为 {@link LLMTaskType#BACKGROUND}——
+ * <p>调用 {@link LlmApi} 并把任务类型钉死为 {@link LlmTaskType#BACKGROUND}——
  * 摘要属于后台异步任务，用户看不到原始输出，路由到 DeepSeek V4-Flash（低成本 + 大吞吐）。
+ *
+ * <p>S3 Phase 3 重构：跨模块走 LlmApi 契约，不再直接持有 LLMProviderRouter（已迁 llm-core 内部）。
  *
  * <p>system prompt 模板的硬约束：
  * <ul>
@@ -28,9 +31,11 @@ import java.util.Map;
  * <p>service 本身不对 LLM 输出做加工——LLM 返回什么就写什么进 memory_summaries.summary_text。
  * 后续 Phase N3（SummaryScheduler）调本 service 然后写库。
  *
- * <p>Q3 task 改动：消息拼装从 router 内部抽出到 {@link PromptBuilder}，本 service 调
- * {@code promptBuilder.build} 拼好 OpenAI 兼容 messages 后传给 router。所有 LLM 调用方共用
- * 一份拼装逻辑（值复用 + 逻辑复用），避免每个 service 自己重复实现。
+ * <p>Q3 task 历史：消息拼装曾经走 {@code PromptBuilder}（位于 sanyan-business）。
+ *
+ * <p>S3 Phase 5 重构：PromptBuilder 随 AiService 一起搬到 sanyan-chat-core 内 {@code internal/}
+ * 包，跨模块不可见。memory-core 自己内联拼装 {@link ChatMessage}（逻辑简单 + 不会被复用），
+ * 同时 message 入参类型从 {@code MessageEntity} 改为 {@link MessageDto}（来自 ChatApi 契约）。
  */
 @Service
 @RequiredArgsConstructor
@@ -48,18 +53,25 @@ public class MemorySummaryService {
             保留关键事实、情感线索、用户提到的人事物。长度控制在 100-200 字。
             """;
 
-    private final LLMProviderRouter llmRouter;
-    private final PromptBuilder promptBuilder;
+    private final LlmApi llmApi;
 
     /**
      * 对传入的对话历史生成一段"对话纪要"文本。
      *
-     * @param messages 用户与 AI 的对话列表（通常 30 条，{@link com.sanyan.memory.MemoryConstants#SUMMARY_TRIGGER_THRESHOLD}）
+     * @param messages 用户与 AI 的对话列表（通常 30 条，{@link com.sanyan.memory.MemoryConstants#SUMMARY_TRIGGER_THRESHOLD}），
+     *                 来自 {@link com.sanyan.chat.ChatApi#listSinceMessageId}
      * @return LLM 生成的纪要文本，service 不做任何加工原样返回
      */
-    public String summarize(List<MessageEntity> messages) {
-        List<Map<String, String>> openAiMessages =
-                promptBuilder.build(SYSTEM_PROMPT, null, messages);
-        return llmRouter.chat(LLMTaskType.BACKGROUND, openAiMessages);
+    public String summarize(List<MessageDto> messages) {
+        List<ChatMessage> chatMessages = new ArrayList<>();
+        chatMessages.add(ChatMessage.system(SYSTEM_PROMPT));
+        if (messages != null) {
+            for (MessageDto m : messages) {
+                String role = SenderType.USER.equalsIgnoreCase(m.senderType()) ? "user" : "assistant";
+                String content = m.content() == null ? "" : m.content();
+                chatMessages.add(new ChatMessage(role, content));
+            }
+        }
+        return llmApi.chat(LlmTaskType.BACKGROUND, chatMessages);
     }
 }

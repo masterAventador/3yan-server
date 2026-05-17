@@ -1,7 +1,7 @@
 package com.sanyan.memory.internal.rag;
 
 import com.sanyan.common.error.BusinessException;
-import com.sanyan.llm.internal.EmbeddingProvider;
+import com.sanyan.embedding.EmbeddingApi;
 import com.sanyan.memory.internal.MemoryErrCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +24,7 @@ import java.util.List;
  *
  * <p>设计要点：
  * <ul>
- *   <li><b>单次批量 HTTP</b>：N 个 chunks 必须在一次 {@link EmbeddingProvider#embed} 调用里
+ *   <li><b>单次批量 HTTP</b>：N 个 chunks 必须在一次 {@link EmbeddingApi#embed} 调用里
  *       一起送出去——远程 BGE-M3 服务支持批量，省 N-1 次 HTTP 往返开销。绝不允许在循环里
  *       一条条调 provider。</li>
  *   <li><b>向量数 ≠ chunks 数 → 抛异常</b>：协议层面应保证一一对应，不一致只能视作远端
@@ -45,7 +45,7 @@ import java.util.List;
 @Slf4j
 public class MemoryEmbeddingService {
 
-    private final EmbeddingProvider embeddingProvider;
+    private final EmbeddingApi embeddingApi;
     private final ChatEmbeddingRepository repository;
 
     /**
@@ -63,7 +63,7 @@ public class MemoryEmbeddingService {
         List<String> texts = chunks.stream()
                 .map(MemoryChunkBuilder.Chunk::chunkText)
                 .toList();
-        List<float[]> vectors = embeddingProvider.embed(texts);
+        List<float[]> vectors = embeddingApi.embed(texts);
         if (vectors.size() != chunks.size()) {
             log.error("Embedding 返回向量数 {} ≠ chunks 数 {}", vectors.size(), chunks.size());
             throw new BusinessException(MemoryErrCode.EMBEDDING_SERVICE_UNAVAILABLE);

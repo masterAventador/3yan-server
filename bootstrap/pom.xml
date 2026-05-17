@@ -13,7 +13,39 @@
     <name>sanyan-server-bootstrap</name>
 
     <dependencies>
-        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-business</artifactId></dependency>
+        <!--
+            S3 Phase 1：user 域已从 sanyan-business 拆出到独立的 sanyan-user-core。
+            bootstrap 必须显式 compile 依赖 sanyan-user-core，否则 fat jar 缺少 user 域 Bean
+            （AuthController / UserRegister/Login Service / UserApiImpl 等），启动后 user API 全 404。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-user-core</artifactId></dependency>
+        <!--
+            S3 Phase 2：character 域已从 sanyan-business 拆出到独立的 sanyan-character-core。
+            bootstrap 必须显式 compile 依赖 sanyan-character-core，否则 fat jar 缺少 CharacterApiImpl Bean，
+            chat 业务（MessageService.handleAiReply）走 CharacterApi 时启动期就装配失败。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-core</artifactId></dependency>
+        <!--
+            S3 Phase 3：llm 域已从 sanyan-business 拆出到独立的 sanyan-llm-core。
+            bootstrap 必须显式 compile 依赖 sanyan-llm-core，否则 fat jar 缺少
+            LlmApiImpl / DoubaoAdapter / DeepSeekAdapter / LLMProviderRouter 等 Bean，
+            AiService / MemorySummaryService / MemoryProfileRefreshService 注入 LlmApi 时启动期装配失败。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-core</artifactId></dependency>
+        <!--
+            S3 Phase 4：embedding 域已从 sanyan-business 拆出到独立的 sanyan-embedding-core。
+            bootstrap 必须显式 compile 依赖 sanyan-embedding-core，否则 fat jar 缺少
+            EmbeddingApiImpl / SiliconFlowEmbeddingProvider 等 Bean，
+            MemoryRagSearchService / MemoryEmbeddingService 注入 EmbeddingApi 时启动期装配失败。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-core</artifactId></dependency>
+        <!--
+            S3 Phase 5：chat 域已从 sanyan-business 拆出到独立的 sanyan-chat-core。
+            bootstrap 必须显式 compile 依赖 sanyan-chat-core，否则 fat jar 缺少
+            MessageController / ChatWebSocketHandler / MessageService / ChatApiImpl /
+            AiService / PromptBuilder 等 Bean，主对话链路启动期装配失败。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-core</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
@@ -33,6 +65,23 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <executions><execution><goals><goal>repackage</goal></goals></execution></executions>
+            </plugin>
+
+            <!--
+                S3 Phase 7：父 pom enforce-no-cross-core-dep 禁止任何模块依赖 *-core。
+                bootstrap 是装配点，必须依赖所有 -core 才能拼出 fat jar，所以这里把该
+                execution 的 phase 设为 none 显式跳过。其他 enforcer execution（如
+                enforce-versions）继续从父 pom 继承生效。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-no-cross-core-dep</id>
+                        <phase>none</phase>
+                    </execution>
+                </executions>
             </plugin>
 
             <!--

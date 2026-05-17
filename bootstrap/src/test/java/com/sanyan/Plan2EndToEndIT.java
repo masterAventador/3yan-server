@@ -1,13 +1,13 @@
 package com.sanyan;
 
+import com.sanyan.chat.SenderType;
 import com.sanyan.chat.event.MessagePersistedEvent;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.test.PostgresTestcontainerSupport;
-import com.sanyan.llm.internal.EmbeddingProvider;
-import com.sanyan.llm.internal.LLMProviderRouter;
-import com.sanyan.llm.internal.LLMTaskType;
+import com.sanyan.embedding.EmbeddingApi;
+import com.sanyan.llm.LlmApi;
+import com.sanyan.llm.LlmTaskType;
 import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.dto.MemoryContext;
@@ -146,10 +146,10 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
     private static final Long CHARACTER_ID = 1L;
 
     @MockBean
-    private LLMProviderRouter llmRouter;
+    private LlmApi llmApi;
 
     @MockBean
-    private EmbeddingProvider embeddingProvider;
+    private EmbeddingApi embeddingApi;
 
     @MockBean
     private StringRedisTemplate stringRedisTemplate;
@@ -206,7 +206,7 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
     @Transactional
     void summary_triggersAfter30Messages() {
         // mock LLM 返回固定摘要文本
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyList()))
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList()))
                 .thenReturn("用户和小婉聊了 30 条关于日常生活的对话纪要");
 
         // 插 30 条消息（user / ai 交替，模拟真实对话）
@@ -255,7 +255,7 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
     @Transactional
     void profile_refreshesFromUserMessage() {
         String llmSummary = "用户家里养了一只名叫橘子的猫，喜欢分享日常宠物趣事。";
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyList())).thenReturn(llmSummary);
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn(llmSummary);
 
         // 插入一条 user 消息
         MessageEntity userMsg = new MessageEntity();
@@ -285,7 +285,7 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
      * 链路 3：RAG 检索召回相关历史片段。
      *
      * <p>流程：插若干 {@link ChatEmbeddingEntity}（其中一条 chunk_text 含"橘子"，向量
-     * 与 query 向量高度相似；其余两条向量正交于 query）→ mock embeddingProvider 返回
+     * 与 query 向量高度相似；其余两条向量正交于 query）→ mock embeddingApi 返回
      * 与"橘子" chunk 同方向的 query 向量 → 调 {@link MemoryApi#getRelevantContext} →
      * 验证返回的 {@link MemoryContext#text()} 含"橘子"片段。
      */
@@ -302,7 +302,7 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
         embeddingRepository.flush();
 
         // mock embedding provider 返回与 chunk[0] 同方向的查询向量 [1, 0, 0, ...]
-        when(embeddingProvider.embed(anyList()))
+        when(embeddingApi.embed(anyList()))
                 .thenReturn(List.of(oneHotVec(0)));
 
         // 调 MemoryApi 拿整合 context

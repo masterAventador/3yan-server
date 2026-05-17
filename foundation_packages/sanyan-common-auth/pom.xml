@@ -81,7 +81,21 @@
                             <rules>
                                 <bannedDependencies>
                                     <excludes>
+                                        <!-- 历史：sanyan-business 单体（已 S3 Phase 6 删除）-->
                                         <exclude>com.sanyan:sanyan-business</exclude>
+                                        <!-- S3 拆模块后 6 对 -api/-core 全部不允许 foundation 反向依赖 -->
+                                        <exclude>com.sanyan:sanyan-user-api</exclude>
+                                        <exclude>com.sanyan:sanyan-user-core</exclude>
+                                        <exclude>com.sanyan:sanyan-character-api</exclude>
+                                        <exclude>com.sanyan:sanyan-character-core</exclude>
+                                        <exclude>com.sanyan:sanyan-chat-api</exclude>
+                                        <exclude>com.sanyan:sanyan-chat-core</exclude>
+                                        <exclude>com.sanyan:sanyan-llm-api</exclude>
+                                        <exclude>com.sanyan:sanyan-llm-core</exclude>
+                                        <exclude>com.sanyan:sanyan-embedding-api</exclude>
+                                        <exclude>com.sanyan:sanyan-embedding-core</exclude>
+                                        <exclude>com.sanyan:sanyan-memory-api</exclude>
+                                        <exclude>com.sanyan:sanyan-memory-core</exclude>
                                     </excludes>
                                 </bannedDependencies>
                             </rules>

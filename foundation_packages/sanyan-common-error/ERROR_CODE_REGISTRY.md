@@ -12,13 +12,13 @@
 | 区间 | 模块 | 类名 | 位置 |
 |---|---|---|---|
 | **400-499** | 通用 | `CommonErrCode` | `foundation_packages/sanyan-common-error/` |
-| **1000-1999** | user | `UserErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/user/internal/` |
-| **2000-2999** | chat | `ChatErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/chat/internal/` |
-| **3000-3999** | character | `CharacterErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/character/internal/` |
-| **4000-4999** | llm | `LlmErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/llm/internal/` |
+| **1000-1999** | user | `UserErrCode` | `business_packages/sanyan-user-core/src/main/java/com/sanyan/user/internal/` |
+| **2000-2999** | chat | `ChatErrCode` | `business_packages/sanyan-chat-core/src/main/java/com/sanyan/chat/internal/` |
+| **3000-3999** | character | `CharacterErrCode` | `business_packages/sanyan-character-core/src/main/java/com/sanyan/character/internal/` |
+| **4000-4999** | llm | `LlmErrCode` | `business_packages/sanyan-llm-core/src/main/java/com/sanyan/llm/internal/` |
 | **5000-5999** | memory | `MemoryErrCode` | `business_packages/sanyan-memory-core/src/main/java/com/sanyan/memory/internal/` |
-| **6000-6999** | _（保留）_ | — | 历史归属 embedding 服务，2026-05-17 切换硅基流动 API 后 embedding 模块已下线，区间空闲 |
-| **7000-9999** | _（保留）_ | — | 留给未来新模块（Plan 3 拆 business 单体时优先用这段） |
+| **6000-6999** | embedding | `EmbeddingErrCode` | `business_packages/sanyan-embedding-core/src/main/java/com/sanyan/embedding/internal/` |
+| **7000-9999** | _（保留）_ | — | 留给未来新模块 |
 
 ---
 
@@ -65,8 +65,9 @@
 | 4001 | `LLM_CALL_FAILED` | AI 服务暂时不可用 |
 | 4002 | `LLM_UPSTREAM_4XX` | AI 服务请求被拒绝 |
 | 4003 | `LLM_UPSTREAM_UNAVAILABLE` | AI 服务暂时不可用 |
-| 4004 | `EMBEDDING_SERVICE_UNAVAILABLE` | Embedding 服务不可用（硅基流动 API 4xx / 5xx 重试耗尽 / 网络异常） |
 | 4005 | `LLM_PROVIDER_NOT_FOUND` | 找不到支持该任务类型的 LLM provider |
+
+> 注：4004 `EMBEDDING_SERVICE_UNAVAILABLE` 已于 S3 Phase 4 退役，迁到 `EmbeddingErrCode` 6001。
 
 ### MemoryErrCode（5000-5999）
 
@@ -75,7 +76,13 @@
 | 5001 | `PROFILE_REFRESH_CONFLICT` | Profile 刷新失败（乐观锁冲突） |
 | 5002 | `EMBEDDING_SERVICE_UNAVAILABLE` | Embedding 服务不可用（业务层视角，调用方按此降级 RAG） |
 
-**关于 4004 与 5002 同名**：分层语义有意保留——4004 是 HTTP 客户端层（`SiliconFlowEmbeddingProvider`）抛的协议级失败，5002 是 Memory 业务层视角的不可用。`MemoryRagSearchService` 同时捕获两个 code 走相同的"返回空 list + 降级"逻辑。
+### EmbeddingErrCode（6000-6999）
+
+| Code | 常量 | 文案 |
+|---|---|---|
+| 6001 | `EMBEDDING_SERVICE_UNAVAILABLE` | Embedding 服务不可用（硅基流动 API 4xx / 5xx 重试耗尽 / 网络异常） |
+
+**关于 6001 与 5002 同名**：分层语义有意保留——6001 是 HTTP 客户端层（`SiliconFlowEmbeddingProvider`）抛的协议级失败，5002 是 Memory 业务层视角的不可用。`MemoryRagSearchService` 同时捕获两个 code 走相同的"返回空 list + 降级"逻辑。
 
 ---
 
@@ -95,3 +102,5 @@
 |---|---|
 | 2026-05-15 | Plan 2 R3 final review 标记本表缺失为 S1 建议 |
 | 2026-05-17 | 创建本表；同日 embedding 模块下线，6xxx 区间转为保留 |
+| 2026-05-17 | S3 Phase 4：6xxx 启用 embedding 域；EmbeddingErrCode 新建 6001；LlmErrCode 删 4004 EMBEDDING_SERVICE_UNAVAILABLE（迁到 EmbeddingErrCode 6001） |
+| 2026-05-17 | S3 Phase 7：sanyan-business 单体拆完，ErrCode 位置全部更新到新 -core 模块路径 |

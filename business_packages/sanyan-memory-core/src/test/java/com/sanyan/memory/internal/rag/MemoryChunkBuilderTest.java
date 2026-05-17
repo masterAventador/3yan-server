@@ -1,7 +1,7 @@
 package com.sanyan.memory.internal.rag;
 
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.SenderType;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.memory.MemoryConstants;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +30,7 @@ class MemoryChunkBuilderTest {
     @Test
     void build_shouldReturnEmptyWhenLessThanMinSize() {
         // 4 条短消息（< 5），不到 min 全丢
-        List<MessageEntity> messages = shortMessages(4);
+        List<MessageDto> messages = shortMessages(4);
 
         List<MemoryChunkBuilder.Chunk> chunks = builder.build(messages);
 
@@ -40,7 +40,7 @@ class MemoryChunkBuilderTest {
     @Test
     void build_shouldReturnSingleChunkWhenExactlyMinSize() {
         // 恰好 5 条短消息 → 1 chunk
-        List<MessageEntity> messages = shortMessages(5);
+        List<MessageDto> messages = shortMessages(5);
 
         List<MemoryChunkBuilder.Chunk> chunks = builder.build(messages);
 
@@ -52,7 +52,7 @@ class MemoryChunkBuilderTest {
     @Test
     void build_shouldSplitInto10Plus10WhenTwentyShortMessages() {
         // 20 条短消息 → 10 + 10
-        List<MessageEntity> messages = shortMessages(20);
+        List<MessageDto> messages = shortMessages(20);
 
         List<MemoryChunkBuilder.Chunk> chunks = builder.build(messages);
 
@@ -66,7 +66,7 @@ class MemoryChunkBuilderTest {
     @Test
     void build_shouldDiscardTailWhenSecondGroupBelowMinSize() {
         // 11 条：第一组 10 条切走，剩 1 条不到 min，丢弃
-        List<MessageEntity> messages = shortMessages(11);
+        List<MessageDto> messages = shortMessages(11);
 
         List<MemoryChunkBuilder.Chunk> chunks = builder.build(messages);
 
@@ -80,7 +80,7 @@ class MemoryChunkBuilderTest {
         // 期望：第 4 条加入后 4*100=400 还没超 400（== 上限不切），第 5 条进来时 400+100>400 触发切
         // 触发切时 current 已经积累 4 条，不够 min(5)，所以第一组丢弃
         // 然后第 5 条开始新组，后续如果总共只剩 1 条也不够 min，全丢
-        List<MessageEntity> messages = longMessagesOf(5, 200);
+        List<MessageDto> messages = longMessagesOf(5, 200);
 
         List<MemoryChunkBuilder.Chunk> chunks = builder.build(messages);
 
@@ -95,7 +95,7 @@ class MemoryChunkBuilderTest {
         // 10 条 × 100 token = 1000 总 token，会按 token 上限多次提前切
         // 验证 token 切分行为：build 不抛异常，结果中每个 chunk 的 tokenCount 不超过 400+单条 token 余量
         // （切分发生在"将要超过"的瞬间，已加进 current 的部分 < 400，刚加入的那条可能让当前 chunk 实际略超）
-        List<MessageEntity> messages = longMessagesOf(10, 200);
+        List<MessageDto> messages = longMessagesOf(10, 200);
 
         List<MemoryChunkBuilder.Chunk> chunks = builder.build(messages);
 
@@ -108,7 +108,7 @@ class MemoryChunkBuilderTest {
 
     @Test
     void build_shouldProduceValidChunkText() {
-        List<MessageEntity> messages = shortMessages(5);
+        List<MessageDto> messages = shortMessages(5);
 
         List<MemoryChunkBuilder.Chunk> chunks = builder.build(messages);
 
@@ -132,30 +132,22 @@ class MemoryChunkBuilderTest {
     // ===== helpers =====
 
     /** 构造 count 条短消息（每条 "消息N"，4 字符 ≈ 2 token）。 */
-    private static List<MessageEntity> shortMessages(int count) {
-        List<MessageEntity> list = new ArrayList<>(count);
+    private static List<MessageDto> shortMessages(int count) {
+        List<MessageDto> list = new ArrayList<>(count);
         for (int i = 1; i <= count; i++) {
-            MessageEntity m = new MessageEntity();
-            m.setId((long) i);
-            m.setUserId(1L);
-            m.setSenderType(SenderType.USER);
-            m.setContent("消息" + i);
-            list.add(m);
+            list.add(new MessageDto(
+                    (long) i, 1L, SenderType.USER, "消息" + i, null));
         }
         return list;
     }
 
     /** 构造 count 条指定字符长度的消息（charLen 字符 ≈ charLen/2 token）。 */
-    private static List<MessageEntity> longMessagesOf(int count, int charLen) {
-        List<MessageEntity> list = new ArrayList<>(count);
+    private static List<MessageDto> longMessagesOf(int count, int charLen) {
+        List<MessageDto> list = new ArrayList<>(count);
         String content = "字".repeat(charLen);
         for (int i = 1; i <= count; i++) {
-            MessageEntity m = new MessageEntity();
-            m.setId((long) i);
-            m.setUserId(1L);
-            m.setSenderType(SenderType.USER);
-            m.setContent(content);
-            list.add(m);
+            list.add(new MessageDto(
+                    (long) i, 1L, SenderType.USER, content, null));
         }
         return list;
     }
