@@ -1,0 +1,97 @@
+# ErrCode 区间登记表
+
+> **本表是所有业务错误码（`ErrCode` 实现 enum）的人类可读索引。**
+> 启动期 `ErrCodeConflictDetector` 自动扫描所有 enum，发现 code 重复直接启动失败——但**区间分配**靠人维护本表。
+>
+> **新模块申请 code 前必须先更新本表。**
+
+---
+
+## 区间分配总览
+
+| 区间 | 模块 | 类名 | 位置 |
+|---|---|---|---|
+| **400-499** | 通用 | `CommonErrCode` | `foundation_packages/sanyan-common-error/` |
+| **1000-1999** | user | `UserErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/user/internal/` |
+| **2000-2999** | chat | `ChatErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/chat/internal/` |
+| **3000-3999** | character | `CharacterErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/character/internal/` |
+| **4000-4999** | llm | `LlmErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/llm/internal/` |
+| **5000-5999** | memory | `MemoryErrCode` | `business_packages/sanyan-memory-core/src/main/java/com/sanyan/memory/internal/` |
+| **6000-6999** | _（保留）_ | — | 历史归属 embedding 服务，2026-05-17 切换硅基流动 API 后 embedding 模块已下线，区间空闲 |
+| **7000-9999** | _（保留）_ | — | 留给未来新模块（Plan 3 拆 business 单体时优先用这段） |
+
+---
+
+## 详细 code 清单
+
+### CommonErrCode（400-499）
+
+| Code | 常量 | 文案 |
+|---|---|---|
+| 400 | `TOKEN_EXPIRED` | 登录态过期 |
+| 401 | `TOKEN_INVALID` | 登录态无效 |
+| 403 | `FORBIDDEN` | 无权限 |
+| 404 | `NOT_FOUND` | 资源不存在 |
+| 410 | `PARAM_INVALID` | 参数错误 |
+| 500 | `INTERNAL_ERROR` | 服务器错误，请稍后重试 |
+
+### UserErrCode（1000-1999）
+
+| Code | 常量 | 文案 |
+|---|---|---|
+| 1001 | `PHONE_ALREADY_REGISTERED` | 手机号已注册 |
+| 1002 | `USER_NOT_FOUND` | 用户不存在 |
+| 1003 | `WRONG_PASSWORD` | 密码错误 |
+| 1004 | `SMS_CODE_INVALID` | 验证码错误 |
+| 1005 | `SMS_CODE_EXPIRED` | 验证码已过期 |
+| 1006 | `SMS_SEND_TOO_FREQUENT` | 请稍后再试 |
+
+### ChatErrCode（2000-2999）
+
+| Code | 常量 | 文案 |
+|---|---|---|
+| 2001 | `MESSAGE_PROCESSING_FAILED` | 消息处理失败 |
+
+### CharacterErrCode（3000-3999）
+
+| Code | 常量 | 文案 |
+|---|---|---|
+| 3001 | `CHARACTER_NOT_FOUND` | 角色不存在 |
+
+### LlmErrCode（4000-4999）
+
+| Code | 常量 | 文案 |
+|---|---|---|
+| 4001 | `LLM_CALL_FAILED` | AI 服务暂时不可用 |
+| 4002 | `LLM_UPSTREAM_4XX` | AI 服务请求被拒绝 |
+| 4003 | `LLM_UPSTREAM_UNAVAILABLE` | AI 服务暂时不可用 |
+| 4004 | `EMBEDDING_SERVICE_UNAVAILABLE` | Embedding 服务不可用（硅基流动 API 4xx / 5xx 重试耗尽 / 网络异常） |
+| 4005 | `LLM_PROVIDER_NOT_FOUND` | 找不到支持该任务类型的 LLM provider |
+
+### MemoryErrCode（5000-5999）
+
+| Code | 常量 | 文案 |
+|---|---|---|
+| 5001 | `PROFILE_REFRESH_CONFLICT` | Profile 刷新失败（乐观锁冲突） |
+| 5002 | `EMBEDDING_SERVICE_UNAVAILABLE` | Embedding 服务不可用（业务层视角，调用方按此降级 RAG） |
+
+**关于 4004 与 5002 同名**：分层语义有意保留——4004 是 HTTP 客户端层（`SiliconFlowEmbeddingProvider`）抛的协议级失败，5002 是 Memory 业务层视角的不可用。`MemoryRagSearchService` 同时捕获两个 code 走相同的"返回空 list + 降级"逻辑。
+
+---
+
+## 新增 code 流程
+
+1. **挑区间**：在"区间分配总览"里找你的模块所属段。如果是新模块，从"保留"段（7000+）挑一段
+2. **改 enum**：在对应 `<Domain>ErrCode.java` 加新 entry
+3. **更新本表**：把新 code + 常量名 + 文案加进上面的明细表
+4. **mvn test**：`ErrCodeConflictDetectorTest` 会守护 code 唯一性
+5. **commit**
+
+---
+
+## 历史变更
+
+| 日期 | 变更 |
+|---|---|
+| 2026-05-15 | Plan 2 R3 final review 标记本表缺失为 S1 建议 |
+| 2026-05-17 | 创建本表；同日 embedding 模块下线，6xxx 区间转为保留 |
