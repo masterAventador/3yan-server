@@ -46,6 +46,16 @@
             AiService / PromptBuilder 等 Bean，主对话链路启动期装配失败。
         -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-core</artifactId></dependency>
+
+        <!--
+            S3 Phase 6 / V1 baseline 修复：原 sanyan-business 引了 flyway-core 通过传递依赖
+            到 bootstrap fat jar。Phase 6 删 sanyan-business 后这条传递断了，导致
+            fat jar 里缺 flyway 类，启动时 Hibernate validate 直接挂（没 flyway 跑 schema）。
+            bootstrap 显式声明这两个依赖：flyway 主体 + PG 方言（PG 17 需要 flyway-database-postgresql）。
+        -->
+        <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-core</artifactId></dependency>
+        <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-database-postgresql</artifactId></dependency>
+
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
