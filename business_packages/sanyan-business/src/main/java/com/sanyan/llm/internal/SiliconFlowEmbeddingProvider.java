@@ -2,6 +2,7 @@ package com.sanyan.llm.internal;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sanyan.common.error.BusinessException;
+import com.sanyan.common.web.client.HttpClientFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -69,7 +70,7 @@ public class SiliconFlowEmbeddingProvider implements EmbeddingProvider {
             @Value("${sanyan.embedding.http.read-timeout-ms:10000}") int readTimeoutMs,
             @Value("${sanyan.embedding.http.max-retries:2}") int maxRetries,
             @Value("${sanyan.embedding.http.retry-backoff-ms:500}") long retryBackoffMs) {
-        this.http = LlmHttpClients.newClient(
+        this.http = HttpClientFactory.newClient(
                 baseUrl,
                 Duration.ofMillis(connectTimeoutMs),
                 Duration.ofMillis(readTimeoutMs));

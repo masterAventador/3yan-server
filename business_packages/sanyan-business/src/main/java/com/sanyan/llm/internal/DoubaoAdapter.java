@@ -2,6 +2,7 @@ package com.sanyan.llm.internal;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sanyan.common.error.BusinessException;
+import com.sanyan.common.web.client.HttpClientFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -65,7 +66,7 @@ public class DoubaoAdapter implements LLMProvider {
             @Value("${sanyan.doubao.read-timeout:PT30S}") Duration readTimeout) {
         this.apiKey = apiKey;
         this.model = model;
-        this.restClient = LlmHttpClients.newClient(baseUrl, connectTimeout, readTimeout);
+        this.restClient = HttpClientFactory.newClient(baseUrl, connectTimeout, readTimeout);
     }
 
     @Override

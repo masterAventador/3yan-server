@@ -2,6 +2,7 @@ package com.sanyan.llm.internal;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sanyan.common.error.BusinessException;
+import com.sanyan.common.web.client.HttpClientFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -53,9 +54,9 @@ public class DeepSeekAdapter implements LLMProvider {
             @Value("${sanyan.llm.deepseek.read-timeout:PT30S}") Duration readTimeout) {
         this.apiKey = apiKey;
         this.model = model;
-        // M2c 重构：与 RemoteBgeM3Provider 共用 LlmHttpClients 工厂，消除重复的
+        // M2c 重构：与 RemoteBgeM3Provider 共用 HttpClientFactory 工厂，消除重复的
         // RestClient + SimpleClientHttpRequestFactory 构造（M1 code review 指出的预警）
-        this.restClient = LlmHttpClients.newClient(baseUrl, connectTimeout, readTimeout);
+        this.restClient = HttpClientFactory.newClient(baseUrl, connectTimeout, readTimeout);
     }
 
     @Override
