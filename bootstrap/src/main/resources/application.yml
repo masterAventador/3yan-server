@@ -37,6 +37,25 @@ sanyan:
     secret: ${JWT_SECRET:your-256-bit-secret-key-for-sanyan-app-change-in-production}
     expiration-days: 30
 
+  intimacy:
+    stages:
+      strangerEnd: 100
+      friendEnd: 300
+      ambiguousEnd: 600
+      loverEnd: 1000
+    delta:
+      messageSent: 1
+      messageDailyCap: 50
+      dailyLogin: 10
+      streakBonusPerDay: 5
+      streakBonusCap: 50
+    rules:
+      deepNightChat: 50
+      firstHonestShare: 30
+    ai:
+      qualityMaxScore: 20
+      triggerEveryNMessages: 10
+
   # ===== 第三方 LLM / Embedding 配置（base，对所有 profile 生效）=====
   # API key 走环境变量注入，配置文件不写 fallback 值：
   #   - 本机 dev：从 ~/.zshrc export DOUBAO_API_KEY / DEEPSEEK_API_KEY / SILICONFLOW_API_KEY
