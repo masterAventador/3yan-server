@@ -35,5 +35,7 @@ class RelationshipsSchemaIT extends PostgresTestcontainerSupport {
         assertThat(cols.get("intimacy_score").nullable()).isFalse();
         assertThat(cols.get("current_stage").nullable()).isFalse();
         assertThat(cols.get("version").nullable()).isFalse();
+        assertThat(cols.get("created_at").nullable()).isFalse();
+        assertThat(cols.get("updated_at").nullable()).isFalse();
     }
 }
