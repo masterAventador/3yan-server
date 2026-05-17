@@ -5,10 +5,21 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
     default-property-inclusion: non_null
+  # ===== 所有 profile 共享的基础设施配置（dev / prod 在自己的 yml 里按需 override）=====
+  datasource:
+    # dev 本机 PG / 线上 PG 都在 localhost，user/password 走环境变量注入
+    url: jdbc:postgresql://localhost:5432/sanyan
+    username: ${PG_USER:sanyan}
+    password: ${PG_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
   flyway:
     enabled: true
     baseline-on-migrate: true  # 生产首次启动 baseline 后，建议改 false 防止误删 schema 后自动 re-baseline
@@ -17,6 +28,9 @@ spring:
   sql:
     init:
       mode: never
+
+server:
+  port: 8080
 
 sanyan:
   jwt:

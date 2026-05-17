@@ -1,20 +1,7 @@
 spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/sanyan
-    username: ${PG_USER:sanyan}
-    password: ${PG_PASSWORD:}
   jpa:
-    hibernate:
-      ddl-auto: validate
+    # 本机开发打开 SQL 日志，方便调试
     show-sql: true
-  data:
-    redis:
-      host: localhost
-      port: 6379
 
-server:
-  port: 8080
-
-# 注：sanyan.doubao / sanyan.llm.deepseek / sanyan.embedding.* 配置全部继承 application.yml base config，
-# 本机 dev 启动靠 ~/.zshrc 中 export 的环境变量注入 3 个 API key。
-# 配置缺失时 ${KEY:} 默认空字符串，启动不挂，但调用上游会被 401 拒绝。
+# 注：sanyan.doubao / sanyan.llm.deepseek / sanyan.embedding.* 和 spring.datasource / spring.data.redis
+# 全部继承 application.yml base 配置。本机 dev 启动靠 ~/.zshrc 中 export 的 3 个 API key 注入。
