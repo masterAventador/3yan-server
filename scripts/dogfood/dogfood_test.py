@@ -736,11 +736,42 @@ SCENARIO_REGISTRY: dict[str, Callable] = {
 
 SCENARIO_ORDER = ["profile", "throttle", "summary", "rag"]
 
+# 每个场景独立 user_id（≥ 900 避免跟真实用户撞），并行跑时数据按 user_id 隔离不冲突
+SCENARIO_USER_IDS = {
+    "profile": 901,
+    "throttle": 902,
+    "summary": 903,
+    "rag": 904,
+}
+
+
+def _prefix_logger(base: Logger, prefix: str) -> Logger:
+    """给 log 前缀加 scenario 名，并行跑时 4 路日志交错不至于混乱。"""
+    wrapped = Logger(verbose=base.verbose)
+    wrapped.info = lambda msg: base.info(f"[{prefix}] {msg}")
+    wrapped.debug = lambda msg: base.debug(f"[{prefix}] {msg}")
+    wrapped.warn = lambda msg: base.warn(f"[{prefix}] {msg}")
+    return wrapped
+
+
+async def _run_one_scenario(
+    name: str, fn: Callable, token: str, db: DbHandle,
+    user_id: int, character_id: int, log: Logger,
+) -> ScenarioResult:
+    """统一 wrap 一个 scenario：异常转 FAIL，加 log 前缀。"""
+    sublog = _prefix_logger(log, name)
+    sublog.info(f"================ 开始 ================")
+    try:
+        return await fn(token, db, user_id, character_id, sublog)
+    except Exception as e:
+        sublog.warn(f"抛异常: {e!r}")
+        return ScenarioResult(name, "FAIL", f"scenario 抛异常: {e!r}")
+
 
 async def main_async(args: argparse.Namespace) -> int:
     log = Logger(verbose=args.verbose)
 
-    # 加载 env / mint JWT / 建 DB handle
+    # 加载 env / 建 DB handle
     env = read_env()
     jwt_secret = env.get("JWT_SECRET")
     if not jwt_secret:
@@ -749,9 +780,6 @@ async def main_async(args: argparse.Namespace) -> int:
     pg_user = env.get("PG_USER", "sanyan")
     pg_password = env.get("PG_PASSWORD", "")
     db = DbHandle(pg_user=pg_user, pg_password=pg_password)
-
-    token = mint_jwt(jwt_secret, args.user_id)
-    log.debug(f"minted JWT for user_id={args.user_id} (len={len(token)})")
 
     # 决定跑哪些场景
     if args.scenario == "all":
@@ -762,22 +790,46 @@ async def main_async(args: argparse.Namespace) -> int:
             return 2
         scenarios = [args.scenario]
 
-    # 清理（默认 true，--no-clean 跳过）
-    if args.clean:
-        clean_test_data(db, args.user_id, log)
+    # 计算每个场景的 user_id：--user-id 显式指定则所有场景共用（兼容旧用法 + 调试单场景）；
+    # 否则用 SCENARIO_USER_IDS 隔离区（每个场景独立 user_id，避免污染真实用户 + 支持并行）
+    use_isolated_users = (args.user_id is None)
+    scenario_uids = {
+        name: (SCENARIO_USER_IDS[name] if use_isolated_users else args.user_id)
+        for name in scenarios
+    }
+    # 一个进程里所有场景共用 character_id
+    character_id = args.character_id
 
-    results: list[ScenarioResult] = []
-    for name in scenarios:
-        fn = SCENARIO_REGISTRY[name]
-        log.info("")
-        log.info(f"================ Scenario: {name} ================")
-        try:
-            r = await fn(token, db, args.user_id, args.character_id, log)
-        except Exception as e:
-            log.warn(f"scenario {name} 抛异常: {e!r}")
-            r = ScenarioResult(name, "FAIL", f"scenario 抛异常: {e!r}")
-        results.append(r)
-        log.info(r.line())
+    # 清理（默认 true，--no-clean 跳过）—— 每个场景的 user_id 各清一次
+    if args.clean:
+        unique_uids = sorted(set(scenario_uids.values()))
+        log.info(f"==> [clean] 清理 user_ids={unique_uids} 的测试数据")
+        for uid in unique_uids:
+            clean_test_data(db, uid, log)
+
+    # 执行：并行 vs 串行
+    if args.parallel and len(scenarios) > 1:
+        log.info(f"==> 并行跑 {len(scenarios)} 个场景: {scenarios}")
+        tasks = [
+            _run_one_scenario(
+                name, SCENARIO_REGISTRY[name],
+                mint_jwt(jwt_secret, scenario_uids[name]),
+                db, scenario_uids[name], character_id, log,
+            )
+            for name in scenarios
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+    else:
+        log.info(f"==> 串行跑 {len(scenarios)} 个场景: {scenarios}")
+        results = []
+        for name in scenarios:
+            r = await _run_one_scenario(
+                name, SCENARIO_REGISTRY[name],
+                mint_jwt(jwt_secret, scenario_uids[name]),
+                db, scenario_uids[name], character_id, log,
+            )
+            results.append(r)
+            log.info(r.line())
 
     # 打印汇总
     log.info("")
@@ -811,8 +863,20 @@ def build_argparser() -> argparse.ArgumentParser:
         "--no-clean", dest="clean", action="store_false",
         help="跳过清理，接着现有数据继续测"
     )
-    p.add_argument("--user-id", type=int, default=1, help="测试用户 id（默认 1）")
+    p.add_argument(
+        "--user-id", type=int, default=None,
+        help="测试用户 id；默认 None → 各场景用 SCENARIO_USER_IDS 隔离区 user_id（901-904）。"
+             "显式指定（如 --user-id 1）则所有场景共用，方便调试单场景。"
+    )
     p.add_argument("--character-id", type=int, default=1, help="角色 id（默认 1，小婉）")
+    p.add_argument(
+        "--parallel", dest="parallel", action="store_true", default=True,
+        help="并行跑多场景（默认开，asyncio.gather）"
+    )
+    p.add_argument(
+        "--sequential", dest="parallel", action="store_false",
+        help="串行跑（调试 / 日志可读性强）"
+    )
     p.add_argument("-v", "--verbose", action="store_true",
                    help="详细 log（含每条消息发送和收到的 AI 回复）")
     return p
