@@ -14,6 +14,12 @@
 
     <dependencies>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-business</artifactId></dependency>
+        <!--
+            S3 Phase 1：user 域已从 sanyan-business 拆出到独立的 sanyan-user-core。
+            bootstrap 必须显式 compile 依赖 sanyan-user-core，否则 fat jar 缺少 user 域 Bean
+            （AuthController / UserRegister/Login Service / UserApiImpl 等），启动后 user API 全 404。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-user-core</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-user-api</artifactId>
+    <name>sanyan-user-api</name>
+    <packaging>jar</packaging>
+
+    <!--
+        S3 Phase 1：user 域对内契约。
+        只含 UserApi 接口 + UserDto record。
+        无任何业务/基础模块依赖（纯 JDK，便于其他业务 -core 引用而不引入传递依赖）。
+    -->
+    <dependencies>
+        <!-- 故意为空：-api 只含接口 + DTO + 事件，纯 Java，无依赖 -->
+    </dependencies>
+</project>
