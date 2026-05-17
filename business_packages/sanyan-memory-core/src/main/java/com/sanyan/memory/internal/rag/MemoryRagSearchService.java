@@ -42,6 +42,16 @@ import java.util.List;
  * 由 GlobalExceptionHandler 转 400 给端上。
  *
  * <p>本 service 不显式标 {@code @Transactional}：纯查询路径，无写操作。
+ *
+ * <p><b>S3 Phase 4 cleanup todo</b>：当前本类 import {@code com.sanyan.llm.internal.EmbeddingProvider}
+ * 和 {@code com.sanyan.llm.internal.LlmErrCode}（通过 sanyan-business → sanyan-llm-core 传递依赖能编译，
+ * 但违反 -api 边界）。Phase 4 拆 sanyan-embedding-api/core 时：
+ * <ul>
+ *   <li>{@code EmbeddingProvider} → {@code com.sanyan.embedding.EmbeddingApi}</li>
+ *   <li>{@code LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE}（4004）→
+ *       {@code EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE}（6001），LlmErrCode 删 4004</li>
+ *   <li>memory-core/pom 加 {@code sanyan-embedding-api} 依赖；删 sanyan-business 整包依赖</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor

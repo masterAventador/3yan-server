@@ -39,6 +39,12 @@ import java.util.List;
  * <p>事务边界：本 service 不显式标 {@code @Transactional}。{@code repository.saveAll}
  * 在 JPA 默认事务范围内即可保证批量插入的原子性；调用方（P5 listener）需自行根据业务
  * 决定整体事务边界。
+ *
+ * <p><b>S3 Phase 4 cleanup todo</b>：当前本类 import {@code com.sanyan.llm.internal.EmbeddingProvider}
+ * （通过 sanyan-business → sanyan-llm-core 传递依赖能编译，但违反 -api 边界）。
+ * Phase 4 拆 sanyan-embedding-api/core 时：
+ * {@code EmbeddingProvider} → {@code com.sanyan.embedding.EmbeddingApi}；
+ * memory-core/pom 加 {@code sanyan-embedding-api} 依赖。
  */
 @Service
 @RequiredArgsConstructor
