@@ -38,7 +38,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @AutoConfigureTestDatabase
 @TestPropertySource(properties = {
         "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "sanyan.jwt.secret=test-secret-key-at-least-256-bits-long-for-hmac-sha-testing",
+        "sanyan.jwt.expiration-days=1"
 })
 class CharacterApplicationContextIT {
 
