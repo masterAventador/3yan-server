@@ -32,7 +32,7 @@ class PromptBuilderTest {
     @Test
     void build_shouldEmitCharacterPromptAsFirstSystemMessage() {
         List<Map<String, String>> result =
-                builder.build("你是小婉", null, List.of());
+                builder.build("你是小婉", null, null, List.of());
 
         assertThat(result).isNotEmpty();
         assertThat(result.get(0))
@@ -45,7 +45,7 @@ class PromptBuilderTest {
         MemoryContext ctx = new MemoryContext("用户喜欢猫\n上次聊到 RAG");
 
         List<Map<String, String>> result =
-                builder.build("你是小婉", ctx, List.of());
+                builder.build("你是小婉", null, ctx, List.of());
 
         assertThat(result).hasSize(2);
         assertThat(result.get(1))
@@ -59,7 +59,7 @@ class PromptBuilderTest {
     @Test
     void build_shouldSkipMemoryContextWhenNull() {
         List<Map<String, String>> result =
-                builder.build("你是小婉", null, List.of());
+                builder.build("你是小婉", null, null, List.of());
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0)).containsEntry("role", "system");
@@ -68,7 +68,7 @@ class PromptBuilderTest {
     @Test
     void build_shouldSkipMemoryContextWhenEmpty() {
         List<Map<String, String>> result =
-                builder.build("你是小婉", MemoryContext.EMPTY, List.of());
+                builder.build("你是小婉", null, MemoryContext.EMPTY, List.of());
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0)).containsEntry("role", "system");
@@ -79,7 +79,7 @@ class PromptBuilderTest {
         MemoryContext ctx = new MemoryContext("   \n  ");
 
         List<Map<String, String>> result =
-                builder.build("你是小婉", ctx, List.of());
+                builder.build("你是小婉", null, ctx, List.of());
 
         assertThat(result).hasSize(1);
     }
@@ -89,7 +89,7 @@ class PromptBuilderTest {
         MessageEntity msg = userMessage("早上好");
 
         List<Map<String, String>> result =
-                builder.build("sys", null, List.of(msg));
+                builder.build("sys", null, null, List.of(msg));
 
         assertThat(result).hasSize(2);
         assertThat(result.get(1))
@@ -102,7 +102,7 @@ class PromptBuilderTest {
         MessageEntity msg = aiMessage("早上好呀");
 
         List<Map<String, String>> result =
-                builder.build("sys", null, List.of(msg));
+                builder.build("sys", null, null, List.of(msg));
 
         assertThat(result).hasSize(2);
         assertThat(result.get(1))
@@ -117,7 +117,7 @@ class PromptBuilderTest {
         msg.setContent(null);
 
         List<Map<String, String>> result =
-                builder.build("sys", null, List.of(msg));
+                builder.build("sys", null, null, List.of(msg));
 
         assertThat(result).hasSize(2);
         assertThat(result.get(1)).containsEntry("content", "");
@@ -130,7 +130,7 @@ class PromptBuilderTest {
         MessageEntity ai = aiMessage("辛苦了");
 
         List<Map<String, String>> result =
-                builder.build("你是小婉", ctx, List.of(user, ai));
+                builder.build("你是小婉", null, ctx, List.of(user, ai));
 
         assertThat(result).hasSize(4);
         assertThat(result.get(0)).containsEntry("role", "system").containsEntry("content", "你是小婉");
@@ -148,7 +148,7 @@ class PromptBuilderTest {
         }
 
         List<Map<String, String>> result =
-                builder.build("sys", null, messages);
+                builder.build("sys", null, null, messages);
 
         // 1 system + 32 history = 33
         assertThat(result).hasSize(1 + MemoryConstants.SHORT_TERM_WINDOW_SIZE);
@@ -168,7 +168,7 @@ class PromptBuilderTest {
         }
 
         List<Map<String, String>> result =
-                builder.build("sys", null, messages);
+                builder.build("sys", null, null, messages);
 
         // 1 system + 32 history = 33
         assertThat(result).hasSize(1 + MemoryConstants.SHORT_TERM_WINDOW_SIZE);
@@ -182,10 +182,59 @@ class PromptBuilderTest {
     @Test
     void build_shouldTolerateNullMessagesList() {
         List<Map<String, String>> result =
-                builder.build("sys", null, null);
+                builder.build("sys", null, null, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0)).containsEntry("role", "system");
+    }
+
+    // ---------- Plan 3 I2：stagePromptSegment 新增场景 ----------
+
+    @Test
+    void build_shouldInsertStageSegmentBetweenCharacterAndMemory() {
+        var result = builder.build(
+                "你是小婉",
+                "当前关系阶段：暧昧。称呼：宝。",
+                MemoryContext.EMPTY,
+                List.of()
+        );
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).get("content")).isEqualTo("你是小婉");
+        assertThat(result.get(1).get("content")).startsWith("当前关系阶段：暧昧");
+    }
+
+    @Test
+    void build_shouldPlaceStageSegmentBeforeMemory() {
+        MemoryContext ctx = new MemoryContext("用户喜欢编程");
+
+        var result = builder.build(
+                "你是小婉",
+                "当前关系阶段：热恋。称呼：亲爱的。",
+                ctx,
+                List.of()
+        );
+
+        assertThat(result).hasSize(3);
+        assertThat(result.get(0).get("content")).isEqualTo("你是小婉");
+        assertThat(result.get(1).get("content")).startsWith("当前关系阶段：热恋");
+        assertThat(result.get(2).get("content")).startsWith("她对你的记忆：");
+    }
+
+    @Test
+    void build_shouldSkipStageSegmentWhenNull() {
+        var result = builder.build("你是小婉", null, MemoryContext.EMPTY, List.of());
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).get("content")).isEqualTo("你是小婉");
+    }
+
+    @Test
+    void build_shouldSkipStageSegmentWhenBlank() {
+        var result1 = builder.build("你是小婉", "", MemoryContext.EMPTY, List.of());
+        assertThat(result1).hasSize(1);
+
+        var result2 = builder.build("你是小婉", "   ", MemoryContext.EMPTY, List.of());
+        assertThat(result2).hasSize(1);
     }
 
     private static MessageEntity userMessage(String content) {

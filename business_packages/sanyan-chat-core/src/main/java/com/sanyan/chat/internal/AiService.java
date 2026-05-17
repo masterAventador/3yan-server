@@ -124,7 +124,7 @@ public class AiService {
         }
 
         List<Map<String, String>> openAiMessages =
-                promptBuilder.build(systemPrompt, memoryContext, recentMessages);
+                promptBuilder.build(systemPrompt, null, memoryContext, recentMessages);
         List<ChatMessage> chatMessages = openAiMessages.stream()
                 .map(m -> new ChatMessage(m.get("role"), m.get("content")))
                 .toList();
