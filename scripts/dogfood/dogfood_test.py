@@ -37,7 +37,7 @@ import websockets
 
 # ----------------------------- 常量 -----------------------------
 
-ENV_FILE = "/opt/3yan/3yan-server/.env"
+ENV_FILE = "/etc/3yan/3yan-server.env"  # systemd unit 的 EnvironmentFile，唯一 env 源
 WS_URL_TEMPLATE = "ws://localhost:8080/ws?token={token}"
 
 # 与 MessageConstants / MemoryConstants 对齐（写死，服务端改了这里也要改）
@@ -259,8 +259,14 @@ async def chat(token: str, contents: list[str], log: Logger,
     log.debug(f"WS 连接 {url}")
     async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
         for i, content in enumerate(contents):
-            log.debug(f"[{i+1}/{len(contents)}] 发送...")
+            # 进度行：[i/N] + 发送内容截断（默认 verbose=False 下也能看进度）
+            preview = content[:30] + "…" if len(content) > 30 else content
+            log.info(f"    [msg {i+1}/{len(contents)}] → {preview}")
+            t_start = time.monotonic()
             r = await send_one(ws, content, log)
+            elapsed = time.monotonic() - t_start
+            ai_total_chars = sum(len(str(m.get("content", ""))) for m in r.new_messages)
+            log.info(f"    [msg {i+1}/{len(contents)}] ✓ AI 回 {len(r.new_messages)} 气泡/{ai_total_chars}字 耗时{elapsed:.1f}s")
             replies.append(r)
             if wait_between > 0:
                 await asyncio.sleep(wait_between)
@@ -820,9 +826,14 @@ async def main_async(args: argparse.Namespace) -> int:
     # 一个进程里所有场景共用 character_id
     character_id = args.character_id
 
+    # ⭐ V10 加 FK 约束后，必须先 ensure dogfood fake user 在 users 表里存在，
+    # 否则 saveUserMessage INSERT message 会撞 FK 报错。幂等。
+    unique_uids = sorted(set(scenario_uids.values()))
+    log.info(f"==> [setup] ensure fake users {unique_uids} 存在（FK 兜底）")
+    ensure_dogfood_users(db, unique_uids, log)
+
     # 清理（默认 true，--no-clean 跳过）—— 每个场景的 user_id 各清一次
     if args.clean:
-        unique_uids = sorted(set(scenario_uids.values()))
         log.info(f"==> [clean] 清理 user_ids={unique_uids} 的测试数据")
         for uid in unique_uids:
             clean_test_data(db, uid, log)

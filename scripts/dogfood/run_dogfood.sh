@@ -35,8 +35,9 @@ echo "==> ssh $SERVER 跑 dogfood_test.py $*"
 # 注：原 SANYAN_OLD_SSH + ssh-agent forwarding 是给 degradation 场景用的（去 old 上 stop sanyan-embedding 服务）。
 # 2026-05-17 embedding 改用硅基流动 API 后 degradation 场景已删除，本脚本不再需要 agent forwarding。
 
-# 用 python3 -u 强制 unbuffered 输出，避免 tty 错乱
+# ssh -tt 强制分配 pty——让远端 python stdout 走 pty（行 flush）而不是 pipe（block buffer，
+# ssh client 默认要等远端进程退出才一次性 flush）。配合 python3 -u 双层保险，实现实时输出。
 exit_code=0
-ssh "$SERVER" "python3 -u $REMOTE_SCRIPT $*" || exit_code=$?
+ssh -tt "$SERVER" "python3 -u $REMOTE_SCRIPT $*" || exit_code=$?
 
 exit "$exit_code"
