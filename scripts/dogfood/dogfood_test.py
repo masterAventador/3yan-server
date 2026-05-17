@@ -736,13 +736,33 @@ SCENARIO_REGISTRY: dict[str, Callable] = {
 
 SCENARIO_ORDER = ["profile", "throttle", "summary", "rag"]
 
-# 每个场景独立 user_id（≥ 900 避免跟真实用户撞），并行跑时数据按 user_id 隔离不冲突
+# 每个场景独立 user_id（≥ 900 避免跟真实用户撞），并行跑时数据按 user_id 隔离不冲突。
+# V10 migration 给 message / memory_* / chat_embeddings 加了 FK，所以这些 user_id 必须
+# 在 users 表里真实存在——ensure_dogfood_users() 启动时按需 INSERT 占位行。
 SCENARIO_USER_IDS = {
     "profile": 901,
     "throttle": 902,
     "summary": 903,
     "rag": 904,
 }
+
+
+def ensure_dogfood_users(db: DbHandle, user_ids: list[int], log: Logger) -> None:
+    """
+    确保 dogfood 测试用的 fake user 在 users 表里。
+    用 ON CONFLICT (id) DO NOTHING 幂等：第一次跑插入，后续跑跳过。
+
+    password 字段 NOT NULL 所以塞个 'dogfood-no-password'（dogfood 不走 login 流程，
+    JWT 是本地用 secret 直接 mint 出来的，password 不会被用到）。
+    phone 字段 unique 所以编码进 id。
+    """
+    for uid in user_ids:
+        db.execute(
+            f"INSERT INTO users (id, phone, password, nickname) "
+            f"VALUES ({uid}, 'dogfood-{uid}', 'dogfood-no-password', 'dogfood-{uid}') "
+            f"ON CONFLICT (id) DO NOTHING"
+        )
+    log.debug(f"ensure_dogfood_users: 已确认 user_ids={user_ids} 存在")
 
 
 def _prefix_logger(base: Logger, prefix: str) -> Logger:

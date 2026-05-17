@@ -184,6 +184,9 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
     @Autowired
     private MemoryApi memoryApi;
 
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager em;
+
     @BeforeEach
     void setupRedisMockChain() {
         // KvCache.setIfAbsent 走 redis.opsForValue().setIfAbsent(key, value, ttl)
@@ -193,6 +196,22 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
         lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
         lenient().when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class)))
                 .thenReturn(Boolean.TRUE);
+    }
+
+    /**
+     * V1 schema 加了 FK 约束，本 IT 用的 user_id ∈ {1000, 2000, 3000} 必须在 users 表里。
+     * V1 已 seed character_id=1（小婉），无需补 character。
+     */
+    @BeforeEach
+    @Transactional
+    void seedFkFixtures() {
+        em.createNativeQuery(
+                "INSERT INTO users (id, phone, password, nickname) VALUES " +
+                "(1000, 'fk-1000', 'x', 'fk-1000'), " +
+                "(2000, 'fk-2000', 'x', 'fk-2000'), " +
+                "(3000, 'fk-3000', 'x', 'fk-3000') " +
+                "ON CONFLICT (id) DO NOTHING"
+        ).executeUpdate();
     }
 
     /**

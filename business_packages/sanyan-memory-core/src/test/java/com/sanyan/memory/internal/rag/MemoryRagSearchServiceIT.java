@@ -75,6 +75,33 @@ class MemoryRagSearchServiceIT extends PostgresTestcontainerSupport {
     @Autowired
     private MemoryRagSearchService service;
 
+    @Autowired
+    private jakarta.persistence.EntityManager em;
+
+    /**
+     * V1 schema 加了 FK 约束，user_id / character_id 必须在 users / ai_character 表里。
+     * V1 已 seed 小婉（character_id=1），本测试还要用 user 1/2/10/11/999 + character 2/999，幂等 INSERT。
+     */
+    @org.junit.jupiter.api.BeforeEach
+    @org.springframework.transaction.annotation.Transactional
+    void seedFkFixtures() {
+        em.createNativeQuery(
+                "INSERT INTO users (id, phone, password, nickname) VALUES " +
+                "(1, 'fk-1', 'x', 'fk-1'), " +
+                "(2, 'fk-2', 'x', 'fk-2'), " +
+                "(10, 'fk-10', 'x', 'fk-10'), " +
+                "(11, 'fk-11', 'x', 'fk-11'), " +
+                "(999, 'fk-999', 'x', 'fk-999') " +
+                "ON CONFLICT (id) DO NOTHING"
+        ).executeUpdate();
+        em.createNativeQuery(
+                "INSERT INTO ai_character (id, name, created_at) VALUES " +
+                "(2, 'fk-char-2', NOW()), " +
+                "(999, 'fk-char-999', NOW()) " +
+                "ON CONFLICT (id) DO NOTHING"
+        ).executeUpdate();
+    }
+
     /**
      * 在 1024 维向量的前两个分量上做有控差异化，其余补 0。
      * 用单位向量便于推算 cosine distance（dot product 即等价 cos sim，省 norm 因子）。

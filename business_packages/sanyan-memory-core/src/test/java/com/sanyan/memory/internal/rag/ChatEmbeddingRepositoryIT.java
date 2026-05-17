@@ -63,6 +63,29 @@ class ChatEmbeddingRepositoryIT extends PostgresTestcontainerSupport {
     @Autowired
     private ChatEmbeddingRepository repository;
 
+    @Autowired
+    private jakarta.persistence.EntityManager em;
+
+    /**
+     * V1 schema 加了 FK 约束，user_id/character_id 必须在 users/ai_character 表里。
+     * V1 已 seed 小婉（character_id=1），本测试还需要 user 1/2 + character 2，幂等 INSERT。
+     */
+    @org.junit.jupiter.api.BeforeEach
+    @org.springframework.transaction.annotation.Transactional
+    void seedFkFixtures() {
+        em.createNativeQuery(
+                "INSERT INTO users (id, phone, password, nickname) VALUES " +
+                "(1, 'fk-1', 'x', 'fk-1'), " +
+                "(2, 'fk-2', 'x', 'fk-2') " +
+                "ON CONFLICT (id) DO NOTHING"
+        ).executeUpdate();
+        em.createNativeQuery(
+                "INSERT INTO ai_character (id, name, created_at) VALUES " +
+                "(2, 'fk-char-2', NOW()) " +
+                "ON CONFLICT (id) DO NOTHING"
+        ).executeUpdate();
+    }
+
     @Test
     void saveAndFindById_persistsAllFieldsIncludingVectorEmbedding() {
         ChatEmbeddingEntity saved = repository.save(ChatEmbeddingTestFixtures.validEmbedding());
