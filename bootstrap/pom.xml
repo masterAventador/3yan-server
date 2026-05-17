@@ -68,6 +68,23 @@
             </plugin>
 
             <!--
+                S3 Phase 7：父 pom enforce-no-cross-core-dep 禁止任何模块依赖 *-core。
+                bootstrap 是装配点，必须依赖所有 -core 才能拼出 fat jar，所以这里把该
+                execution 的 phase 设为 none 显式跳过。其他 enforcer execution（如
+                enforce-versions）继续从父 pom 继承生效。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-no-cross-core-dep</id>
+                        <phase>none</phase>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
                 Testcontainers 在 surefire 派生 JVM 里的两块配置：
                   1. systemPropertyVariables.api.version=1.44：docker-java 3.4.x 客户端默认
                      声明 API 版本 1.32，与 Docker Engine 25+ 最小要求 1.44 不兼容；docker-java
