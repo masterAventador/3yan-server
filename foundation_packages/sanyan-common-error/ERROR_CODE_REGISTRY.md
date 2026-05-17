@@ -12,13 +12,13 @@
 | 区间 | 模块 | 类名 | 位置 |
 |---|---|---|---|
 | **400-499** | 通用 | `CommonErrCode` | `foundation_packages/sanyan-common-error/` |
-| **1000-1999** | user | `UserErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/user/internal/` |
-| **2000-2999** | chat | `ChatErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/chat/internal/` |
-| **3000-3999** | character | `CharacterErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/character/internal/` |
-| **4000-4999** | llm | `LlmErrCode` | `business_packages/sanyan-business/src/main/java/com/sanyan/llm/internal/` |
+| **1000-1999** | user | `UserErrCode` | `business_packages/sanyan-user-core/src/main/java/com/sanyan/user/internal/` |
+| **2000-2999** | chat | `ChatErrCode` | `business_packages/sanyan-chat-core/src/main/java/com/sanyan/chat/internal/` |
+| **3000-3999** | character | `CharacterErrCode` | `business_packages/sanyan-character-core/src/main/java/com/sanyan/character/internal/` |
+| **4000-4999** | llm | `LlmErrCode` | `business_packages/sanyan-llm-core/src/main/java/com/sanyan/llm/internal/` |
 | **5000-5999** | memory | `MemoryErrCode` | `business_packages/sanyan-memory-core/src/main/java/com/sanyan/memory/internal/` |
 | **6000-6999** | embedding | `EmbeddingErrCode` | `business_packages/sanyan-embedding-core/src/main/java/com/sanyan/embedding/internal/` |
-| **7000-9999** | _（保留）_ | — | 留给未来新模块（Plan 3 拆 business 单体时优先用这段） |
+| **7000-9999** | _（保留）_ | — | 留给未来新模块 |
 
 ---
 
@@ -103,3 +103,4 @@
 | 2026-05-15 | Plan 2 R3 final review 标记本表缺失为 S1 建议 |
 | 2026-05-17 | 创建本表；同日 embedding 模块下线，6xxx 区间转为保留 |
 | 2026-05-17 | S3 Phase 4：6xxx 启用 embedding 域；EmbeddingErrCode 新建 6001；LlmErrCode 删 4004 EMBEDDING_SERVICE_UNAVAILABLE（迁到 EmbeddingErrCode 6001） |
+| 2026-05-17 | S3 Phase 7：sanyan-business 单体拆完，ErrCode 位置全部更新到新 -core 模块路径 |
