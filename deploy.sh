@@ -40,8 +40,8 @@ LOCAL_JAR="bootstrap/target/$JAR_NAME"
 echo "==> [2/4] 上传 jar 到 $SERVER..."
 scp -q "$LOCAL_JAR" "$SERVER:$REMOTE_JAR_PATH"
 
-echo "==> [3/4] systemctl restart $SERVICE_NAME（systemd 接管启停）..."
-ssh "$SERVER" "systemctl restart $SERVICE_NAME"
+echo "==> [3/4] systemctl restart ${SERVICE_NAME} (systemd 接管启停)..."
+ssh "$SERVER" "systemctl restart ${SERVICE_NAME}"
 
 echo "==> [4/4] 等待健康检查（最多 60s）..."
 # 三重确认：端口 LISTEN + systemd is-active + 日志含 'Started SanyanApplication'
@@ -53,7 +53,7 @@ for i in $(seq 1 30); do
   STARTED_OK="$(ssh "$SERVER" "journalctl -u $SERVICE_NAME --since '30 seconds ago' --no-pager 2>/dev/null | grep -q 'Started SanyanApplication'" 2>/dev/null && echo y || echo n)"
 
   if [[ "$PORT_OK" == "y" && "$ACTIVE_OK" == "active" && "$STARTED_OK" == "y" ]]; then
-    echo "✅ 部署成功（端口=LISTEN service=active 应用已 Started）"
+    echo "✅ 部署成功 (端口=LISTEN service=active 应用已 Started)"
     DEPLOY_OK=1
     break
   fi
@@ -61,7 +61,7 @@ for i in $(seq 1 30); do
 done
 
 if [[ "$DEPLOY_OK" -ne 1 ]]; then
-  echo "❌ 60s 内未通过健康检查（port=$PORT_OK active=$ACTIVE_OK started=$STARTED_OK）" >&2
-  echo "请查日志: ssh $SERVER 'journalctl -u $SERVICE_NAME -n 100 --no-pager'" >&2
+  echo "❌ 60s 内未通过健康检查 (port=${PORT_OK} active=${ACTIVE_OK} started=${STARTED_OK})" >&2
+  echo "请查日志: ssh ${SERVER} 'journalctl -u ${SERVICE_NAME} -n 100 --no-pager'" >&2
   exit 1
 fi
