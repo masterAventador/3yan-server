@@ -28,8 +28,8 @@ import static org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTest
  *       原因：vector(1024) 类型需要 {@code CREATE EXTENSION vector}，Hibernate ddl-auto
  *       无法生成 {@code CREATE EXTENSION} 语句。Flyway 跑 V1→V7 才能拿到完整 schema。</li>
  *   <li>Spring Boot 自带 Flyway autoconfigure：classpath 找到
- *       {@code db/migration/V*.sql}（由 {@code sanyan-business} 模块提供，已被本模块
- *       compile scope 依赖带入 test classpath）后自动运行。</li>
+ *       {@code db/migration/V*.sql}（S3 Phase 6 起本模块在
+ *       {@code src/test/resources/db/migration/} 留一份测试副本，主副本在 bootstrap）后自动运行。</li>
  * </ul>
  *
  * <p>{@code spring.jpa.hibernate.ddl-auto=none}：禁用 Hibernate 自动建表，schema 完全交给

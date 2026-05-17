@@ -13,7 +13,6 @@
     <name>sanyan-server-bootstrap</name>
 
     <dependencies>
-        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-business</artifactId></dependency>
         <!--
             S3 Phase 1：user 域已从 sanyan-business 拆出到独立的 sanyan-user-core。
             bootstrap 必须显式 compile 依赖 sanyan-user-core，否则 fat jar 缺少 user 域 Bean

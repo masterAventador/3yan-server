@@ -164,19 +164,14 @@
             <scope>test</scope>
         </dependency>
         <!--
-            S3 Phase 5：test scope 依赖 sanyan-business —— 只为拿到 db/migration 资源。
-            ChatEmbeddingRepositoryIT / MemoryRagSearchServiceIT 用 Flyway 跑 V1→V9（包含
-            CREATE EXTENSION vector + chat_embeddings 表 + ivfflat 索引），这些 SQL 当前仍在
-            sanyan-business/src/main/resources/db/migration/。
-
-            Phase 6 删 sanyan-business 时，会把 db/migration 资源移到 bootstrap 或拆到各域 -core，
-            届时本 test-scope 依赖随之删除。
+            S3 Phase 6：sanyan-business 模块彻底删除。Flyway V*.sql 主副本已迁到
+            bootstrap/src/main/resources/db/migration/（生产 schema 归属 bootstrap）。
+            本模块 RAG IT（ChatEmbeddingRepositoryIT / MemoryRagSearchServiceIT）通过
+            spring.flyway.locations=classpath:db/migration 找 SQL，所以在
+            src/test/resources/db/migration/ 留一份**测试副本**——
+            副本而非引用，保持 memory-core 测试与其它模块资源完全解耦。
+            副本同步规则：生产 V*.sql 改动时，需要手动同步到本模块 test resources。
         -->
-        <dependency>
-            <groupId>com.sanyan</groupId>
-            <artifactId>sanyan-business</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>

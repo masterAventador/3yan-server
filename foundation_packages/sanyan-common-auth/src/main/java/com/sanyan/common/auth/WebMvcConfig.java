@@ -1,6 +1,5 @@
-package com.sanyan.config;
+package com.sanyan.common.auth;
 
-import com.sanyan.common.auth.LoginUserArgumentResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
