@@ -26,7 +26,7 @@ sanyan:
   doubao:
     api-key: test
     model: test
-    endpoint: http://localhost:9999
+    base-url: http://localhost:9999
   cos:
     secret-id: test
     secret-key: test

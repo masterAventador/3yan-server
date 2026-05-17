@@ -5,10 +5,21 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
     default-property-inclusion: non_null
+  # ===== 所有 profile 共享的基础设施配置（dev / prod 在自己的 yml 里按需 override）=====
+  datasource:
+    # dev 本机 PG / 线上 PG 都在 localhost，user/password 走环境变量注入
+    url: jdbc:postgresql://localhost:5432/sanyan
+    username: ${PG_USER:sanyan}
+    password: ${PG_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
   flyway:
     enabled: true
     baseline-on-migrate: true  # 生产首次启动 baseline 后，建议改 false 防止误删 schema 后自动 re-baseline
@@ -18,7 +29,42 @@ spring:
     init:
       mode: never
 
+server:
+  port: 8080
+
 sanyan:
   jwt:
     secret: ${JWT_SECRET:your-256-bit-secret-key-for-sanyan-app-change-in-production}
     expiration-days: 30
+
+  # ===== 第三方 LLM / Embedding 配置（base，对所有 profile 生效）=====
+  # API key 走环境变量注入，配置文件不写 fallback 值：
+  #   - 本机 dev：从 ~/.zshrc export DOUBAO_API_KEY / DEEPSEEK_API_KEY / SILICONFLOW_API_KEY
+  #   - 线上 prod：从 /opt/3yan/3yan-server/.env 注入（见 deploy.sh），且 application-prod.yml
+  #     覆盖为无 fallback 的严格写法，启动时缺 key 直接 fail-fast
+  doubao:
+    # USER_FACING 任务（用户对话）走豆包 doubao-seed-character
+    api-key: ${DOUBAO_API_KEY:}
+    base-url: https://ark.cn-beijing.volces.com/api/v3
+    model: ep-20260408102845-f86mb
+  llm:
+    deepseek:
+      # BACKGROUND 任务（摘要 / 档案抽取）走 DeepSeek V4-Flash
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com
+      model: deepseek-v4-flash
+  embedding:
+    # 走硅基流动托管的 BAAI/bge-m3（OpenAI 兼容 /embeddings，免费）
+    siliconflow:
+      api-key: ${SILICONFLOW_API_KEY:}
+      base-url: https://api.siliconflow.cn/v1
+      model: BAAI/bge-m3
+    http:
+      # 公网 RTT 30-80ms，connect 3s 足够覆盖偶发抖动
+      connect-timeout-ms: 3000
+      # 单次推理 200-800ms（取决于 batch 大小），10s 是充足兜底
+      read-timeout-ms: 10000
+      # 5xx / 网络异常重试 2 次（共 3 次尝试），4xx 不重试
+      max-retries: 2
+      # 首次退避 500ms，按 2 倍指数增长（500 → 1000 → 2000）
+      retry-backoff-ms: 500

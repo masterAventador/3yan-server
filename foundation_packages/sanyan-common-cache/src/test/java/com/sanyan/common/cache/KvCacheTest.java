@@ -80,4 +80,52 @@ class KvCacheTest {
         assertThatThrownBy(() -> cache.set("k", "v", null))
             .isInstanceOf(NullPointerException.class);
     }
+
+    @Test
+    void setIfAbsent_returnsTrueWhenRedisAcquired() {
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.setIfAbsent("foo", "bar", Duration.ofMinutes(5))).thenReturn(Boolean.TRUE);
+        KvCache cache = new KvCache(redis);
+
+        boolean acquired = cache.setIfAbsent("foo", "bar", Duration.ofMinutes(5));
+
+        assertThat(acquired).isTrue();
+        verify(ops).setIfAbsent("foo", "bar", Duration.ofMinutes(5));
+    }
+
+    @Test
+    void setIfAbsent_returnsFalseWhenKeyAlreadyExists() {
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.setIfAbsent("foo", "bar", Duration.ofMinutes(5))).thenReturn(Boolean.FALSE);
+        KvCache cache = new KvCache(redis);
+
+        boolean acquired = cache.setIfAbsent("foo", "bar", Duration.ofMinutes(5));
+
+        assertThat(acquired).isFalse();
+    }
+
+    @Test
+    void setIfAbsent_returnsFalseWhenRedisReturnsNull() {
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.setIfAbsent("foo", "bar", Duration.ofMinutes(5))).thenReturn(null);
+        KvCache cache = new KvCache(redis);
+
+        // Redis null（连接异常等）也视为未获取——节流场景下宁可重复触发也别永久卡住
+        assertThat(cache.setIfAbsent("foo", "bar", Duration.ofMinutes(5))).isFalse();
+    }
+
+    @Test
+    void setIfAbsent_throwsWhenTtlIsZero() {
+        KvCache cache = new KvCache(redis);
+        assertThatThrownBy(() -> cache.setIfAbsent("k", "v", Duration.ZERO))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("ttl");
+    }
+
+    @Test
+    void setIfAbsent_throwsWhenTtlIsNull() {
+        KvCache cache = new KvCache(redis);
+        assertThatThrownBy(() -> cache.setIfAbsent("k", "v", null))
+            .isInstanceOf(NullPointerException.class);
+    }
 }

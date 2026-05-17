@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-memory-core</artifactId>
+    <name>sanyan-memory-core</name>
+    <packaging>jar</packaging>
+
+    <!--
+        Plan 2 Task L0：模块空壳，仅注册到父 pom。
+        后续 Task N1-Q4 会填充 summary / profile / rag / orchestrator 子包。
+        注意：sanyan-memory-core 需要依赖 sanyan-business（订阅 MessagePersistedEvent + 调 LLM router），
+        这是 Plan 1 未拆 chat -api/-core 的妥协，Plan 3 会修复。该例外的 Enforcer 允许放行写在本 pom 里。
+
+        Task N0：补 junit-jupiter + assertj-core 用于 MemoryConstants 对齐铁律测试。
+        Task N1：补 spring-boot-starter-data-jpa（Entity + Repository）+ Postgres driver + sanyan-common-test（Testcontainers PG）。
+        Task N2：补 sanyan-business（compile scope）——MemorySummaryService 需要调
+                 LLMProviderRouter + 引用 MessageEntity/SenderType/LLMTaskType。理由同上：
+                 Plan 1 没把 chat 拆 -api/-core，所以现阶段只能整包依赖；Plan 3 拆完后改成
+                 只依赖 sanyan-chat-api（拿到 MessageDto + LLM 路由契约）。
+
+        Task O4：补 sanyan-common-cache —— UserMessageProfileExtractListener 用 KvCache.setIfAbsent
+                 做 5 分钟节流（同一 user/character 5 分钟内最多触发一次档案抽取）。
+                 不直接用 RedisTemplate，遵守 foundation-layer 规则（业务代码统一走 KvCache 封装）。
+
+        Task P1：补 com.pgvector:pgvector （pgvector-java SDK，0.1.6 是 Maven Central 当前最新稳定版，
+                 plan spec 写的 0.1.7 暂未发布）—— 提供 PGvector 包装类用于 JDBC 与 PG vector 类型互转。
+                 ChatEmbeddingEntity 的 embedding float[] 字段通过 PgVectorType（Hibernate 6 UserType）
+                 走 PGvector 序列化。
+
+        Task P4：补 sanyan-memory-api —— MemoryRagSearchService.search 返回 List<MemoryFragment>，
+                 MemoryFragment record 是跨模块 DTO 契约，定义在 sanyan-memory-api/dto。
+    -->
+    <dependencies>
+        <!--
+            P4：跨模块 DTO（MemoryFragment）契约 + Q2 阶段的 MemoryApi 接口都定义在 sanyan-memory-api。
+            -core 实现侧依赖 -api 是 java-backend rule 默认允许的方向（业务的 -core → 同业务的 -api）。
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-memory-api</artifactId>
+        </dependency>
+        <!--
+            Plan 2 妥协依赖：调 LLM router + 引用 chat 的 MessageEntity / SenderType。
+            未来 Plan 3 把 sanyan-business 拆 -api/-core 后，本依赖改成只引 chat-api / llm-api。
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-business</artifactId>
+        </dependency>
+
+        <!-- O4：Redis 节流走 common-cache 的 KvCache（不直接碰 RedisTemplate） -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-common-cache</artifactId>
+        </dependency>
+
+        <!-- 主代码：JPA Entity + Repository -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <!--
+            P1：pgvector Java SDK，提供 PGvector 包装类 + JDBC 类型互转。
+            ChatEmbeddingEntity.embedding (float[]) 通过 PgVectorType（Hibernate UserType）
+            序列化为 PG vector(1024)。最新稳定版 0.1.6（Maven Central 截至当前），
+            plan spec 写的 0.1.7 暂未发布。
+        -->
+        <dependency>
+            <groupId>com.pgvector</groupId>
+            <artifactId>pgvector</artifactId>
+            <version>0.1.6</version>
+        </dependency>
+        <!-- Entity 用 @Data / @NoArgsConstructor / @AllArgsConstructor 减少样板 -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
+        <!-- 测试基础 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Postgres JDBC driver。
+            P1 之前是 test scope（仅 Testcontainers 用），P1 起改为 compile scope：
+            pgvector-java 的 PGvector 类继承 org.postgresql.util.PGobject，
+            PgVectorType 编译时需要这些符号。
+            生产 datasource 也是 PG，编译期就引入并无额外风险。
+        -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+        <!-- 共享 Testcontainer PG 基类 + TestApplication（@SpringBootConfiguration 上下文根） -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-common-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Testcontainers 在 surefire/failsafe 派生 JVM 里的两块配置：
+                  1. systemPropertyVariables.api.version=1.44：docker-java 3.4.x 客户端默认
+                     声明 API 版本 1.32，与 Docker Engine 25+ 最小要求 1.44 不兼容。
+                  2. environmentVariables.TESTCONTAINERS_RYUK_DISABLED=true：开发机 Colima
+                     rootless Docker 上 Ryuk 无法清理，依赖 JVM 退出时容器自清理。
+                配置与 bootstrap/pom.xml 保持一致（参考 V5MigrationIT 的工作模式）。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                    <environmentVariables>
+                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                    </environmentVariables>
+                </configuration>
+            </plugin>
+            <!-- *IT 用 failsafe 跑（Repository 集成测试需要 Testcontainer PG） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                    <environmentVariables>
+                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                    </environmentVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

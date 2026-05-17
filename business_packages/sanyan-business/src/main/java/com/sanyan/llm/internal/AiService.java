@@ -1,51 +1,82 @@
 package com.sanyan.llm.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.character.internal.AiCharacterEntity;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
+import com.sanyan.chat.internal.SenderType;
+import com.sanyan.memory.MemoryApi;
+import com.sanyan.memory.MemoryConstants;
+import com.sanyan.memory.dto.MemoryContext;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
+/**
+ * AI 对话编排层。
+ *
+ * <p>M3 task 重构：把豆包 HTTP 调用抽到 {@link DoubaoAdapter}，按 {@link LLMTaskType} 路由
+ * 的逻辑搬到 {@link LLMProviderRouter}。AiService 退化为薄编排层，只负责：
+ * <ol>
+ *   <li>加载人设资源文件 + 拼接当前时间组装 system prompt</li>
+ *   <li>从 {@link MessageRepository} 拉取短期上下文（最近 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条）</li>
+ *   <li>调 {@link MemoryApi#getRelevantContext} 拿长期记忆整合 context（Q4）</li>
+ *   <li>用 {@link PromptBuilder} 拼成 OpenAI 兼容消息数组</li>
+ *   <li>委托给 {@link LLMProviderRouter}（task type = USER_FACING → 走豆包）</li>
+ * </ol>
+ *
+ * <p>Q3 task 改动：
+ * <ul>
+ *   <li>短期窗口从硬编码 {@code 20} 改为 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE}（= 32），
+ *       与摘要触发阈值的对齐铁律落地（{@code SHORT_TERM_WINDOW_SIZE > SUMMARY_TRIGGER_THRESHOLD}）</li>
+ *   <li>消息拼装走 {@link PromptBuilder}，统一所有调用方（包括 -memory-core 后台 service）的拼装逻辑</li>
+ * </ul>
+ *
+ * <p>Q4 task 改动：
+ * <ul>
+ *   <li>注入 {@link MemoryApi}，主对话前调 {@code getRelevantContext} 拿长期记忆 context 传给 PromptBuilder</li>
+ *   <li>RAG query 取最近一条 {@link SenderType#USER} 消息内容；无 user 消息时用空串占位</li>
+ *   <li>characterId 优先 {@code character.getId()}；为 null 时回落到
+ *       {@code sanyan.memory.default-character-id}（默认 1L，MVP 单角色阶段的兜底）</li>
+ *   <li><b>降级</b>：MemoryApi 抛异常时 catch + {@code log.warn} 跳过长期记忆，主对话继续不受影响</li>
+ * </ul>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiService {
 
     private final MessageRepository messageRepository;
-    private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
-
-    @Value("${sanyan.doubao.api-key:}")
-    private String apiKey;
-
-    @Value("${sanyan.doubao.model:doubao-seed-character}")
-    private String model;
-
-    @Value("${sanyan.doubao.endpoint:https://ark.cn-beijing.volces.com/api/v3/chat/completions}")
-    private String endpoint;
+    private final LLMProviderRouter llmRouter;
+    private final PromptBuilder promptBuilder;
+    private final MemoryApi memoryApi;
 
     @Value("classpath:prompts/xiaowan-system.md")
     private Resource systemPromptResource;
 
-    private String systemPromptTemplate;
+    /**
+     * Plan 1 MVP 单角色阶段的兜底 characterId。
+     * <p>chat 入参 {@link AiCharacterEntity} 通常带 id（来自 DB），但容错路径上 character 可能没 id
+     * （例如 fixture 未持久化、未来某角色字段缺失等），此时回落到本默认值，与 N3/O4 的硬编码 1L 对齐。
+     * <p>通过 {@code @Value} 注入，方便后续 application.yml 显式配置或多角色 Plan 3 直接弃用。
+     */
+    @Value("${sanyan.memory.default-character-id:1}")
+    private Long defaultCharacterId;
 
-    static final String AI_FALLBACK_MESSAGE = "抱歉，我现在有点走神了，等下再聊吧~";
+    private String systemPromptTemplate;
 
     @PostConstruct
     void loadSystemPrompt() {
@@ -57,72 +88,73 @@ public class AiService {
     }
 
     /**
-     * AI reply to user's text message.
-     * 一期短期上下文：最近 20 条消息。长期记忆（B+C+RAG）按 spec Plan 2 实现。
+     * AI 回复用户消息。
+     *
+     * <p>流程：
+     * <ol>
+     *   <li>组装 system prompt（人设 + 当前时间）</li>
+     *   <li>拉取最近 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条短期消息，reverse 成时间正序</li>
+     *   <li>取最新一条用户消息作为 RAG query，调 {@link MemoryApi#getRelevantContext} 拿
+     *       长期记忆 context（异常降级为 null）</li>
+     *   <li>用 {@link PromptBuilder} 拼装 OpenAI 消息数组，委托 {@link LLMProviderRouter}</li>
+     * </ol>
      */
     public String chat(AiCharacterEntity character, Long userId) {
         String systemPrompt = assembleSystemPrompt(systemPromptTemplate, formatCurrentTime());
 
         List<MessageEntity> recentMessages = messageRepository
-                .findByUserIdOrderByIdDesc(userId, PageRequest.of(0, 20));
+                .findByUserIdOrderByIdDesc(userId, PageRequest.of(0, MemoryConstants.SHORT_TERM_WINDOW_SIZE));
         Collections.reverse(recentMessages);
 
-        return callDoubao(systemPrompt, recentMessages);
+        Long characterId = resolveCharacterId(character);
+        String ragQuery = extractLatestUserMessage(recentMessages);
+
+        MemoryContext memoryContext = null;
+        try {
+            memoryContext = memoryApi.getRelevantContext(userId, characterId, ragQuery);
+        } catch (Exception e) {
+            // 长期记忆失败不能影响主对话——降级跳过长期记忆段，继续走短期窗口 + 人设
+            log.warn("MemoryApi 调用失败，跳过长期记忆: {}", e.getMessage());
+        }
+
+        List<Map<String, String>> openAiMessages =
+                promptBuilder.build(systemPrompt, memoryContext, recentMessages);
+        return llmRouter.chat(LLMTaskType.USER_FACING, openAiMessages);
     }
 
     public String assembleSystemPrompt(String characterPrompt, String time) {
         return characterPrompt + "\n\n[当前时间] " + time;
     }
 
-    public String callDoubao(String systemPrompt, List<MessageEntity> messages) {
-        return callDoubaoRaw(buildChatMessages(systemPrompt, messages));
-    }
-
-    public String callDoubaoRaw(List<Map<String, String>> chatMessages) {
-        try {
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("model", model);
-            requestBody.put("messages", chatMessages);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
-
-            HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(requestBody), headers);
-
-            log.info("豆包 API 请求: model={}, messagesCount={}", model, chatMessages.size());
-            long start = System.currentTimeMillis();
-            ResponseEntity<String> response = restTemplate.exchange(endpoint, HttpMethod.POST, entity, String.class);
-            log.info("豆包 API 响应: status={}, 耗时={}ms", response.getStatusCode(), System.currentTimeMillis() - start);
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> responseMap = objectMapper.readValue(response.getBody(), Map.class);
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> choices = (List<Map<String, Object>>) responseMap.get("choices");
-            @SuppressWarnings("unchecked")
-            Map<String, String> message = (Map<String, String>) choices.get(0).get("message");
-            return message.get("content");
-
-        } catch (Exception e) {
-            log.error("豆包 API 调用失败", e);
-            return AI_FALLBACK_MESSAGE;
-        }
-    }
-
-    static List<Map<String, String>> buildChatMessages(String systemPrompt, List<MessageEntity> messages) {
-        List<Map<String, String>> chatMessages = new ArrayList<>();
-        chatMessages.add(Map.of("role", "system", "content", systemPrompt));
-        if (messages != null) {
-            for (MessageEntity msg : messages) {
-                String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
-                chatMessages.add(Map.of("role", role, "content", msg.getContent() == null ? "" : msg.getContent()));
-            }
-        }
-        return chatMessages;
-    }
-
     private String formatCurrentTime() {
         LocalDateTime now = LocalDateTime.now();
         return now.format(DateTimeFormatter.ofPattern("yyyy年M月d日 E HH:mm", Locale.CHINESE));
+    }
+
+    /**
+     * 从短期窗口里取「最新一条 user 消息」的内容，作为 RAG 检索 query。
+     * <p>没有 user 消息时返回空串（不返回 null，避免 -core 端 NPE）。
+     */
+    private static String extractLatestUserMessage(List<MessageEntity> recentMessagesAsc) {
+        if (recentMessagesAsc == null) {
+            return "";
+        }
+        for (int i = recentMessagesAsc.size() - 1; i >= 0; i--) {
+            MessageEntity msg = recentMessagesAsc.get(i);
+            if (SenderType.USER.equalsIgnoreCase(msg.getSenderType())) {
+                return msg.getContent() == null ? "" : msg.getContent();
+            }
+        }
+        return "";
+    }
+
+    /**
+     * 优先 {@code character.getId()}，否则回落 {@link #defaultCharacterId}。
+     */
+    private Long resolveCharacterId(AiCharacterEntity character) {
+        if (character != null && character.getId() != null) {
+            return character.getId();
+        }
+        return defaultCharacterId;
     }
 }

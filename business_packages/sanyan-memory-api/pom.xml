@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-memory-api</artifactId>
+    <name>sanyan-memory-api</name>
+    <packaging>jar</packaging>
+
+    <!--
+        Plan 2 Task L0：模块空壳，仅注册到父 pom。
+        后续 Task L1-Q2 会填充 MemoryApi 接口 + 各 DTO + 事件。
+        -api 模块按 java-backend rule 约束：只放接口 + DTO + 事件，不含实现。
+    -->
+    <dependencies>
+    </dependencies>
+</project>
