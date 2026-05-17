@@ -2,6 +2,7 @@ package com.sanyan.character.api;
 
 import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.AiCharacterDto;
+import com.sanyan.character.dto.RelationshipDto;
 import com.sanyan.character.internal.AiCharacterEntity;
 import com.sanyan.character.internal.AiCharacterRepository;
 import com.sanyan.character.internal.CharacterErrCode;
@@ -27,6 +28,23 @@ public class CharacterApiImpl implements CharacterApi {
         return repository.findById(characterId)
                 .map(CharacterApiImpl::toDto)
                 .orElseThrow(() -> new BusinessException(CharacterErrCode.CHARACTER_NOT_FOUND));
+    }
+
+    // ----- Plan 3 新增骨架（H4 task 填实现） -----
+
+    @Override
+    public RelationshipDto findOrCreateRelationship(Long userId, Long characterId) {
+        throw new UnsupportedOperationException("H4 task implements");
+    }
+
+    @Override
+    public RelationshipDto fetchMyRelationship(Long userId, Long characterId) {
+        throw new UnsupportedOperationException("H4 task implements");
+    }
+
+    @Override
+    public String getStagePromptSegment(Long userId, Long characterId) {
+        throw new UnsupportedOperationException("H4 task implements");
     }
 
     // 注：AiCharacterEntity 的字段是 avatar；DTO 上对应位置是 avatarUrl（命名解耦：
