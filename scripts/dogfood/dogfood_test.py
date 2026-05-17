@@ -6,9 +6,8 @@ Plan 2 dogfood E2E 测试 harness。
 设计为在 **new 服务器（49.233.213.109）本地** 执行：
 - WS 直接打 ws://localhost:8080/ws，避免被本地宽带的 NAT/中转干扰
 - psql / redis-cli 命中本机服务，零网络开销
-- old 服务器（154.8.162.83）通过 ssh 控制 sanyan-embedding 服务
 
-7 个场景（profile / throttle / summary / rag / degradation / all），每个场景实现一个
+4 个场景（profile / throttle / summary / rag），每个场景实现一个
 `run_<scenario>()` + 一个 `assert_<scenario>()`，PASS/FAIL/SKIP 摘要 + 退出码语义。
 
 依赖（new 上已装）:
@@ -16,7 +15,6 @@ Plan 2 dogfood E2E 测试 harness。
 - websockets (16.0)
 - PyJWT (2.12)
 - 本机 psql / redis-cli
-- ssh old 免密
 """
 
 from __future__ import annotations
@@ -730,91 +728,10 @@ async def run_rag(token: str, db: DbHandle, user_id: int, character_id: int,
     return ScenarioResult("rag", "PASS" if rag_pass else "FAIL", detail)
 
 
-# ----------------------------- 场景 E: degradation -----------------------------
-
-def ssh_old(cmd: str, ssh_target: str) -> tuple[int, str, str]:
-    """
-    在 harness 运行的机器上 ssh 到 old 跑命令。返回 (rc, stdout, stderr)。
-    ssh_target: 形如 'old' / 'root@154.8.162.83' / 'root@old-host'
-    """
-    result = subprocess.run(
-        ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
-         "-o", "StrictHostKeyChecking=accept-new",
-         "-o", "UserKnownHostsFile=/tmp/.dogfood_known_hosts",
-         ssh_target, cmd],
-        capture_output=True, text=True, timeout=60,
-    )
-    return result.returncode, result.stdout.strip(), result.stderr.strip()
-
-
-async def run_degradation(token: str, db: DbHandle, user_id: int, character_id: int,
-                          log: Logger) -> ScenarioResult:
-    """
-    场景 E: 停 embedding 服务后，主对话不挂。
-
-    本场景需要 ssh 到 old（154.8.162.83）执行 systemctl stop/start sanyan-embedding。
-    new 上一般没配 old 的 ssh 别名 / 公钥互信，所以本场景要求：
-      - 环境变量 SANYAN_OLD_SSH 指向可达的 ssh target（如 'old' 或 'root@154.8.162.83'）
-      - 且该 target 已配置免密
-    若未配置，场景 SKIP 并提示怎么开启。
-    """
-    log.info("==> [scenario] degradation (embedding 服务停掉后主对话仍工作)")
-
-    ssh_target = os.environ.get("SANYAN_OLD_SSH", "")
-    if not ssh_target:
-        return ScenarioResult(
-            "degradation", "SKIP",
-            "未设置 SANYAN_OLD_SSH 环境变量；本场景需要可 ssh old 来 stop/start "
-            "sanyan-embedding。配置方法见 README。"
-        )
-
-    # 预检：能否免密 ssh old
-    rc_check, _, err_check = ssh_old("echo ok", ssh_target)
-    if rc_check != 0:
-        return ScenarioResult(
-            "degradation", "SKIP",
-            f"无法 ssh 到 SANYAN_OLD_SSH={ssh_target}: {err_check}; "
-            "请检查 ~/.ssh/config + 免密"
-        )
-
-    log.info(f"    [1/3] ssh {ssh_target} 停 sanyan-embedding")
-    rc, _, err = ssh_old("sudo systemctl stop sanyan-embedding", ssh_target)
-    if rc != 0:
-        return ScenarioResult(
-            "degradation", "FAIL",
-            f"systemctl stop 失败: {err}"
-        )
-    time.sleep(2)
-
-    log.info("    [2/3] 服务停掉后发消息测主对话")
-    err_text = ""
-    ai_text = ""
-    try:
-        replies = await chat(token, ["这是 embedding 服务停掉后的一条消息。"], log)
-        ai_text = replies[0].ai_concat
-    except Exception as e:
-        err_text = str(e)
-    finally:
-        log.info(f"    [3/3] ssh {ssh_target} 重启 sanyan-embedding")
-        rc2, _, err2 = ssh_old("sudo systemctl start sanyan-embedding", ssh_target)
-        if rc2 != 0:
-            log.warn(f"重启 embedding 失败: {err2}（请手动恢复！）")
-
-    if err_text:
-        return ScenarioResult(
-            "degradation", "FAIL",
-            f"主对话异常: {err_text}"
-        )
-    if not ai_text:
-        return ScenarioResult(
-            "degradation", "FAIL",
-            "embedding 停掉后 AI 没有回复"
-        )
-
-    return ScenarioResult(
-        "degradation", "PASS",
-        f"embedding 停掉后 AI 仍正常回复（{len(ai_text)} 字符）"
-    )
+# 注：原"场景 E: degradation"（ssh old 停 sanyan-embedding 服务验证降级）已废弃——
+# 2026-05-17 embedding 改用硅基流动 API 后，老服务器上的 sanyan-embedding 服务已下线，
+# 该场景永远跑不通。embedding 不可用时的降级路径仍由
+# MemoryRagSearchServiceTest（两条 fallback case）单元测试覆盖。
 
 
 # ----------------------------- main runner -----------------------------
@@ -824,10 +741,9 @@ SCENARIO_REGISTRY: dict[str, Callable] = {
     "throttle": run_throttle,
     "summary": run_summary,
     "rag": run_rag,
-    "degradation": run_degradation,
 }
 
-SCENARIO_ORDER = ["profile", "throttle", "summary", "rag", "degradation"]
+SCENARIO_ORDER = ["profile", "throttle", "summary", "rag"]
 
 
 async def main_async(args: argparse.Namespace) -> int:

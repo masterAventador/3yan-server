@@ -42,16 +42,16 @@ public final class MemoryConstants {
     /** 同一用户的档案抽取节流分钟数，Redis SETNX TTL 用。 */
     public static final int PROFILE_EXTRACT_THROTTLE_MINUTES = 5;
 
-    /** 远程 embedding server TCP 连接超时（毫秒）。 */
+    /** 硅基流动 embedding API TCP 连接超时（毫秒）。 */
     public static final int EMBEDDING_HTTP_CONNECT_TIMEOUT_MS = 3000;
 
-    /** 远程 embedding server 读响应超时（毫秒）。必须 &gt; CONNECT 超时。 */
+    /** 硅基流动 embedding API 读响应超时（毫秒）。必须 &gt; CONNECT 超时。 */
     public static final int EMBEDDING_HTTP_READ_TIMEOUT_MS = 10000;
 
-    /** 远程 embedding server 网络异常最大重试次数（4xx 不重试）。 */
+    /** 硅基流动 embedding API 网络异常最大重试次数（4xx 不重试）。 */
     public static final int EMBEDDING_HTTP_MAX_RETRIES = 2;
 
-    /** 远程 embedding server 重试间隔基数（毫秒），用于指数退避。 */
+    /** 硅基流动 embedding API 重试间隔基数（毫秒），用于指数退避。 */
     public static final long EMBEDDING_HTTP_RETRY_BACKOFF_MS = 500L;
 
     /** 用户档案 emotion_line 数组最多保留条数，超过丢最早。 */
