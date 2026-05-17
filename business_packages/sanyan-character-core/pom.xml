@@ -24,6 +24,9 @@
         <!-- 本域 -api 契约 -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-api</artifactId></dependency>
 
+        <!-- Plan 3 G2：订阅 chat-api 的 MessagePersistedEvent -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-api</artifactId></dependency>
+
         <!-- foundation -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-error</artifactId></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-web</artifactId></dependency>
