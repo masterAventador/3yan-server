@@ -101,6 +101,26 @@
                     <artifactId>maven-enforcer-plugin</artifactId>
                     <version>3.4.1</version>
                 </plugin>
+                <!--
+                    Testcontainers + Colima 兼容：
+                    macOS 下 Colima 的 Docker socket 在 ~/.colima/docker.sock，
+                    而非标准 /var/run/docker.sock。通过 environmentVariables 传递
+                    DOCKER_HOST 给 surefire 子进程，确保 Testcontainers 能找到 daemon。
+                    如果 DOCKER_HOST 环境变量已在 shell 中设置，这里的配置会被覆盖（Maven
+                    surefire 先取系统环境变量，再取 <environmentVariables>）。
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <environmentVariables>
+                            <DOCKER_HOST>unix:///Users/aventador/.colima/default/docker.sock</DOCKER_HOST>
+                            <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>/Users/aventador/.colima/default/docker.sock</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
+                            <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                        </environmentVariables>
+                        <argLine>-Dapi.version=1.45 -Ddb.migration.dir=${session.executionRootDirectory}/bootstrap/src/main/resources/db/migration</argLine>
+                    </configuration>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-failsafe-plugin</artifactId>
