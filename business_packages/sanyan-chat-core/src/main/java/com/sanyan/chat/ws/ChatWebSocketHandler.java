@@ -80,7 +80,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         sendObject(session, new WsTyping());
 
         // 4. async: AI 调用 + 拆分多条 + 按节奏推送（typing → delay → message → gap → typing → ...）
+        //    成功 / 失败两条路径都要发 turn_complete，让客户端不必靠"静默 Xs 没新事件"猜结束
         CompletableFuture.runAsync(() -> {
+            int pushedCount = 0;
             try {
                 List<MessageEntity> aiMessages = messageService.handleAiReply(userId);
                 for (int i = 0; i < aiMessages.size(); i++) {
@@ -93,6 +95,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     long delay = TypingDelayCalculator.calculateTypingDelay(aiMsg.getContent());
                     Thread.sleep(delay);
                     sendObject(session, new WsNewMessage(messageService.toData(aiMsg)));
+                    pushedCount++;
                     log.info("AI 回复气泡推送: userId={}, msgId={}, idx={}/{}",
                             userId, aiMsg.getId(), i + 1, aiMessages.size());
                 }
@@ -101,6 +104,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 log.error("处理 AI 回复失败, userId={}", userId, e);
                 sendObject(session, new WsError(wsMsg.getClientMsgId(),
                         WsErrorMessage.MESSAGE_PROCESSING_FAILED));
+            } finally {
+                sendObject(session, new WsTurnComplete(wsMsg.getClientMsgId(), pushedCount));
             }
         });
     }

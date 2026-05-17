@@ -48,8 +48,8 @@ RAG_CHUNK_MIN_SIZE = 5
 THROTTLE_KEY_PREFIX = "sanyan:memory:profile:throttle:"
 RAG_INDEX_QUEUE_KEY = "sanyan:memory:rag:index-queue"
 
-# WS 多气泡 / typing 静默期阈值（秒）
-REPLY_SILENCE_TIMEOUT_SECONDS = 6.0
+# WS 一轮 AI 回复硬超时兜底（秒）。正常路径靠 server 的 turn_complete 精确结束；
+# 服务挂掉不发 turn_complete 时这个兜底才生效。
 REPLY_HARD_TIMEOUT_SECONDS = 90.0
 
 # 抽取异步触发后等待落库的最长时长（秒）
@@ -194,8 +194,11 @@ class WsReply:
 
 async def send_one(ws, content: str, log: Logger) -> WsReply:
     """
-    发一条 user 消息，按"6 秒静默期"判定 AI 回复结束。
-    server 推送顺序：ack → typing → new_message (×N，每条之前可能再来一次 typing)。
+    发一条 user 消息，靠 server 的 turn_complete 事件精确判定结束（无需静默期猜测）。
+
+    server 推送顺序：ack → typing → new_message (×N，每条之前可能再来一次 typing) → turn_complete。
+    turn_complete 是 2026-05-17 新增协议事件，关联本 user 消息 clientMsgId，成功/异常路径都发。
+    REPLY_HARD_TIMEOUT_SECONDS 仍作为兜底（万一服务挂了不发 turn_complete）。
     """
     client_msg_id = str(uuid.uuid4())
     payload = {"type": "send_message", "content": content, "clientMsgId": client_msg_id}
@@ -204,34 +207,18 @@ async def send_one(ws, content: str, log: Logger) -> WsReply:
 
     reply = WsReply()
     start = time.monotonic()
-    last_event = start
     while True:
-        # 静默期判定：上次收到事件后超过 SILENCE_TIMEOUT 没新事件，认为回复完成
-        elapsed_since_event = time.monotonic() - last_event
-        remaining_silence = REPLY_SILENCE_TIMEOUT_SECONDS - elapsed_since_event
         remaining_hard = REPLY_HARD_TIMEOUT_SECONDS - (time.monotonic() - start)
         if remaining_hard <= 0:
-            log.warn("hard timeout 90s，强制结束等待 AI 回复")
+            log.warn("hard timeout 90s 无 turn_complete，强制结束等待 AI 回复（可能服务挂了）")
             break
-        if remaining_silence <= 0:
-            # 至少要收到一条 new_message 才能"静默结束"，否则继续硬等
-            if reply.new_messages:
-                break
-            # 还没收到任何 AI 消息：再继续等到硬超时
-            last_event = time.monotonic()
-            continue
 
         try:
-            raw = await asyncio.wait_for(
-                ws.recv(),
-                timeout=min(remaining_silence, remaining_hard),
-            )
+            raw = await asyncio.wait_for(ws.recv(), timeout=remaining_hard)
         except asyncio.TimeoutError:
-            if reply.new_messages:
-                break
-            continue
+            log.warn("hard timeout 触发 recv 超时，结束等待")
+            break
 
-        last_event = time.monotonic()
         try:
             msg = json.loads(raw)
         except Exception:
@@ -254,6 +241,10 @@ async def send_one(ws, content: str, log: Logger) -> WsReply:
         elif mtype == "error":
             reply.errors.append(msg)
             log.warn(f"← error: {msg}")
+        elif mtype == "turn_complete":
+            # 关键：服务端明确告诉我们 AI 这一轮气泡推完了（含异常路径），立刻 break
+            log.debug(f"← turn_complete messageCount={msg.get('messageCount')}")
+            break
         else:
             log.debug(f"← (其它) {mtype}: {raw[:120]}")
 
