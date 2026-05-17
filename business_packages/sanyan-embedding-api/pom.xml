@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-embedding-api</artifactId>
+    <name>sanyan-embedding-api</name>
+    <packaging>jar</packaging>
+
+    <!--
+        S3 Phase 4：embedding 域对内契约。
+        只含 EmbeddingApi 单接口（embed(List<String>) → List<float[]>）。零依赖。
+        embedding 跟 llm 是不同概念，按 java-backend §2.2「一个 -api 一个主接口」拆出独立域。
+    -->
+    <dependencies>
+        <!-- 故意为空：-api 只含接口 + DTO + 事件 -->
+    </dependencies>
+</project>

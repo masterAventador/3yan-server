@@ -43,16 +43,6 @@
         -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-api</artifactId></dependency>
 
-        <!--
-            S3 Phase 3 临时依赖（违规但有期限）：SiliconFlowEmbeddingProvider 仍在 sanyan-business 内，
-            它复用 LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE（已随 llm 5 个 internal 类迁到 sanyan-llm-core）。
-            为让 Phase 3 编译通过，本模块临时引 sanyan-llm-core 拿到那个 enum 值。
-            Phase 4 把 embedding 全套迁到 sanyan-embedding-core 并拆出 EmbeddingErrCode 后，本依赖消失。
-            违反 "-core 不依赖 -core" 的 java-backend rule，所以 Phase 7 ArchUnit / Enforcer 启用时
-            必须先确认本依赖已被 Phase 4 清理。
-        -->
-        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-core</artifactId></dependency>
-
         <!-- Spring Boot 业务必备 -->
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>

@@ -3,10 +3,10 @@ package com.sanyan.memory.internal.profile;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.error.BusinessException;
+import com.sanyan.common.error.CommonErrCode;
 import com.sanyan.llm.LlmApi;
 import com.sanyan.llm.LlmTaskType;
 import com.sanyan.llm.dto.ChatMessage;
-import com.sanyan.llm.internal.LlmErrCode;
 import com.sanyan.memory.internal.MemoryErrCode;
 import com.sanyan.memory.internal.profile.fixtures.MemoryProfileTestFixtures;
 import org.junit.jupiter.api.Test;
@@ -159,7 +159,7 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("旧画像");
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
         when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any()))
-                .thenThrow(new BusinessException(LlmErrCode.LLM_UPSTREAM_UNAVAILABLE));
+                .thenThrow(new BusinessException(CommonErrCode.INTERNAL_ERROR));
 
         MemoryProfileEntity result = service.refresh(1L, 1L, buildMessages(3));
 

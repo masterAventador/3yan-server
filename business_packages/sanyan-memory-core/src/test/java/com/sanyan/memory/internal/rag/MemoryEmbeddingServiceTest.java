@@ -1,7 +1,7 @@
 package com.sanyan.memory.internal.rag;
 
 import com.sanyan.common.error.BusinessException;
-import com.sanyan.llm.internal.EmbeddingProvider;
+import com.sanyan.embedding.EmbeddingApi;
 import com.sanyan.memory.internal.MemoryErrCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +39,7 @@ import static org.mockito.Mockito.when;
 class MemoryEmbeddingServiceTest {
 
     @Mock
-    private EmbeddingProvider embeddingProvider;
+    private EmbeddingApi embeddingApi;
 
     @Mock
     private ChatEmbeddingRepository repository;
@@ -57,14 +57,14 @@ class MemoryEmbeddingServiceTest {
                 42
         );
         float[] vector = new float[]{0.1f, 0.2f, 0.3f};
-        when(embeddingProvider.embed(anyList())).thenReturn(List.of(vector));
+        when(embeddingApi.embed(anyList())).thenReturn(List.of(vector));
 
         service.index(userId, characterId, List.of(chunk));
 
         // provider 收到的文本必须就是 chunk.chunkText()
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> textsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(embeddingProvider).embed(textsCaptor.capture());
+        verify(embeddingApi).embed(textsCaptor.capture());
         assertThat(textsCaptor.getValue())
                 .as("应原样把 chunk.chunkText 传给 provider")
                 .containsExactly("user: 消息1\nai: 回复1");
@@ -97,14 +97,14 @@ class MemoryEmbeddingServiceTest {
         float[] v1 = new float[]{1f, 0f};
         float[] v2 = new float[]{0f, 1f};
         float[] v3 = new float[]{0.5f, 0.5f};
-        when(embeddingProvider.embed(anyList())).thenReturn(List.of(v1, v2, v3));
+        when(embeddingApi.embed(anyList())).thenReturn(List.of(v1, v2, v3));
 
         service.index(userId, characterId, List.of(c1, c2, c3));
 
         // provider 必须只调一次（单次 HTTP 批量），不是 3 次
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> textsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(embeddingProvider).embed(textsCaptor.capture());
+        verify(embeddingApi).embed(textsCaptor.capture());
         assertThat(textsCaptor.getValue())
                 .as("3 个 chunk 必须在单次 embed 调用中批量送过去")
                 .containsExactly("chunk-1 文本", "chunk-2 文本", "chunk-3 文本");
@@ -136,7 +136,7 @@ class MemoryEmbeddingServiceTest {
     void index_shouldDoNothingForEmptyChunks() {
         service.index(100L, 7L, List.of());
 
-        verifyNoInteractions(embeddingProvider);
+        verifyNoInteractions(embeddingApi);
         verifyNoInteractions(repository);
     }
 
@@ -144,7 +144,7 @@ class MemoryEmbeddingServiceTest {
     void index_shouldDoNothingForNullChunks() {
         service.index(100L, 7L, null);
 
-        verifyNoInteractions(embeddingProvider);
+        verifyNoInteractions(embeddingApi);
         verifyNoInteractions(repository);
     }
 
@@ -154,7 +154,7 @@ class MemoryEmbeddingServiceTest {
                 List.of(1L, 2L, 3L, 4L, 5L), "chunk 文本", 30);
         BusinessException providerError =
                 new BusinessException(MemoryErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
-        when(embeddingProvider.embed(anyList())).thenThrow(providerError);
+        when(embeddingApi.embed(anyList())).thenThrow(providerError);
 
         assertThatThrownBy(() -> service.index(100L, 7L, List.of(chunk)))
                 .isSameAs(providerError);
@@ -170,7 +170,7 @@ class MemoryEmbeddingServiceTest {
         MemoryChunkBuilder.Chunk c2 = new MemoryChunkBuilder.Chunk(
                 List.of(6L, 7L, 8L, 9L, 10L), "chunk-2", 30);
         // 故意只返回 1 个向量，模拟远端协议错误
-        when(embeddingProvider.embed(anyList()))
+        when(embeddingApi.embed(anyList()))
                 .thenReturn(List.of(new float[]{0.1f}));
 
         assertThatThrownBy(() -> service.index(100L, 7L, List.of(c1, c2)))

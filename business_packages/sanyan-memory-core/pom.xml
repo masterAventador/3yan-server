@@ -70,6 +70,15 @@
             <artifactId>sanyan-llm-api</artifactId>
         </dependency>
 
+        <!--
+            S3 Phase 4：MemoryRagSearchService + MemoryEmbeddingService 跨模块调 embedding
+            走 EmbeddingApi 契约（取代 Plan 2 时代的 EmbeddingProvider，后者已删）。
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-embedding-api</artifactId>
+        </dependency>
+
         <!-- O4：Redis 节流走 common-cache 的 KvCache（不直接碰 RedisTemplate） -->
         <dependency>
             <groupId>com.sanyan</groupId>

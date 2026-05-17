@@ -33,6 +33,13 @@
             AiService / MemorySummaryService / MemoryProfileRefreshService 注入 LlmApi 时启动期装配失败。
         -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-core</artifactId></dependency>
+        <!--
+            S3 Phase 4：embedding 域已从 sanyan-business 拆出到独立的 sanyan-embedding-core。
+            bootstrap 必须显式 compile 依赖 sanyan-embedding-core，否则 fat jar 缺少
+            EmbeddingApiImpl / SiliconFlowEmbeddingProvider 等 Bean，
+            MemoryRagSearchService / MemoryEmbeddingService 注入 EmbeddingApi 时启动期装配失败。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-core</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>

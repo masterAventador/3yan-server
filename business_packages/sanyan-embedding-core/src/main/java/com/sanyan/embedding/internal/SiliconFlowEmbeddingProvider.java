@@ -1,4 +1,4 @@
-package com.sanyan.llm.internal;
+package com.sanyan.embedding.internal;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sanyan.common.error.BusinessException;
@@ -24,9 +24,9 @@ import java.util.Map;
  *
  * <p><b>错误码语义</b>（与历史 {@code RemoteBgeM3Provider} 完全对齐）：
  * <ul>
- *   <li>4xx（401 key 错 / 429 限流 / 400 请求非法）→ {@link LlmErrCode#EMBEDDING_SERVICE_UNAVAILABLE}，
+ *   <li>4xx（401 key 错 / 429 限流 / 400 请求非法）→ {@link EmbeddingErrCode#EMBEDDING_SERVICE_UNAVAILABLE}，
  *       <b>不重试</b>（重试不会变成 2xx）</li>
- *   <li>5xx 上游错误 → 重试 {@code maxRetries} 次后仍失败抛 {@link LlmErrCode#EMBEDDING_SERVICE_UNAVAILABLE}</li>
+ *   <li>5xx 上游错误 → 重试 {@code maxRetries} 次后仍失败抛 {@link EmbeddingErrCode#EMBEDDING_SERVICE_UNAVAILABLE}</li>
  *   <li>网络异常（{@link ResourceAccessException}：连接拒绝 / DNS 失败 / read timeout）→ 同上重试</li>
  *   <li>200 但响应体缺 data 字段 → 算业务错误，不重试，直接抛</li>
  * </ul>
@@ -36,10 +36,14 @@ import java.util.Map;
  *
  * <p><b>降级语义</b>：本类不返回空向量绕过 RAG，所有失败一律抛异常。降级由调用方
  * （{@code MemoryRagSearchService}）根据业务语义决定。
+ *
+ * <p><b>S3 Phase 4</b>：本类从 {@code sanyan-business/llm/internal} 迁到
+ * {@code sanyan-embedding-core/embedding/internal}；同时不再 implements {@code EmbeddingProvider}
+ * 接口（旧接口已删除）。本类作为 internal 委托对象，由 {@code EmbeddingApiImpl} 包装暴露给外部。
  */
 @Slf4j
 @Component
-public class SiliconFlowEmbeddingProvider implements EmbeddingProvider {
+public class SiliconFlowEmbeddingProvider {
 
     private static final String EMBEDDINGS_PATH = "/embeddings";
     private static final String ENCODING_FORMAT = "float";
@@ -80,7 +84,6 @@ public class SiliconFlowEmbeddingProvider implements EmbeddingProvider {
         this.retryBackoffMs = retryBackoffMs;
     }
 
-    @Override
     public List<float[]> embed(List<String> texts) {
         Map<String, Object> requestBody = Map.of(
                 "model", model,
@@ -95,7 +98,7 @@ public class SiliconFlowEmbeddingProvider implements EmbeddingProvider {
                 if (attempt >= totalAttempts) {
                     log.error("SiliconFlow embedding unavailable after {} attempts: {}",
                             totalAttempts, e.getMessage());
-                    throw new BusinessException(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
+                    throw new BusinessException(EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
                 }
                 long backoff = retryBackoffMs * (long) Math.pow(2, attempt - 1);
                 log.warn("SiliconFlow embedding attempt {}/{} failed ({}), retrying after {}ms",
@@ -103,7 +106,7 @@ public class SiliconFlowEmbeddingProvider implements EmbeddingProvider {
                 sleepQuiet(backoff);
             }
         }
-        throw new BusinessException(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
+        throw new BusinessException(EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
     }
 
     private List<float[]> doEmbed(Map<String, Object> requestBody) {
@@ -117,14 +120,14 @@ public class SiliconFlowEmbeddingProvider implements EmbeddingProvider {
 
             if (resp == null || resp.data() == null || resp.data().isEmpty()) {
                 log.error("SiliconFlow response missing data: {}", resp);
-                throw new BusinessException(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
+                throw new BusinessException(EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
             }
             return resp.data().stream().map(EmbeddingItem::embedding).toList();
 
         } catch (HttpClientErrorException e) {
             log.error("SiliconFlow 4xx (no retry): status={}, body={}",
                     e.getStatusCode(), e.getResponseBodyAsString());
-            throw new BusinessException(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
+            throw new BusinessException(EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
         } catch (HttpServerErrorException e) {
             throw new RetryableEmbeddingException(
                     "upstream 5xx: " + e.getStatusCode(), e);

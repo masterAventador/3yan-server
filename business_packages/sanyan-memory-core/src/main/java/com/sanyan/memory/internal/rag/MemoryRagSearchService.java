@@ -1,8 +1,7 @@
 package com.sanyan.memory.internal.rag;
 
 import com.sanyan.common.error.BusinessException;
-import com.sanyan.llm.internal.EmbeddingProvider;
-import com.sanyan.llm.internal.LlmErrCode;
+import com.sanyan.embedding.EmbeddingApi;
 import com.sanyan.memory.dto.MemoryFragment;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.MemoryErrCode;
@@ -35,30 +34,30 @@ import java.util.List;
  * <p>降级范围严格限定在 EMBEDDING_SERVICE_UNAVAILABLE：
  * <ul>
  *   <li>{@link MemoryErrCode#EMBEDDING_SERVICE_UNAVAILABLE}（code 5002）—— 本模块定义</li>
- *   <li>{@link LlmErrCode#EMBEDDING_SERVICE_UNAVAILABLE}（code 4004）—— RemoteBgeM3Provider 实际抛的
- *       是这个，跨 enum 但 code 语义一致；按 code 识别避免漏判</li>
+ *   <li>{@code EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE}（code 6001，定义在
+ *       sanyan-embedding-core/internal）—— {@code SiliconFlowEmbeddingProvider} 实际抛的是这个</li>
  * </ul>
- * 其他 {@link BusinessException}（如 {@code LLM_UPSTREAM_4XX}）<b>原样上抛</b>，
- * 由 GlobalExceptionHandler 转 400 给端上。
+ * 其他 {@link BusinessException}（如系统内部错误）<b>原样上抛</b>，由 GlobalExceptionHandler 转 500 给端上。
+ *
+ * <p><b>实现细节</b>：6001 用裸数字而非引用 {@code EmbeddingErrCode}，因为 EmbeddingErrCode 位于
+ * embedding-core/internal，跨业务 -core 不允许互相 import internal（java-backend rule）。
+ * code 6001 是 {@code ERROR_CODE_REGISTRY.md} 登记的发布契约，可视为稳定值。
  *
  * <p>本 service 不显式标 {@code @Transactional}：纯查询路径，无写操作。
- *
- * <p><b>S3 Phase 4 cleanup todo</b>：当前本类 import {@code com.sanyan.llm.internal.EmbeddingProvider}
- * 和 {@code com.sanyan.llm.internal.LlmErrCode}（通过 sanyan-business → sanyan-llm-core 传递依赖能编译，
- * 但违反 -api 边界）。Phase 4 拆 sanyan-embedding-api/core 时：
- * <ul>
- *   <li>{@code EmbeddingProvider} → {@code com.sanyan.embedding.EmbeddingApi}</li>
- *   <li>{@code LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE}（4004）→
- *       {@code EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE}（6001），LlmErrCode 删 4004</li>
- *   <li>memory-core/pom 加 {@code sanyan-embedding-api} 依赖；删 sanyan-business 整包依赖</li>
- * </ul>
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class MemoryRagSearchService {
 
-    private final EmbeddingProvider embeddingProvider;
+    /**
+     * EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE 的稳定 code 值（定义在
+     * sanyan-embedding-core/internal/EmbeddingErrCode.java，ERROR_CODE_REGISTRY.md 6001 登记项）。
+     * 这里硬编码是为了避免 memory-core import 跨业务 -core 的 internal 包。
+     */
+    static final int EMBEDDING_ERR_CODE_SERVICE_UNAVAILABLE = 6001;
+
+    private final EmbeddingApi embeddingApi;
     private final ChatEmbeddingRepository repository;
 
     /**
@@ -73,7 +72,7 @@ public class MemoryRagSearchService {
      */
     public List<MemoryFragment> search(Long userId, Long characterId, String queryText) {
         try {
-            List<float[]> queryVectors = embeddingProvider.embed(List.of(queryText));
+            List<float[]> queryVectors = embeddingApi.embed(List.of(queryText));
             if (queryVectors.isEmpty()) {
                 // 防御：provider 输入单 query 应必返单向量，但万一返回空别越界
                 return List.of();
@@ -96,14 +95,17 @@ public class MemoryRagSearchService {
     }
 
     /**
-     * 判断异常是否属于"embedding 服务不可用"，按 code 识别而不是 enum 引用——
-     * {@code RemoteBgeM3Provider}（M2c task）抛的是 {@link LlmErrCode#EMBEDDING_SERVICE_UNAVAILABLE}
-     * （code 4004），而 {@link MemoryEmbeddingService}（P3 task）抛的是
-     * {@link MemoryErrCode#EMBEDDING_SERVICE_UNAVAILABLE}（code 5002）。两种来源都要降级。
+     * 判断异常是否属于"embedding 服务不可用"。按 code 识别，覆盖两种来源：
+     * <ul>
+     *   <li>{@link MemoryEmbeddingService}（P3 task）抛
+     *       {@link MemoryErrCode#EMBEDDING_SERVICE_UNAVAILABLE}（code 5002）</li>
+     *   <li>{@code SiliconFlowEmbeddingProvider}（S3 Phase 4 起）抛
+     *       {@code EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE}（code 6001）</li>
+     * </ul>
      */
     private static boolean isEmbeddingUnavailable(BusinessException e) {
         int code = e.getErrCode().getCode();
         return code == MemoryErrCode.EMBEDDING_SERVICE_UNAVAILABLE.getCode()
-                || code == LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE.getCode();
+                || code == EMBEDDING_ERR_CODE_SERVICE_UNAVAILABLE;
     }
 }

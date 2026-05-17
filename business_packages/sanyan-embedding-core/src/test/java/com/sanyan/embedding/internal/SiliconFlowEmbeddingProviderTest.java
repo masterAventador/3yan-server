@@ -1,4 +1,4 @@
-package com.sanyan.llm.internal;
+package com.sanyan.embedding.internal;
 
 import com.sanyan.common.error.BusinessException;
 import okhttp3.mockwebserver.MockResponse;
@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <ul>
  *   <li>200 成功：返回 vectors，请求头 {@code Authorization: Bearer <key>} +
  *       body {@code {model, input, encoding_format}}</li>
- *   <li>401：4xx 不重试，直接抛 {@link LlmErrCode#EMBEDDING_SERVICE_UNAVAILABLE}</li>
+ *   <li>401：4xx 不重试，直接抛 {@link EmbeddingErrCode#EMBEDDING_SERVICE_UNAVAILABLE}</li>
  *   <li>503 重试后成功：第一次 503，第二次 200，调用方拿到成功结果（mockServer 收到 2 个 request）</li>
  *   <li>503 重试耗尽：连续 503，抛 {@code BusinessException(EMBEDDING_SERVICE_UNAVAILABLE)}</li>
  *   <li>连接 timeout：mockServer shutdown，重试耗尽后抛</li>
@@ -107,7 +107,7 @@ class SiliconFlowEmbeddingProviderTest {
         assertThatThrownBy(() -> provider.embed(List.of("hi")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
-                .isEqualTo(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
+                .isEqualTo(EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
 
         // 4xx 不重试，只发出 1 次请求
         assertThat(mockServer.getRequestCount()).isEqualTo(1);
@@ -139,7 +139,7 @@ class SiliconFlowEmbeddingProviderTest {
         assertThatThrownBy(() -> provider.embed(List.of("retry exhausted")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
-                .isEqualTo(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
+                .isEqualTo(EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
 
         assertThat(mockServer.getRequestCount()).isEqualTo(MAX_RETRIES + 1);
     }
@@ -151,7 +151,7 @@ class SiliconFlowEmbeddingProviderTest {
         assertThatThrownBy(() -> provider.embed(List.of("connect fail")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
-                .isEqualTo(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
+                .isEqualTo(EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
     }
 
     @Test
@@ -166,7 +166,7 @@ class SiliconFlowEmbeddingProviderTest {
         assertThatThrownBy(() -> provider.embed(List.of("hi")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
-                .isEqualTo(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
+                .isEqualTo(EmbeddingErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
 
         assertThat(mockServer.getRequestCount()).isEqualTo(1);
     }
