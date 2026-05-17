@@ -1,6 +1,7 @@
 package com.sanyan.llm.internal;
 
 import com.sanyan.common.error.BusinessException;
+import com.sanyan.llm.LlmTaskType;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -33,17 +34,17 @@ class LLMProviderRouterTest {
     @Test
     void chat_shouldRouteUserFacingToDoubaoProvider() {
         LLMProvider userFacing = mock(LLMProvider.class);
-        when(userFacing.supports(LLMTaskType.USER_FACING)).thenReturn(true);
-        when(userFacing.supports(LLMTaskType.BACKGROUND)).thenReturn(false);
+        when(userFacing.supports(LlmTaskType.USER_FACING)).thenReturn(true);
+        when(userFacing.supports(LlmTaskType.BACKGROUND)).thenReturn(false);
         when(userFacing.chat(any())).thenReturn("user-reply");
 
         LLMProvider background = mock(LLMProvider.class);
-        when(background.supports(LLMTaskType.USER_FACING)).thenReturn(false);
-        when(background.supports(LLMTaskType.BACKGROUND)).thenReturn(true);
+        when(background.supports(LlmTaskType.USER_FACING)).thenReturn(false);
+        when(background.supports(LlmTaskType.BACKGROUND)).thenReturn(true);
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(userFacing, background));
 
-        String reply = router.chat(LLMTaskType.USER_FACING, List.of(Map.of("role", "system", "content", "你是小婉")));
+        String reply = router.chat(LlmTaskType.USER_FACING, List.of(Map.of("role", "system", "content", "你是小婉")));
 
         assertThat(reply).isEqualTo("user-reply");
         verify(background, never()).chat(any());
@@ -53,17 +54,17 @@ class LLMProviderRouterTest {
     @Test
     void chat_shouldRouteBackgroundToDeepSeekProvider() {
         LLMProvider userFacing = mock(LLMProvider.class);
-        when(userFacing.supports(LLMTaskType.USER_FACING)).thenReturn(true);
-        when(userFacing.supports(LLMTaskType.BACKGROUND)).thenReturn(false);
+        when(userFacing.supports(LlmTaskType.USER_FACING)).thenReturn(true);
+        when(userFacing.supports(LlmTaskType.BACKGROUND)).thenReturn(false);
 
         LLMProvider background = mock(LLMProvider.class);
-        when(background.supports(LLMTaskType.USER_FACING)).thenReturn(false);
-        when(background.supports(LLMTaskType.BACKGROUND)).thenReturn(true);
+        when(background.supports(LlmTaskType.USER_FACING)).thenReturn(false);
+        when(background.supports(LlmTaskType.BACKGROUND)).thenReturn(true);
         when(background.chat(any())).thenReturn("bg-summary");
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(userFacing, background));
 
-        String reply = router.chat(LLMTaskType.BACKGROUND, List.of(Map.of("role", "system", "content", "你是摘要助手")));
+        String reply = router.chat(LlmTaskType.BACKGROUND, List.of(Map.of("role", "system", "content", "你是摘要助手")));
 
         assertThat(reply).isEqualTo("bg-summary");
         verify(userFacing, never()).chat(any());
@@ -73,7 +74,7 @@ class LLMProviderRouterTest {
     @Test
     void chat_shouldPassMessagesThroughUnchanged() {
         LLMProvider provider = mock(LLMProvider.class);
-        when(provider.supports(LLMTaskType.USER_FACING)).thenReturn(true);
+        when(provider.supports(LlmTaskType.USER_FACING)).thenReturn(true);
         when(provider.chat(any())).thenReturn("ok");
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(provider));
@@ -82,7 +83,7 @@ class LLMProviderRouterTest {
                 Map.of("role", "system", "content", "sys"),
                 Map.of("role", "user", "content", "hello")
         );
-        router.chat(LLMTaskType.USER_FACING, input);
+        router.chat(LlmTaskType.USER_FACING, input);
 
         verify(provider).chat(input);
     }
@@ -94,7 +95,7 @@ class LLMProviderRouterTest {
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(only));
 
-        assertThatThrownBy(() -> router.chat(LLMTaskType.USER_FACING, List.of()))
+        assertThatThrownBy(() -> router.chat(LlmTaskType.USER_FACING, List.of()))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
                 .isEqualTo(LlmErrCode.LLM_PROVIDER_NOT_FOUND);
@@ -104,7 +105,7 @@ class LLMProviderRouterTest {
     void chat_shouldThrowWhenProvidersListEmpty() {
         LLMProviderRouter router = new LLMProviderRouter(List.of());
 
-        assertThatThrownBy(() -> router.chat(LLMTaskType.BACKGROUND, List.of()))
+        assertThatThrownBy(() -> router.chat(LlmTaskType.BACKGROUND, List.of()))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
                 .isEqualTo(LlmErrCode.LLM_PROVIDER_NOT_FOUND);
@@ -113,15 +114,15 @@ class LLMProviderRouterTest {
     @Test
     void chat_shouldPickFirstWhenMultipleProvidersMatch() {
         LLMProvider first = mock(LLMProvider.class);
-        when(first.supports(LLMTaskType.USER_FACING)).thenReturn(true);
+        when(first.supports(LlmTaskType.USER_FACING)).thenReturn(true);
         when(first.chat(any())).thenReturn("first-wins");
 
         LLMProvider second = mock(LLMProvider.class);
-        when(second.supports(LLMTaskType.USER_FACING)).thenReturn(true);
+        when(second.supports(LlmTaskType.USER_FACING)).thenReturn(true);
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(first, second));
 
-        String reply = router.chat(LLMTaskType.USER_FACING, List.of());
+        String reply = router.chat(LlmTaskType.USER_FACING, List.of());
 
         assertThat(reply).isEqualTo("first-wins");
         verify(second, never()).chat(any());

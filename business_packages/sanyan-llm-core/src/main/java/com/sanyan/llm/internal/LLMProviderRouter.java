@@ -1,6 +1,7 @@
 package com.sanyan.llm.internal;
 
 import com.sanyan.common.error.BusinessException;
+import com.sanyan.llm.LlmTaskType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -10,14 +11,14 @@ import java.util.Map;
 /**
  * LLM Provider 路由层（M3 task；Q3 task 进一步收窄职责）。
  *
- * <p>按 {@link LLMTaskType} 在所有 {@link LLMProvider} 实现中挑出第一个匹配的：
+ * <p>按 {@link LlmTaskType} 在所有 {@link LLMProvider} 实现中挑出第一个匹配的：
  * <ul>
- *   <li>{@link LLMTaskType#USER_FACING} → {@link DoubaoAdapter}</li>
- *   <li>{@link LLMTaskType#BACKGROUND} → {@link DeepSeekAdapter}</li>
+ *   <li>{@link LlmTaskType#USER_FACING} → {@link DoubaoAdapter}</li>
+ *   <li>{@link LlmTaskType#BACKGROUND} → {@link DeepSeekAdapter}</li>
  * </ul>
  *
  * <p>装配方式：Spring 通过 {@code List<LLMProvider>} 收集所有 {@code @Component} 的 provider
- * 实现，按字段定义顺序构造注入。调用方（{@link AiService} / N2/O2 的后台 service）只依赖
+ * 实现，按字段定义顺序构造注入。调用方（{@code AiService} / N2/O2 的后台 service）只依赖
  * router 这一层，不直接 import 具体 adapter。
  *
  * <p>错误语义：
@@ -27,10 +28,13 @@ import java.util.Map;
  *   <li>多个 provider 匹配 → log.warn + 取首个，行为可预期（按 Spring 注入顺序）</li>
  * </ul>
  *
- * <p><b>Q3 task 重构：</b>原 {@code buildOpenAiMessages} 拼装逻辑搬到 {@link PromptBuilder}。
+ * <p><b>Q3 task 重构：</b>原 {@code buildOpenAiMessages} 拼装逻辑搬到 {@code PromptBuilder}。
  * router 退化为纯路由层，只接受调用方已经拼好的 OpenAI 兼容消息数组，不再做任何加工。
  * 这样 PromptBuilder 成为唯一的"消息拼装入口"，所有调用方（AiService / MemorySummaryService /
  * MemoryProfileRefreshService）共用拼装逻辑（值复用 + 逻辑复用）。
+ *
+ * <p><b>S3 Phase 3 重构：</b>本类从 sanyan-business 物理迁移到 sanyan-llm-core；taskType 参数从
+ * 旧的 {@code LLMTaskType}（同模块 internal）改成 {@link LlmTaskType}（{@code sanyan-llm-api} 契约）。
  */
 @Slf4j
 @Component
@@ -46,11 +50,11 @@ public class LLMProviderRouter {
      * 路由到匹配的 provider 并发起一次 chat 调用。
      *
      * @param taskType       任务类型，决定走哪个 provider
-     * @param openAiMessages 已经由 {@link PromptBuilder} 拼好的 OpenAI 兼容消息数组
+     * @param openAiMessages 已经由 {@code PromptBuilder} 拼好的 OpenAI 兼容消息数组
      * @return provider 返回的助手回复文本
      * @throws BusinessException 找不到匹配 provider，或 provider 上游异常向上传递
      */
-    public String chat(LLMTaskType taskType, List<Map<String, String>> openAiMessages) {
+    public String chat(LlmTaskType taskType, List<Map<String, String>> openAiMessages) {
         List<LLMProvider> matched = providers.stream()
                 .filter(p -> p.supports(taskType))
                 .toList();

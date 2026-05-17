@@ -4,6 +4,9 @@ import com.sanyan.character.dto.AiCharacterDto;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
 import com.sanyan.chat.internal.SenderType;
+import com.sanyan.llm.LlmApi;
+import com.sanyan.llm.LlmTaskType;
+import com.sanyan.llm.dto.ChatMessage;
 import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.dto.MemoryContext;
@@ -24,7 +27,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,16 +38,19 @@ import static org.mockito.Mockito.when;
 /**
  * Task M3：AiService 单元测试（重写）。
  *
- * <p>Plan 1 时代直接 mock RestTemplate 走豆包；M3 把豆包抽到 {@link DoubaoAdapter}，
- * 路由层 {@link LLMProviderRouter} 接管 task type → provider 的选择。
- * 现在 AiService 退化为"装配 system prompt + 拉短期上下文 + 委托给 router"的薄编排层，
- * 测试只需 mock router 行为即可。
+ * <p>Plan 1 时代直接 mock RestTemplate 走豆包；M3 把豆包抽到 DoubaoAdapter，
+ * 路由层 LLMProviderRouter 接管 task type → provider 的选择。
+ * 现在 AiService 退化为"装配 system prompt + 拉短期上下文 + 委托给 LlmApi"的薄编排层，
+ * 测试只需 mock {@link LlmApi} 行为即可。
+ *
+ * <p>S3 Phase 3 重构：AiService 不再持有 LLMProviderRouter，改持 {@link LlmApi} 契约；
+ * 本测试相应地 mock LlmApi 而非 router。
  */
 @ExtendWith(MockitoExtension.class)
 class AiServiceTest {
 
     @Mock MessageRepository messageRepository;
-    @Mock LLMProviderRouter llmRouter;
+    @Mock LlmApi llmApi;
     @Mock MemoryApi memoryApi;
 
     private AiService service;
@@ -57,7 +62,7 @@ class AiServiceTest {
     void setUp() {
         // Q3 起 AiService 直接持有 PromptBuilder（无状态 Spring Bean，可在测试里直接 new）。
         // Q4 起再注入 MemoryApi，主对话前调 getRelevantContext 拿长期记忆 context。
-        service = new AiService(messageRepository, llmRouter, new PromptBuilder(), memoryApi);
+        service = new AiService(messageRepository, llmApi, new PromptBuilder(), memoryApi);
         Resource resource = new ByteArrayResource(
                 SYSTEM_PROMPT_MARKER.getBytes(StandardCharsets.UTF_8));
         ReflectionTestUtils.setField(service, "systemPromptResource", resource);
@@ -70,33 +75,33 @@ class AiServiceTest {
     void chat_shouldDelegateToRouterWithUserFacingTaskType() {
         when(messageRepository.findByUserIdOrderByIdDesc(anyLong(), any()))
                 .thenReturn(List.of());
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any()))
                 .thenReturn("hello-from-router");
 
         AiCharacterDto character = xiaowanDto();
         String reply = service.chat(character, 1L);
 
         assertThat(reply).isEqualTo("hello-from-router");
-        verify(llmRouter).chat(eq(LLMTaskType.USER_FACING), any());
+        verify(llmApi).chat(eq(LlmTaskType.USER_FACING), any());
     }
 
     @Test
     void chat_shouldPassSystemPromptLoadedFromResourceToRouter() {
         when(messageRepository.findByUserIdOrderByIdDesc(anyLong(), any()))
                 .thenReturn(List.of());
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any()))
                 .thenReturn("ok");
 
         service.chat(xiaowanDto(), 1L);
 
         // Q3：AiService 走 PromptBuilder 拼成 OpenAI messages，第一条必须是包含资源文件人设的 system 消息
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmRouter).chat(eq(LLMTaskType.USER_FACING), captor.capture());
-        List<Map<String, String>> sent = captor.getValue();
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.USER_FACING), captor.capture());
+        List<ChatMessage> sent = captor.getValue();
         assertThat(sent).isNotEmpty();
-        assertThat(sent.get(0)).containsEntry("role", "system");
-        assertThat(sent.get(0).get("content"))
+        assertThat(sent.get(0).role()).isEqualTo("system");
+        assertThat(sent.get(0).content())
                 .as("system prompt 必须来自资源文件，且追加了当前时间")
                 .contains(SYSTEM_PROMPT_MARKER)
                 .contains("[当前时间]");
@@ -115,26 +120,28 @@ class AiServiceTest {
         // 用可变 ArrayList——Collections.reverse 不能作用于 List.of() 的不可变列表
         when(messageRepository.findByUserIdOrderByIdDesc(eq(1L), any()))
                 .thenReturn(new ArrayList<>(List.of(newer, older)));
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any()))
                 .thenReturn("ack");
 
         service.chat(xiaowanDto(), 1L);
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmRouter).chat(eq(LLMTaskType.USER_FACING), captor.capture());
-        List<Map<String, String>> sent = captor.getValue();
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.USER_FACING), captor.capture());
+        List<ChatMessage> sent = captor.getValue();
         // 1 system + 2 history
         assertThat(sent).hasSize(3);
-        assertThat(sent.get(1)).containsEntry("role", "user").containsEntry("content", "你好");
-        assertThat(sent.get(2)).containsEntry("role", "assistant").containsEntry("content", "你好呀");
+        assertThat(sent.get(1).role()).isEqualTo("user");
+        assertThat(sent.get(1).content()).isEqualTo("你好");
+        assertThat(sent.get(2).role()).isEqualTo("assistant");
+        assertThat(sent.get(2).content()).isEqualTo("你好呀");
     }
 
     @Test
     void chat_shouldUseShortTermWindowSizeFromMemoryConstants() {
         when(messageRepository.findByUserIdOrderByIdDesc(eq(1L), any()))
                 .thenReturn(List.of());
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any()))
                 .thenReturn("ok");
 
         service.chat(xiaowanDto(), 1L);
@@ -159,20 +166,20 @@ class AiServiceTest {
                 .thenReturn(new ArrayList<>(List.of()));
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), any()))
                 .thenReturn(null);
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any()))
                 .thenReturn("ok");
 
         String reply = service.chat(xiaowanDto(), 42L);
         assertThat(reply).isEqualTo("ok");
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmRouter).chat(eq(LLMTaskType.USER_FACING), captor.capture());
-        List<Map<String, String>> sent = captor.getValue();
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.USER_FACING), captor.capture());
+        List<ChatMessage> sent = captor.getValue();
         // 只有人设 system 消息，没有「她对你的记忆：」段
         assertThat(sent).hasSize(1);
-        assertThat(sent.get(0)).containsEntry("role", "system");
-        assertThat(sent.get(0).get("content")).doesNotContain(PromptBuilder.MEMORY_PREFIX);
+        assertThat(sent.get(0).role()).isEqualTo("system");
+        assertThat(sent.get(0).content()).doesNotContain(PromptBuilder.MEMORY_PREFIX);
     }
 
     @Test
@@ -184,25 +191,26 @@ class AiServiceTest {
                 .thenReturn(new ArrayList<>(List.of(userMsg)));
         when(memoryApi.getRelevantContext(eq(42L), eq(DEFAULT_CHARACTER_ID), eq("我最近想去北海道")))
                 .thenReturn(new MemoryContext("她记得你喜欢滑雪"));
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any()))
                 .thenReturn("好呀我陪你");
 
         service.chat(xiaowanDto(), 42L);
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmRouter).chat(eq(LLMTaskType.USER_FACING), captor.capture());
-        List<Map<String, String>> sent = captor.getValue();
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.USER_FACING), captor.capture());
+        List<ChatMessage> sent = captor.getValue();
         // 期望顺序：[0]人设 system / [1]记忆 system / [2]user 消息
         assertThat(sent).hasSize(3);
-        assertThat(sent.get(0)).containsEntry("role", "system");
-        assertThat(sent.get(0).get("content")).contains(SYSTEM_PROMPT_MARKER);
-        assertThat(sent.get(1)).containsEntry("role", "system");
-        assertThat(sent.get(1).get("content"))
+        assertThat(sent.get(0).role()).isEqualTo("system");
+        assertThat(sent.get(0).content()).contains(SYSTEM_PROMPT_MARKER);
+        assertThat(sent.get(1).role()).isEqualTo("system");
+        assertThat(sent.get(1).content())
                 .as("Memory context 必须以固定前缀注入，避免污染人设")
                 .startsWith(PromptBuilder.MEMORY_PREFIX)
                 .contains("她记得你喜欢滑雪");
-        assertThat(sent.get(2)).containsEntry("role", "user").containsEntry("content", "我最近想去北海道");
+        assertThat(sent.get(2).role()).isEqualTo("user");
+        assertThat(sent.get(2).content()).isEqualTo("我最近想去北海道");
     }
 
     @Test
@@ -221,7 +229,7 @@ class AiServiceTest {
         when(messageRepository.findByUserIdOrderByIdDesc(eq(7L), any()))
                 .thenReturn(new ArrayList<>(List.of(latestUser, aiReply, oldestUser)));
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), any())).thenReturn(null);
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any())).thenReturn("ok");
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any())).thenReturn("ok");
 
         AiCharacterDto character = xiaowanDto();  // id = 1L
         service.chat(character, 7L);
@@ -240,7 +248,7 @@ class AiServiceTest {
         when(messageRepository.findByUserIdOrderByIdDesc(eq(9L), any()))
                 .thenReturn(new ArrayList<>(List.of(userMsg)));
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), any())).thenReturn(null);
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any())).thenReturn("ok");
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any())).thenReturn("ok");
 
         service.chat(withoutId, 9L);
 
@@ -258,21 +266,22 @@ class AiServiceTest {
                 .thenReturn(new ArrayList<>(List.of(userMsg)));
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), any()))
                 .thenThrow(new RuntimeException("embedding 服务挂了"));
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any()))
                 .thenReturn("ok");
 
         String reply = service.chat(xiaowanDto(), 1L);
         assertThat(reply).isEqualTo("ok");
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmRouter).chat(eq(LLMTaskType.USER_FACING), captor.capture());
-        List<Map<String, String>> sent = captor.getValue();
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.USER_FACING), captor.capture());
+        List<ChatMessage> sent = captor.getValue();
         // 没有「她对你的记忆」段（降级），但人设 system + 1 条 user 消息仍存在
         assertThat(sent).hasSize(2);
-        assertThat(sent.get(0)).containsEntry("role", "system");
-        assertThat(sent.get(0).get("content")).doesNotContain(PromptBuilder.MEMORY_PREFIX);
-        assertThat(sent.get(1)).containsEntry("role", "user").containsEntry("content", "hi");
+        assertThat(sent.get(0).role()).isEqualTo("system");
+        assertThat(sent.get(0).content()).doesNotContain(PromptBuilder.MEMORY_PREFIX);
+        assertThat(sent.get(1).role()).isEqualTo("user");
+        assertThat(sent.get(1).content()).isEqualTo("hi");
     }
 
     @Test
@@ -284,7 +293,7 @@ class AiServiceTest {
         when(messageRepository.findByUserIdOrderByIdDesc(anyLong(), any()))
                 .thenReturn(new ArrayList<>(List.of(aiOnly)));
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), any())).thenReturn(null);
-        when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any())).thenReturn("ok");
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any())).thenReturn("ok");
 
         service.chat(xiaowanDto(), 1L);
 

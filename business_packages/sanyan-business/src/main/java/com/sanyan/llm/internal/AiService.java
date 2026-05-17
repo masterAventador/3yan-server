@@ -4,6 +4,9 @@ import com.sanyan.character.dto.AiCharacterDto;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
 import com.sanyan.chat.internal.SenderType;
+import com.sanyan.llm.LlmApi;
+import com.sanyan.llm.LlmTaskType;
+import com.sanyan.llm.dto.ChatMessage;
 import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.dto.MemoryContext;
@@ -28,15 +31,19 @@ import java.util.Map;
 /**
  * AI 对话编排层。
  *
- * <p>M3 task 重构：把豆包 HTTP 调用抽到 {@link DoubaoAdapter}，按 {@link LLMTaskType} 路由
- * 的逻辑搬到 {@link LLMProviderRouter}。AiService 退化为薄编排层，只负责：
+ * <p>M3 task 重构：把豆包 HTTP 调用抽到 DoubaoAdapter（已迁 sanyan-llm-core），按
+ * {@link LlmTaskType} 路由的逻辑放在 LLMProviderRouter。AiService 退化为薄编排层，只负责：
  * <ol>
  *   <li>加载人设资源文件 + 拼接当前时间组装 system prompt</li>
  *   <li>从 {@link MessageRepository} 拉取短期上下文（最近 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条）</li>
  *   <li>调 {@link MemoryApi#getRelevantContext} 拿长期记忆整合 context（Q4）</li>
  *   <li>用 {@link PromptBuilder} 拼成 OpenAI 兼容消息数组</li>
- *   <li>委托给 {@link LLMProviderRouter}（task type = USER_FACING → 走豆包）</li>
+ *   <li>转 {@link ChatMessage} 并委托给 {@link LlmApi}（task type = USER_FACING → 走豆包）</li>
  * </ol>
+ *
+ * <p>S3 Phase 3 重构：跨模块调 LLM 走 {@link LlmApi} 契约（不再直接持 LLMProviderRouter）。
+ * PromptBuilder 仍在 sanyan-business（Phase 5 才搬 chat-core），所以本类继续用其输出的
+ * {@code List<Map<String,String>>}，最后转一次 {@code List<ChatMessage>} 喂给 LlmApi。
  *
  * <p>Q3 task 改动：
  * <ul>
@@ -60,7 +67,7 @@ import java.util.Map;
 public class AiService {
 
     private final MessageRepository messageRepository;
-    private final LLMProviderRouter llmRouter;
+    private final LlmApi llmApi;
     private final PromptBuilder promptBuilder;
     private final MemoryApi memoryApi;
 
@@ -96,7 +103,7 @@ public class AiService {
      *   <li>拉取最近 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条短期消息，reverse 成时间正序</li>
      *   <li>取最新一条用户消息作为 RAG query，调 {@link MemoryApi#getRelevantContext} 拿
      *       长期记忆 context（异常降级为 null）</li>
-     *   <li>用 {@link PromptBuilder} 拼装 OpenAI 消息数组，委托 {@link LLMProviderRouter}</li>
+     *   <li>用 {@link PromptBuilder} 拼装 OpenAI 消息数组，转 {@link ChatMessage} 后委托 {@link LlmApi}</li>
      * </ol>
      */
     public String chat(AiCharacterDto character, Long userId) {
@@ -119,7 +126,10 @@ public class AiService {
 
         List<Map<String, String>> openAiMessages =
                 promptBuilder.build(systemPrompt, memoryContext, recentMessages);
-        return llmRouter.chat(LLMTaskType.USER_FACING, openAiMessages);
+        List<ChatMessage> chatMessages = openAiMessages.stream()
+                .map(m -> new ChatMessage(m.get("role"), m.get("content")))
+                .toList();
+        return llmApi.chat(LlmTaskType.USER_FACING, chatMessages);
     }
 
     public String assembleSystemPrompt(String characterPrompt, String time) {

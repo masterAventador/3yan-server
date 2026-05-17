@@ -5,9 +5,9 @@ import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
 import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.test.PostgresTestcontainerSupport;
+import com.sanyan.llm.LlmApi;
+import com.sanyan.llm.LlmTaskType;
 import com.sanyan.llm.internal.EmbeddingProvider;
-import com.sanyan.llm.internal.LLMProviderRouter;
-import com.sanyan.llm.internal.LLMTaskType;
 import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.dto.MemoryContext;
@@ -146,7 +146,7 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
     private static final Long CHARACTER_ID = 1L;
 
     @MockBean
-    private LLMProviderRouter llmRouter;
+    private LlmApi llmApi;
 
     @MockBean
     private EmbeddingProvider embeddingProvider;
@@ -206,7 +206,7 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
     @Transactional
     void summary_triggersAfter30Messages() {
         // mock LLM 返回固定摘要文本
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyList()))
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList()))
                 .thenReturn("用户和小婉聊了 30 条关于日常生活的对话纪要");
 
         // 插 30 条消息（user / ai 交替，模拟真实对话）
@@ -255,7 +255,7 @@ class Plan2EndToEndIT extends PostgresTestcontainerSupport {
     @Transactional
     void profile_refreshesFromUserMessage() {
         String llmSummary = "用户家里养了一只名叫橘子的猫，喜欢分享日常宠物趣事。";
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), anyList())).thenReturn(llmSummary);
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn(llmSummary);
 
         // 插入一条 user 消息
         MessageEntity userMsg = new MessageEntity();

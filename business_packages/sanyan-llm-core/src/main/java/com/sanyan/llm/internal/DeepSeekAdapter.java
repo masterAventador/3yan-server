@@ -3,6 +3,7 @@ package com.sanyan.llm.internal;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sanyan.common.error.BusinessException;
 import com.sanyan.common.web.client.HttpClientFactory;
+import com.sanyan.llm.LlmTaskType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -98,8 +99,8 @@ public class DeepSeekAdapter implements LLMProvider {
     }
 
     @Override
-    public boolean supports(LLMTaskType taskType) {
-        return taskType == LLMTaskType.BACKGROUND;
+    public boolean supports(LlmTaskType taskType) {
+        return taskType == LlmTaskType.BACKGROUND;
     }
 
     @Override

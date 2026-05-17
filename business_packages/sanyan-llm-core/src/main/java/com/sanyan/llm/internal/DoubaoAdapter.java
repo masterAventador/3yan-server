@@ -3,6 +3,7 @@ package com.sanyan.llm.internal;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sanyan.common.error.BusinessException;
 import com.sanyan.common.web.client.HttpClientFactory;
+import com.sanyan.llm.LlmTaskType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -23,7 +24,7 @@ import java.util.Map;
  * <p>从 Plan 1 时代的 {@code AiService.callDoubao} 抽出，目的：
  * <ul>
  *   <li>统一 LLM 调用入口为 {@link LLMProvider}，由 {@link LLMProviderRouter} 按
- *       {@link LLMTaskType} 路由</li>
+ *       {@link LlmTaskType} 路由</li>
  *   <li>错误不再"吞异常返回 fallback 字符串"，与 {@link DeepSeekAdapter} 一致抛
  *       {@link BusinessException}；fallback 策略由调用方（Controller / 上层 Service）决定</li>
  * </ul>
@@ -108,8 +109,8 @@ public class DoubaoAdapter implements LLMProvider {
     }
 
     @Override
-    public boolean supports(LLMTaskType taskType) {
-        return taskType == LLMTaskType.USER_FACING;
+    public boolean supports(LlmTaskType taskType) {
+        return taskType == LlmTaskType.USER_FACING;
     }
 
     @Override

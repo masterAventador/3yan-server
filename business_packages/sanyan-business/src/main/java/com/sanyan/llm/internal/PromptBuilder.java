@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  * Plan 2 Task Q3：把 LLM 调用前的「OpenAI 兼容消息数组」拼装逻辑统一收口。
  *
- * <p>原 M3 task 把这段拼装放在 {@link LLMProviderRouter#buildOpenAiMessages} 里——但 Q3 task
+ * <p>原 M3 task 把这段拼装放在 {@code LLMProviderRouter#buildOpenAiMessages} 里——但 Q3 task
  * 需要在 system 段注入长期记忆（{@link MemoryContext}），并且短期窗口必须严格限制在
  * {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE}（= 32）条以内。把拼装抽到独立类有两个好处：
  * <ul>

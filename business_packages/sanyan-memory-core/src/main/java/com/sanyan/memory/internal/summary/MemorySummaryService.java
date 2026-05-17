@@ -1,8 +1,9 @@
 package com.sanyan.memory.internal.summary;
 
 import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.llm.internal.LLMProviderRouter;
-import com.sanyan.llm.internal.LLMTaskType;
+import com.sanyan.llm.LlmApi;
+import com.sanyan.llm.LlmTaskType;
+import com.sanyan.llm.dto.ChatMessage;
 import com.sanyan.llm.internal.PromptBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,8 +15,10 @@ import java.util.Map;
 /**
  * Plan 2 Task N2：把一段对话历史压成"对话纪要"。
  *
- * <p>调用 {@link LLMProviderRouter} 并把任务类型钉死为 {@link LLMTaskType#BACKGROUND}——
+ * <p>调用 {@link LlmApi} 并把任务类型钉死为 {@link LlmTaskType#BACKGROUND}——
  * 摘要属于后台异步任务，用户看不到原始输出，路由到 DeepSeek V4-Flash（低成本 + 大吞吐）。
+ *
+ * <p>S3 Phase 3 重构：跨模块走 LlmApi 契约，不再直接持有 LLMProviderRouter（已迁 llm-core 内部）。
  *
  * <p>system prompt 模板的硬约束：
  * <ul>
@@ -29,8 +32,9 @@ import java.util.Map;
  * 后续 Phase N3（SummaryScheduler）调本 service 然后写库。
  *
  * <p>Q3 task 改动：消息拼装从 router 内部抽出到 {@link PromptBuilder}，本 service 调
- * {@code promptBuilder.build} 拼好 OpenAI 兼容 messages 后传给 router。所有 LLM 调用方共用
- * 一份拼装逻辑（值复用 + 逻辑复用），避免每个 service 自己重复实现。
+ * {@code promptBuilder.build} 拼好 OpenAI 兼容 messages 后转 {@link ChatMessage} 喂给 LlmApi。
+ * 所有 LLM 调用方共用一份拼装逻辑（值复用 + 逻辑复用），避免每个 service 自己重复实现。
+ * Phase 5 把 PromptBuilder 搬 chat-core 后，本类可直接拼 ChatMessage，省掉一次 Map→ChatMessage 转换。
  */
 @Service
 @RequiredArgsConstructor
@@ -48,7 +52,7 @@ public class MemorySummaryService {
             保留关键事实、情感线索、用户提到的人事物。长度控制在 100-200 字。
             """;
 
-    private final LLMProviderRouter llmRouter;
+    private final LlmApi llmApi;
     private final PromptBuilder promptBuilder;
 
     /**
@@ -60,6 +64,9 @@ public class MemorySummaryService {
     public String summarize(List<MessageEntity> messages) {
         List<Map<String, String>> openAiMessages =
                 promptBuilder.build(SYSTEM_PROMPT, null, messages);
-        return llmRouter.chat(LLMTaskType.BACKGROUND, openAiMessages);
+        List<ChatMessage> chatMessages = openAiMessages.stream()
+                .map(m -> new ChatMessage(m.get("role"), m.get("content")))
+                .toList();
+        return llmApi.chat(LlmTaskType.BACKGROUND, chatMessages);
     }
 }
