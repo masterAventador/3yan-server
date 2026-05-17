@@ -27,6 +27,9 @@
         <!-- Plan 3 G2：订阅 chat-api 的 MessagePersistedEvent -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-api</artifactId></dependency>
 
+        <!-- Plan 3 F1：调 LlmApi 评对话质量 -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-api</artifactId></dependency>
+
         <!-- foundation -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-error</artifactId></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-web</artifactId></dependency>
