@@ -1,9 +1,9 @@
 package com.sanyan;
 
+import com.sanyan.chat.SenderType;
 import com.sanyan.chat.event.MessagePersistedEvent;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.test.PostgresTestcontainerSupport;
 import com.sanyan.embedding.EmbeddingApi;
 import com.sanyan.llm.LlmApi;

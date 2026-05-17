@@ -1,7 +1,7 @@
 package com.sanyan.memory.internal.profile;
 
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.SenderType;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.common.error.BusinessException;
 import com.sanyan.common.error.CommonErrCode;
 import com.sanyan.llm.LlmApi;
@@ -219,9 +219,10 @@ class MemoryProfileRefreshServiceTest {
         when(repository.save(any(MemoryProfileEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("new");
 
-        List<MessageEntity> messages = buildMessages(2);
-        messages.get(0).setContent("你好啊");
-        messages.get(1).setContent("好呀，吃了吗");
+        // MessageDto 是 record（不可变），用显式构造覆盖默认 content
+        List<MessageDto> messages = List.of(
+                new MessageDto(0L, 1L, SenderType.USER, "你好啊", null),
+                new MessageDto(1L, 1L, SenderType.AI, "好呀，吃了吗", null));
         service.refresh(1L, 1L, messages);
 
         @SuppressWarnings("unchecked")
@@ -272,14 +273,15 @@ class MemoryProfileRefreshServiceTest {
 
     // ============ helpers ============
 
-    private static List<MessageEntity> buildMessages(int count) {
-        List<MessageEntity> messages = new ArrayList<>();
+    private static List<MessageDto> buildMessages(int count) {
+        List<MessageDto> messages = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            MessageEntity m = new MessageEntity();
-            m.setUserId(1L);
-            m.setSenderType(i % 2 == 0 ? SenderType.USER : SenderType.AI);
-            m.setContent(i % 2 == 0 ? "用户消息 " + i : "AI 回复 " + i);
-            messages.add(m);
+            messages.add(new MessageDto(
+                    (long) i,
+                    1L,
+                    i % 2 == 0 ? SenderType.USER : SenderType.AI,
+                    i % 2 == 0 ? "用户消息 " + i : "AI 回复 " + i,
+                    null));
         }
         return messages;
     }

@@ -1,15 +1,14 @@
 package com.sanyan.memory.event;
 
+import com.sanyan.chat.ChatApi;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.chat.event.MessagePersistedEvent;
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.MessageRepository;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.cache.KvCache;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.profile.MemoryProfileRefreshService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -45,8 +44,8 @@ import java.util.List;
  * <p><b>为什么走 KvCache 不直接用 RedisTemplate</b>：foundation-layer 规则约束业务代码必须走
  * common-cache 封装，统一 key 管理 + 后续可加监控埋点。
  *
- * <p><b>MVP 单角色约束</b>：当前 {@link MessageEntity} 没有 character_id 列，
- * {@code findByUserIdOrderByIdDesc} 只按 userId 过滤，character 维度仅在节流 key 和 profile 表上区分。
+ * <p><b>MVP 单角色约束</b>：当前 {@code MessageEntity} 没有 character_id 列，
+ * {@link ChatApi#listRecentByUser} 只按 userId 过滤，character 维度仅在节流 key 和 profile 表上区分。
  */
 @Component
 @RequiredArgsConstructor
@@ -65,7 +64,7 @@ public class UserMessageProfileRefreshListener {
     static final int RECENT_MESSAGES_FOR_REFRESH = 10;
 
     private final MemoryProfileRefreshService refreshService;
-    private final MessageRepository messageRepository;
+    private final ChatApi chatApi;
     private final KvCache kvCache;
 
     @Async
@@ -90,10 +89,10 @@ public class UserMessageProfileRefreshListener {
         }
 
         try {
-            // 3) 取最近 N 条消息（Repository 按 id 降序返回；这里反转为时间正序送给 LLM）
-            List<MessageEntity> recentDesc = messageRepository.findByUserIdOrderByIdDesc(
-                    event.userId(), PageRequest.of(0, RECENT_MESSAGES_FOR_REFRESH));
-            List<MessageEntity> recentAsc = new ArrayList<>(recentDesc);
+            // 3) 取最近 N 条消息（ChatApi 按 id 降序返回；这里反转为时间正序送给 LLM）
+            List<MessageDto> recentDesc = chatApi.listRecentByUser(
+                    event.userId(), RECENT_MESSAGES_FOR_REFRESH);
+            List<MessageDto> recentAsc = new ArrayList<>(recentDesc);
             Collections.reverse(recentAsc);
 
             // 4) LLM 直接维护画像段落

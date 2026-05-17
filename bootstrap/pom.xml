@@ -40,6 +40,13 @@
             MemoryRagSearchService / MemoryEmbeddingService 注入 EmbeddingApi 时启动期装配失败。
         -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-core</artifactId></dependency>
+        <!--
+            S3 Phase 5：chat 域已从 sanyan-business 拆出到独立的 sanyan-chat-core。
+            bootstrap 必须显式 compile 依赖 sanyan-chat-core，否则 fat jar 缺少
+            MessageController / ChatWebSocketHandler / MessageService / ChatApiImpl /
+            AiService / PromptBuilder 等 Bean，主对话链路启动期装配失败。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-core</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>

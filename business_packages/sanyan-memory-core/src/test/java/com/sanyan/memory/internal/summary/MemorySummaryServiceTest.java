@@ -1,11 +1,10 @@
 package com.sanyan.memory.internal.summary;
 
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.SenderType;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.llm.LlmApi;
 import com.sanyan.llm.LlmTaskType;
 import com.sanyan.llm.dto.ChatMessage;
-import com.sanyan.llm.internal.PromptBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -46,17 +45,16 @@ class MemorySummaryServiceTest {
     @Mock
     private LlmApi llmApi;
 
-    private final PromptBuilder promptBuilder = new PromptBuilder();
     private MemorySummaryService service;
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        service = new MemorySummaryService(llmApi, promptBuilder);
+        service = new MemorySummaryService(llmApi);
     }
 
     @Test
     void summarize_shouldRouteToBackgroundTaskType() {
-        List<MessageEntity> messages = buildFixtureMessages(30);
+        List<MessageDto> messages = buildFixtureMessages(30);
         when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
@@ -70,7 +68,7 @@ class MemorySummaryServiceTest {
 
     @Test
     void summarize_shouldPassMessagesViaPromptBuilder() {
-        List<MessageEntity> messages = buildFixtureMessages(30);
+        List<MessageDto> messages = buildFixtureMessages(30);
         when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
@@ -89,7 +87,7 @@ class MemorySummaryServiceTest {
 
     @Test
     void summarize_systemPromptShouldContainCharacterNameXiaoWan() {
-        List<MessageEntity> messages = buildFixtureMessages(30);
+        List<MessageDto> messages = buildFixtureMessages(30);
         when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
@@ -102,7 +100,7 @@ class MemorySummaryServiceTest {
 
     @Test
     void summarize_systemPromptShouldContainLengthConstraint() {
-        List<MessageEntity> messages = buildFixtureMessages(30);
+        List<MessageDto> messages = buildFixtureMessages(30);
         when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
@@ -114,7 +112,7 @@ class MemorySummaryServiceTest {
 
     @Test
     void summarize_systemPromptShouldContainSummaryKeyword() {
-        List<MessageEntity> messages = buildFixtureMessages(30);
+        List<MessageDto> messages = buildFixtureMessages(30);
         when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("摘要内容");
 
         service.summarize(messages);
@@ -126,7 +124,7 @@ class MemorySummaryServiceTest {
 
     @Test
     void summarize_shouldReturnRouterOutputUnchanged() {
-        List<MessageEntity> messages = buildFixtureMessages(30);
+        List<MessageDto> messages = buildFixtureMessages(30);
         String fakeLlmOutput = "用户聊到了周三的技术面试，情绪比较焦虑，希望小婉帮忙加油打气。";
         when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any())).thenReturn(fakeLlmOutput);
 
@@ -151,14 +149,15 @@ class MemorySummaryServiceTest {
      * 默认不可见（除非 test-jar），且 service 测试只关心传给 router 的参数对象引用，
      * 消息内容本身不参与断言，所以本地构造足够。
      */
-    private List<MessageEntity> buildFixtureMessages(int count) {
-        List<MessageEntity> messages = new ArrayList<>();
+    private List<MessageDto> buildFixtureMessages(int count) {
+        List<MessageDto> messages = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            MessageEntity m = new MessageEntity();
-            m.setUserId(1L);
-            m.setSenderType(i % 2 == 0 ? SenderType.USER : SenderType.AI);
-            m.setContent(i % 2 == 0 ? "用户消息 " + i : "AI 回复 " + i);
-            messages.add(m);
+            messages.add(new MessageDto(
+                    (long) i,
+                    1L,
+                    i % 2 == 0 ? SenderType.USER : SenderType.AI,
+                    i % 2 == 0 ? "用户消息 " + i : "AI 回复 " + i,
+                    null));
         }
         return messages;
     }

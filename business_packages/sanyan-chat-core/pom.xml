@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-chat-core</artifactId>
+    <name>sanyan-chat-core</name>
+    <packaging>jar</packaging>
+
+    <!--
+        S3 Phase 5：chat 域实现层（最复杂的拆分）。
+        含：
+        - web/        MessageController + MessageData (HTTP 接口)
+        - ws/         ChatWebSocketHandler + WsError/WsSyncResult/WsNewMessage/WsAck/WsErrorMessage
+        - internal/   MessageEntity + MessageRepository + MessageService + ChatErrCode
+                      + AiService + PromptBuilder（从 sanyan-business/llm/ 搬过来，本质属 chat 域）
+                      + MessageDtoMapper (Entity → DTO 私有映射)
+        - api/        ChatApiImpl（实现 sanyan-chat-api 的 ChatApi，供 memory-core 等跨模块调）
+
+        跨模块依赖：
+        - 本域 -api（ChatApi 契约 + MessageDto + SenderType + MessagePersistedEvent record）
+        - sanyan-user-api（暂未直接用，但本模块未来可能需要）—— 暂不加，按需补
+        - sanyan-character-api（MessageService.handleAiReply 调 CharacterApi）
+        - sanyan-llm-api（AiService 调 LlmApi）
+        - sanyan-memory-api（AiService 调 MemoryApi.getRelevantContext 拿长期记忆）
+        - foundation: error/web/auth/util/ws
+    -->
+    <dependencies>
+        <!-- 本域 -api 契约 -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-api</artifactId></dependency>
+
+        <!-- 调其他业务 -api -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-api</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-api</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-api</artifactId></dependency>
+
+        <!-- foundation -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-error</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-web</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-auth</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-util</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-ws</artifactId></dependency>
+
+        <!-- Spring 必备 -->
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-websocket</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-validation</artifactId></dependency>
+        <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
+
+        <!-- 测试 -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.awaitility</groupId><artifactId>awaitility</artifactId><scope>test</scope></dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

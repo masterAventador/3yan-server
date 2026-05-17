@@ -1,7 +1,7 @@
 package com.sanyan.memory.internal.profile;
 
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.SenderType;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.common.error.BusinessException;
 import com.sanyan.llm.LlmApi;
 import com.sanyan.llm.LlmTaskType;
@@ -96,7 +96,7 @@ public class MemoryProfileRefreshService {
      * @return 刷新后的 entity；LLM 失败 / 无可学习内容时返回 {@code null}
      */
     public MemoryProfileEntity refresh(
-            Long userId, Long characterId, List<MessageEntity> recentMessages) {
+            Long userId, Long characterId, List<MessageDto> recentMessages) {
         if (recentMessages == null || recentMessages.isEmpty()) {
             return null;
         }
@@ -106,7 +106,7 @@ public class MemoryProfileRefreshService {
     private MemoryProfileEntity refreshWithRetry(
             Long userId,
             Long characterId,
-            List<MessageEntity> recentMessages,
+            List<MessageDto> recentMessages,
             int retriesLeft) {
         try {
             MemoryProfileEntity entity = repository
@@ -138,7 +138,7 @@ public class MemoryProfileRefreshService {
      * 让上层 listener 跳过即可。
      */
     private String callLlmForUpdatedSummary(
-            String currentSummary, List<MessageEntity> recentMessages) {
+            String currentSummary, List<MessageDto> recentMessages) {
         String systemPrompt = String.format(
                 SYSTEM_PROMPT_TEMPLATE,
                 currentSummary.isBlank() ? EMPTY_PROFILE_PLACEHOLDER : currentSummary,
@@ -157,15 +157,15 @@ public class MemoryProfileRefreshService {
     }
 
     /**
-     * 把消息列表拼成 LLM 可读的 user/assistant 段落。和 {@code PromptBuilder} 区别：
+     * 把消息列表拼成 LLM 可读的 user/小婉 段落。和 chat-core 的 {@code PromptBuilder} 区别：
      * PromptBuilder 输出 OpenAI 兼容的 message 数组（多段独立 system/user/assistant 消息）；
      * 这里要把整段对话塞进单条 system prompt，所以走纯文本拼接。
      */
-    private static String formatMessagesForPrompt(List<MessageEntity> messages) {
+    private static String formatMessagesForPrompt(List<MessageDto> messages) {
         StringBuilder sb = new StringBuilder();
-        for (MessageEntity m : messages) {
-            String role = SenderType.USER.equals(m.getSenderType()) ? "用户" : "小婉";
-            String content = m.getContent() == null ? "" : m.getContent();
+        for (MessageDto m : messages) {
+            String role = SenderType.USER.equalsIgnoreCase(m.senderType()) ? "用户" : "小婉";
+            String content = m.content() == null ? "" : m.content();
             sb.append(role).append("：").append(content).append("\n");
         }
         return sb.toString().trim();

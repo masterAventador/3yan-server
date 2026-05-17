@@ -52,13 +52,22 @@
             <artifactId>sanyan-memory-api</artifactId>
         </dependency>
         <!--
-            Plan 2 妥协依赖：引用 chat 的 MessageEntity / SenderType + PromptBuilder。
-            未来 Phase 5 把 sanyan-business 拆 -api/-core 后，本依赖改成只引 chat-api。
-            S3 Phase 3：LLM 调用已抽到 sanyan-llm-api（见下方），sanyan-business 只剩 chat 依赖。
+            S3 Phase 5：删除 Plan 2 时代的 sanyan-business 整包妥协依赖。
+
+            历史：Plan 2 时代 chat 域还在 sanyan-business 里，memory-core 需要访问
+            MessageEntity / MessageRepository / SenderType / PromptBuilder，只能整包依赖
+            sanyan-business（已在 enforcer 例外里登记）。
+
+            S3 Phase 5 拆出 sanyan-chat-api + sanyan-chat-core 后：
+            - memory-core 通过 sanyan-chat-api (ChatApi 契约 + MessageDto + SenderType + MessagePersistedEvent) 拿数据
+            - 不再需要看 chat 域的 internal 任何东西
+            - 不再需要看 sanyan-business 内的 PromptBuilder（memory-core 自己内联拼装 ChatMessage）
+
+            至此 Plan 2 妥协彻底结束，java-backend §3.3「跨模块不引 internal」铁律重新生效。
         -->
         <dependency>
             <groupId>com.sanyan</groupId>
-            <artifactId>sanyan-business</artifactId>
+            <artifactId>sanyan-chat-api</artifactId>
         </dependency>
 
         <!--
@@ -83,6 +92,20 @@
         <dependency>
             <groupId>com.sanyan</groupId>
             <artifactId>sanyan-common-cache</artifactId>
+        </dependency>
+
+        <!--
+            S3 Phase 5：删 sanyan-business 整包依赖后，这些原本经 business 传递的依赖必须直接声明：
+            - common-error：MemoryErrCode / BusinessException / ErrCode
+            - jackson-databind：MessageEmbeddingIndexListener / RagIndexWorker 序列化 ChunkIndexJob
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-common-error</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
 
         <!-- 主代码：JPA Entity + Repository -->
@@ -138,6 +161,20 @@
         <dependency>
             <groupId>com.sanyan</groupId>
             <artifactId>sanyan-common-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            S3 Phase 5：test scope 依赖 sanyan-business —— 只为拿到 db/migration 资源。
+            ChatEmbeddingRepositoryIT / MemoryRagSearchServiceIT 用 Flyway 跑 V1→V9（包含
+            CREATE EXTENSION vector + chat_embeddings 表 + ivfflat 索引），这些 SQL 当前仍在
+            sanyan-business/src/main/resources/db/migration/。
+
+            Phase 6 删 sanyan-business 时，会把 db/migration 资源移到 bootstrap 或拆到各域 -core，
+            届时本 test-scope 依赖随之删除。
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-business</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

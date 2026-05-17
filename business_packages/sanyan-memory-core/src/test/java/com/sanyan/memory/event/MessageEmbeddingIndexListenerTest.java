@@ -1,10 +1,10 @@
 package com.sanyan.memory.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sanyan.chat.ChatApi;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.chat.event.MessagePersistedEvent;
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.MessageRepository;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.rag.MemoryChunkBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +49,7 @@ import static org.mockito.Mockito.when;
 class MessageEmbeddingIndexListenerTest {
 
     @Mock
-    private MessageRepository messageRepository;
+    private ChatApi chatApi;
     @Mock
     private MemoryChunkBuilder chunkBuilder;
     @Mock
@@ -83,7 +83,7 @@ class MessageEmbeddingIndexListenerTest {
 
         verify(listOps).rightPush(PENDING_KEY, "500");
         // 不应查 message / build chunks / XADD
-        verify(messageRepository, never()).findAllById(any());
+        verify(chatApi, never()).findAllByIds(any());
         verify(chunkBuilder, never()).build(any());
         verify(streamOps, never()).add(eq(INDEX_QUEUE_KEY), any(Map.class));
     }
@@ -95,7 +95,7 @@ class MessageEmbeddingIndexListenerTest {
 
         listener.onMessagePersisted(event(500L));
 
-        verify(messageRepository, never()).findAllById(any());
+        verify(chatApi, never()).findAllByIds(any());
         verify(streamOps, never()).add(eq(INDEX_QUEUE_KEY), any(Map.class));
     }
 
@@ -110,8 +110,8 @@ class MessageEmbeddingIndexListenerTest {
         }
         when(listOps.range(PENDING_KEY, 0, size - 1)).thenReturn(popped);
 
-        List<MessageEntity> entities = buildMessageEntities(1000L, size);
-        when(messageRepository.findAllById(any())).thenReturn(entities);
+        List<MessageDto> entities = buildMessageEntities(1000L, size);
+        when(chatApi.findAllByIds(any())).thenReturn(entities);
 
         MemoryChunkBuilder.Chunk chunk = new MemoryChunkBuilder.Chunk(
                 List.of(1000L, 1001L, 1002L, 1003L, 1004L), "chunk-text", 80);
@@ -123,7 +123,7 @@ class MessageEmbeddingIndexListenerTest {
         // 清空累积 list
         verify(redis).delete(PENDING_KEY);
         // 拉取消息 → build chunks
-        verify(messageRepository).findAllById(any());
+        verify(chatApi).findAllByIds(any());
         verify(chunkBuilder).build(any());
         // 每个 chunk XADD 一次
         ArgumentCaptor<Map<String, String>> mapCaptor = ArgumentCaptor.forClass(Map.class);
@@ -152,7 +152,7 @@ class MessageEmbeddingIndexListenerTest {
             popped.add(String.valueOf(2000L + i));
         }
         when(listOps.range(PENDING_KEY, 0, size - 1)).thenReturn(popped);
-        when(messageRepository.findAllById(any())).thenReturn(buildMessageEntities(2000L, size));
+        when(chatApi.findAllByIds(any())).thenReturn(buildMessageEntities(2000L, size));
 
         // 2 个 chunks
         MemoryChunkBuilder.Chunk c1 = new MemoryChunkBuilder.Chunk(List.of(2000L, 2001L, 2002L, 2003L, 2004L), "c1", 50);
@@ -173,7 +173,7 @@ class MessageEmbeddingIndexListenerTest {
         listener.onMessagePersisted(event(500L));
 
         verify(redis).delete(PENDING_KEY);
-        verify(messageRepository, never()).findAllById(any());
+        verify(chatApi, never()).findAllByIds(any());
         verify(streamOps, never()).add(eq(INDEX_QUEUE_KEY), any(Map.class));
     }
 
@@ -186,7 +186,7 @@ class MessageEmbeddingIndexListenerTest {
             popped.add(String.valueOf(3000L + i));
         }
         lenient().when(listOps.range(PENDING_KEY, 0, size - 1)).thenReturn(popped);
-        lenient().when(messageRepository.findAllById(any())).thenReturn(buildMessageEntities(3000L, size));
+        lenient().when(chatApi.findAllByIds(any())).thenReturn(buildMessageEntities(3000L, size));
         lenient().when(chunkBuilder.build(any())).thenReturn(List.of());
 
         listener.onMessagePersisted(event(3009L));
@@ -198,15 +198,15 @@ class MessageEmbeddingIndexListenerTest {
         return new MessagePersistedEvent(messageId, USER_ID, CHARACTER_ID, SenderType.USER);
     }
 
-    private static List<MessageEntity> buildMessageEntities(long startId, int count) {
-        List<MessageEntity> list = new ArrayList<>();
+    private static List<MessageDto> buildMessageEntities(long startId, int count) {
+        List<MessageDto> list = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            MessageEntity m = new MessageEntity();
-            m.setId(startId + i);
-            m.setUserId(USER_ID);
-            m.setSenderType(i % 2 == 0 ? SenderType.USER : SenderType.AI);
-            m.setContent("msg-" + (startId + i));
-            list.add(m);
+            list.add(new MessageDto(
+                    startId + i,
+                    USER_ID,
+                    i % 2 == 0 ? SenderType.USER : SenderType.AI,
+                    "msg-" + (startId + i),
+                    null));
         }
         return list;
     }

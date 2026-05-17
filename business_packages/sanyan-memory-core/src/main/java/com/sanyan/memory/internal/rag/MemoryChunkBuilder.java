@@ -1,6 +1,6 @@
 package com.sanyan.memory.internal.rag;
 
-import com.sanyan.chat.internal.MessageEntity;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.memory.MemoryConstants;
 import org.springframework.stereotype.Component;
 
@@ -31,16 +31,16 @@ public class MemoryChunkBuilder {
      * @param messages 已按时间升序排好的消息列表（同一 user / character）
      * @return 切片结果；输入 null / 少于 min 时返回空 list
      */
-    public List<Chunk> build(List<MessageEntity> messages) {
+    public List<Chunk> build(List<MessageDto> messages) {
         if (messages == null || messages.size() < MemoryConstants.RAG_CHUNK_MIN_SIZE) {
             return List.of();
         }
         List<Chunk> result = new ArrayList<>();
-        List<MessageEntity> current = new ArrayList<>();
+        List<MessageDto> current = new ArrayList<>();
         int currentTokens = 0;
 
-        for (MessageEntity msg : messages) {
-            int msgTokens = estimateTokens(msg.getContent());
+        for (MessageDto msg : messages) {
+            int msgTokens = estimateTokens(msg.content());
             // 决定是否在加入本条之前先 flush current chunk
             boolean exceedsSize = current.size() >= MemoryConstants.RAG_CHUNK_MAX_SIZE;
             boolean exceedsTokens = currentTokens + msgTokens > MemoryConstants.RAG_CHUNK_MAX_TOKEN
@@ -62,12 +62,12 @@ public class MemoryChunkBuilder {
         return result;
     }
 
-    private static Chunk toChunk(List<MessageEntity> msgs) {
-        List<Long> ids = msgs.stream().map(MessageEntity::getId).toList();
+    private static Chunk toChunk(List<MessageDto> msgs) {
+        List<Long> ids = msgs.stream().map(MessageDto::id).toList();
         String text = msgs.stream()
-                .map(m -> m.getSenderType() + ": " + m.getContent())
+                .map(m -> m.senderType() + ": " + m.content())
                 .collect(Collectors.joining("\n"));
-        int tokens = msgs.stream().mapToInt(m -> estimateTokens(m.getContent())).sum();
+        int tokens = msgs.stream().mapToInt(m -> estimateTokens(m.content())).sum();
         return new Chunk(ids, text, tokens);
     }
 

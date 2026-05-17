@@ -1,9 +1,9 @@
 package com.sanyan.memory.event;
 
+import com.sanyan.chat.ChatApi;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.chat.event.MessagePersistedEvent;
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.MessageRepository;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.cache.KvCache;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.profile.MemoryProfileRefreshService;
@@ -13,7 +13,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -22,6 +21,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -52,7 +52,7 @@ class UserMessageProfileRefreshListenerTest {
     @Mock
     private MemoryProfileRefreshService refreshService;
     @Mock
-    private MessageRepository messageRepository;
+    private ChatApi chatApi;
     @Mock
     private KvCache kvCache;
 
@@ -66,20 +66,20 @@ class UserMessageProfileRefreshListenerTest {
     @Test
     void onMessagePersisted_userRole_throttleAcquired_triggersRefresh() {
         when(kvCache.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        List<MessageEntity> recentDesc = buildMessagesDesc(MESSAGE_ID,
+        List<MessageDto> recentDesc = buildMessagesDesc(MESSAGE_ID,
                 UserMessageProfileRefreshListener.RECENT_MESSAGES_FOR_REFRESH);
-        when(messageRepository.findByUserIdOrderByIdDesc(eq(USER_ID), any(Pageable.class)))
+        when(chatApi.listRecentByUser(eq(USER_ID), anyInt()))
                 .thenReturn(recentDesc);
 
         listener.onMessagePersisted(userEvent(MESSAGE_ID));
 
         // Refresh 收到的应是时间正序（id 升序）
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<MessageEntity>> captor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<MessageDto>> captor = ArgumentCaptor.forClass(List.class);
         verify(refreshService).refresh(eq(USER_ID), eq(CHARACTER_ID), captor.capture());
-        List<MessageEntity> passed = captor.getValue();
+        List<MessageDto> passed = captor.getValue();
         assertThat(passed).hasSize(UserMessageProfileRefreshListener.RECENT_MESSAGES_FOR_REFRESH);
-        assertThat(passed.get(0).getId()).isLessThan(passed.get(passed.size() - 1).getId());
+        assertThat(passed.get(0).id()).isLessThan(passed.get(passed.size() - 1).id());
     }
 
     @Test
@@ -87,7 +87,7 @@ class UserMessageProfileRefreshListenerTest {
         listener.onMessagePersisted(new MessagePersistedEvent(MESSAGE_ID, USER_ID, CHARACTER_ID, SenderType.AI));
 
         verify(kvCache, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
-        verify(messageRepository, never()).findByUserIdOrderByIdDesc(anyLong(), any(Pageable.class));
+        verify(chatApi, never()).listRecentByUser(anyLong(), anyInt());
         verify(refreshService, never()).refresh(anyLong(), anyLong(), anyList());
     }
 
@@ -97,7 +97,7 @@ class UserMessageProfileRefreshListenerTest {
 
         listener.onMessagePersisted(userEvent(MESSAGE_ID));
 
-        verify(messageRepository, never()).findByUserIdOrderByIdDesc(anyLong(), any(Pageable.class));
+        verify(chatApi, never()).listRecentByUser(anyLong(), anyInt());
         verify(refreshService, never()).refresh(anyLong(), anyLong(), anyList());
     }
 
@@ -120,23 +120,21 @@ class UserMessageProfileRefreshListenerTest {
     @Test
     void onMessagePersisted_requestsRecentNMessages() {
         when(kvCache.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        when(messageRepository.findByUserIdOrderByIdDesc(eq(USER_ID), any(Pageable.class)))
+        when(chatApi.listRecentByUser(eq(USER_ID), anyInt()))
                 .thenReturn(Collections.emptyList());
 
         listener.onMessagePersisted(userEvent(MESSAGE_ID));
 
-        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(messageRepository).findByUserIdOrderByIdDesc(eq(USER_ID), pageableCaptor.capture());
-        Pageable pageable = pageableCaptor.getValue();
-        assertThat(pageable.getPageNumber()).isEqualTo(0);
-        assertThat(pageable.getPageSize())
+        ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(chatApi).listRecentByUser(eq(USER_ID), limitCaptor.capture());
+        assertThat(limitCaptor.getValue())
                 .isEqualTo(UserMessageProfileRefreshListener.RECENT_MESSAGES_FOR_REFRESH);
     }
 
     @Test
     void onMessagePersisted_swallowsRefreshException_doesNotThrow() {
         when(kvCache.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        when(messageRepository.findByUserIdOrderByIdDesc(eq(USER_ID), any(Pageable.class)))
+        when(chatApi.listRecentByUser(eq(USER_ID), anyInt()))
                 .thenReturn(buildMessagesDesc(MESSAGE_ID,
                         UserMessageProfileRefreshListener.RECENT_MESSAGES_FOR_REFRESH));
         when(refreshService.refresh(anyLong(), anyLong(), anyList()))
@@ -152,7 +150,7 @@ class UserMessageProfileRefreshListenerTest {
     void onMessagePersisted_userRoleCaseInsensitive() {
         // role 字段大写也应被识别为 user（防御性匹配）
         when(kvCache.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        when(messageRepository.findByUserIdOrderByIdDesc(eq(USER_ID), any(Pageable.class)))
+        when(chatApi.listRecentByUser(eq(USER_ID), anyInt()))
                 .thenReturn(Collections.emptyList());
 
         listener.onMessagePersisted(new MessagePersistedEvent(MESSAGE_ID, USER_ID, CHARACTER_ID, "USER"));
@@ -166,16 +164,16 @@ class UserMessageProfileRefreshListenerTest {
         return new MessagePersistedEvent(messageId, USER_ID, CHARACTER_ID, SenderType.USER);
     }
 
-    /** 构造按 id 降序的消息列表（模拟 Repository.findByUserIdOrderByIdDesc 的返回顺序）。 */
-    private static List<MessageEntity> buildMessagesDesc(long latestId, int count) {
-        List<MessageEntity> list = new ArrayList<>();
+    /** 构造按 id 降序的消息列表（模拟 ChatApi.listRecentByUser 的返回顺序）。 */
+    private static List<MessageDto> buildMessagesDesc(long latestId, int count) {
+        List<MessageDto> list = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            MessageEntity m = new MessageEntity();
-            m.setId(latestId - i);
-            m.setUserId(USER_ID);
-            m.setSenderType(i % 2 == 0 ? SenderType.USER : SenderType.AI);
-            m.setContent("msg-" + (latestId - i));
-            list.add(m);
+            list.add(new MessageDto(
+                    latestId - i,
+                    USER_ID,
+                    i % 2 == 0 ? SenderType.USER : SenderType.AI,
+                    "msg-" + (latestId - i),
+                    null));
         }
         return list;
     }
