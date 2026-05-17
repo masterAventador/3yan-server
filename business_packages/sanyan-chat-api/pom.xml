@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-chat-api</artifactId>
+    <name>sanyan-chat-api</name>
+    <packaging>jar</packaging>
+
+    <!--
+        S3 Phase 5：chat 域对内契约。
+        含 ChatApi 接口 + SenderType 常量类 + MessageDto record + event/MessagePersistedEvent record。
+        零依赖（纯 JDK）。
+    -->
+    <dependencies>
+        <!-- 故意为空：-api 只含接口 + DTO + 事件 -->
+    </dependencies>
+</project>

@@ -1,9 +1,9 @@
 package com.sanyan.memory.internal.summary;
 
+import com.sanyan.chat.ChatApi;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.chat.event.MessagePersistedEvent;
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.MessageRepository;
-import com.sanyan.chat.internal.SenderType;
 import com.sanyan.common.cache.KvCache;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.summary.fixtures.MemorySummaryTestFixtures;
@@ -55,7 +55,7 @@ class SummarySchedulerTest {
     @Mock
     private MemorySummaryService summaryService;
     @Mock
-    private MessageRepository messageRepository;
+    private ChatApi chatApi;
     @Mock
     private KvCache kvCache;
 
@@ -77,7 +77,7 @@ class SummarySchedulerTest {
         when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
                 .thenReturn(Optional.of(summaryEndingAt(100L)));
         // 自上次摘要以来新消息只有 10 条 (< 30)
-        when(messageRepository.countByUserIdAndIdGreaterThan(USER_ID, 100L)).thenReturn(10L);
+        when(chatApi.countSinceMessageId(USER_ID, 100L)).thenReturn(10L);
 
         scheduler.onMessagePersisted(eventForMessage(101L));
 
@@ -91,7 +91,7 @@ class SummarySchedulerTest {
         // 自上次摘要以来累积 29 条 —— 边界：阈值是 ≥ 30，29 不触发
         when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
                 .thenReturn(Optional.of(summaryEndingAt(100L)));
-        when(messageRepository.countByUserIdAndIdGreaterThan(USER_ID, 100L)).thenReturn(29L);
+        when(chatApi.countSinceMessageId(USER_ID, 100L)).thenReturn(29L);
 
         scheduler.onMessagePersisted(eventForMessage(129L));
 
@@ -105,10 +105,10 @@ class SummarySchedulerTest {
         // 自上次摘要以来累积 30 条 —— 边界：阈值 ≥ 30，30 触发
         when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
                 .thenReturn(Optional.of(summaryEndingAt(100L)));
-        when(messageRepository.countByUserIdAndIdGreaterThan(USER_ID, 100L))
+        when(chatApi.countSinceMessageId(USER_ID, 100L))
                 .thenReturn((long) MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
-        List<MessageEntity> newMessages = buildMessages(101L, MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
-        when(messageRepository.findByUserIdAndIdGreaterThanOrderByIdAsc(USER_ID, 100L))
+        List<MessageDto> newMessages = buildMessages(101L, MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
+        when(chatApi.listSinceMessageId(USER_ID, 100L))
                 .thenReturn(newMessages);
         when(summaryService.summarize(newMessages)).thenReturn("阈值摘要内容");
 
@@ -131,9 +131,9 @@ class SummarySchedulerTest {
         givenLockAcquired();
         when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
                 .thenReturn(Optional.of(summaryEndingAt(50L)));
-        when(messageRepository.countByUserIdAndIdGreaterThan(USER_ID, 50L)).thenReturn(35L);
-        List<MessageEntity> newMessages = buildMessages(51L, 35);
-        when(messageRepository.findByUserIdAndIdGreaterThanOrderByIdAsc(USER_ID, 50L))
+        when(chatApi.countSinceMessageId(USER_ID, 50L)).thenReturn(35L);
+        List<MessageDto> newMessages = buildMessages(51L, 35);
+        when(chatApi.listSinceMessageId(USER_ID, 50L))
                 .thenReturn(newMessages);
         when(summaryService.summarize(newMessages)).thenReturn("超阈值摘要");
 
@@ -153,17 +153,17 @@ class SummarySchedulerTest {
         // 没有历史 summary —— sinceMessageId 应回退到 0
         when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
                 .thenReturn(Optional.empty());
-        when(messageRepository.countByUserIdAndIdGreaterThan(USER_ID, 0L))
+        when(chatApi.countSinceMessageId(USER_ID, 0L))
                 .thenReturn((long) MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
-        List<MessageEntity> allMessages = buildMessages(1L, MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
-        when(messageRepository.findByUserIdAndIdGreaterThanOrderByIdAsc(USER_ID, 0L))
+        List<MessageDto> allMessages = buildMessages(1L, MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
+        when(chatApi.listSinceMessageId(USER_ID, 0L))
                 .thenReturn(allMessages);
         when(summaryService.summarize(allMessages)).thenReturn("首次摘要");
 
         scheduler.onMessagePersisted(eventForMessage(30L));
 
-        verify(messageRepository).countByUserIdAndIdGreaterThan(USER_ID, 0L);
-        verify(messageRepository).findByUserIdAndIdGreaterThanOrderByIdAsc(USER_ID, 0L);
+        verify(chatApi).countSinceMessageId(USER_ID, 0L);
+        verify(chatApi).listSinceMessageId(USER_ID, 0L);
         verify(summaryService).summarize(allMessages);
         ArgumentCaptor<MemorySummaryEntity> captor = ArgumentCaptor.forClass(MemorySummaryEntity.class);
         verify(summaryRepository).save(captor.capture());
@@ -177,10 +177,10 @@ class SummarySchedulerTest {
         // summarize 抛异常 —— listener 必须吞掉，不能影响主对话
         when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
                 .thenReturn(Optional.of(summaryEndingAt(100L)));
-        when(messageRepository.countByUserIdAndIdGreaterThan(USER_ID, 100L))
+        when(chatApi.countSinceMessageId(USER_ID, 100L))
                 .thenReturn((long) MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
-        List<MessageEntity> newMessages = buildMessages(101L, MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
-        when(messageRepository.findByUserIdAndIdGreaterThanOrderByIdAsc(USER_ID, 100L))
+        List<MessageDto> newMessages = buildMessages(101L, MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
+        when(chatApi.listSinceMessageId(USER_ID, 100L))
                 .thenReturn(newMessages);
         when(summaryService.summarize(newMessages))
                 .thenThrow(new RuntimeException("LLM 调用失败"));
@@ -208,7 +208,7 @@ class SummarySchedulerTest {
                 .thenReturn(false);
         when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
                 .thenReturn(Optional.of(summaryEndingAt(100L)));
-        when(messageRepository.countByUserIdAndIdGreaterThan(USER_ID, 100L)).thenReturn(5L);
+        when(chatApi.countSinceMessageId(USER_ID, 100L)).thenReturn(5L);
 
         // 第一次：正常评估（5 < 30 不触发 summarize，但走完整链路）
         scheduler.onMessagePersisted(eventForMessage(105L));
@@ -233,7 +233,7 @@ class SummarySchedulerTest {
         givenLockAcquired();
         when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
                 .thenReturn(Optional.of(summaryEndingAt(100L)));
-        when(messageRepository.countByUserIdAndIdGreaterThan(USER_ID, 100L)).thenReturn(10L);
+        when(chatApi.countSinceMessageId(USER_ID, 100L)).thenReturn(10L);
 
         scheduler.onMessagePersisted(eventForMessage(101L));
 
@@ -254,10 +254,10 @@ class SummarySchedulerTest {
         givenLockAcquired();
         when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
                 .thenReturn(Optional.of(summaryEndingAt(100L)));
-        when(messageRepository.countByUserIdAndIdGreaterThan(USER_ID, 100L))
+        when(chatApi.countSinceMessageId(USER_ID, 100L))
                 .thenReturn((long) MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
-        List<MessageEntity> newMessages = buildMessages(101L, MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
-        when(messageRepository.findByUserIdAndIdGreaterThanOrderByIdAsc(USER_ID, 100L))
+        List<MessageDto> newMessages = buildMessages(101L, MemoryConstants.SUMMARY_TRIGGER_THRESHOLD);
+        when(chatApi.listSinceMessageId(USER_ID, 100L))
                 .thenReturn(newMessages);
         when(summaryService.summarize(newMessages)).thenReturn("正常生成的摘要");
         when(summaryRepository.save(any(MemorySummaryEntity.class)))
@@ -283,15 +283,15 @@ class SummarySchedulerTest {
     }
 
     /** 构造 count 条连续 id 的消息（从 startId 开始递增）。 */
-    private static List<MessageEntity> buildMessages(long startId, int count) {
-        List<MessageEntity> list = new ArrayList<>();
+    private static List<MessageDto> buildMessages(long startId, int count) {
+        List<MessageDto> list = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            MessageEntity m = new MessageEntity();
-            m.setId(startId + i);
-            m.setUserId(USER_ID);
-            m.setSenderType(i % 2 == 0 ? SenderType.USER : SenderType.AI);
-            m.setContent("msg-" + (startId + i));
-            list.add(m);
+            list.add(new MessageDto(
+                    startId + i,
+                    USER_ID,
+                    i % 2 == 0 ? SenderType.USER : SenderType.AI,
+                    "msg-" + (startId + i),
+                    null));
         }
         return list;
     }

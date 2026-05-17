@@ -1,11 +1,12 @@
 package com.sanyan.memory.internal.profile;
 
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.SenderType;
+import com.sanyan.chat.SenderType;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.common.error.BusinessException;
-import com.sanyan.llm.internal.LLMProviderRouter;
-import com.sanyan.llm.internal.LLMTaskType;
-import com.sanyan.llm.internal.LlmErrCode;
+import com.sanyan.common.error.CommonErrCode;
+import com.sanyan.llm.LlmApi;
+import com.sanyan.llm.LlmTaskType;
+import com.sanyan.llm.dto.ChatMessage;
 import com.sanyan.memory.internal.MemoryErrCode;
 import com.sanyan.memory.internal.profile.fixtures.MemoryProfileTestFixtures;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,6 @@ import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,10 +52,10 @@ class MemoryProfileRefreshServiceTest {
     private MemoryProfileRepository repository;
 
     @Mock
-    private LLMProviderRouter llmRouter;
+    private LlmApi llmApi;
 
     private MemoryProfileRefreshService newService() {
-        return new MemoryProfileRefreshService(repository, llmRouter);
+        return new MemoryProfileRefreshService(repository, llmApi);
     }
 
     // ============ 正常路径 ============
@@ -66,7 +66,7 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("旧画像");
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
         when(repository.save(any(MemoryProfileEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn("用户名叫张三，前端工程师。");
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any())).thenReturn("用户名叫张三，前端工程师。");
 
         MemoryProfileEntity result = service.refresh(1L, 1L, buildMessages(3));
 
@@ -83,7 +83,7 @@ class MemoryProfileRefreshServiceTest {
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
         when(repository.save(any(MemoryProfileEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         // LLM 输出常带前后换行 / 空格，service 应 trim 后落库
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any()))
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any()))
                 .thenReturn("\n\n  用户喜欢猫。  \n");
 
         MemoryProfileEntity result = service.refresh(1L, 1L, buildMessages(3));
@@ -98,7 +98,7 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileRefreshService service = newService();
         when(repository.findByUserIdAndCharacterId(2L, 3L)).thenReturn(Optional.empty());
         when(repository.save(any(MemoryProfileEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn("首次画像。");
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any())).thenReturn("首次画像。");
 
         MemoryProfileEntity result = service.refresh(2L, 3L, buildMessages(3));
 
@@ -112,14 +112,14 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileRefreshService service = newService();
         when(repository.findByUserIdAndCharacterId(2L, 3L)).thenReturn(Optional.empty());
         when(repository.save(any(MemoryProfileEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn("画像内容");
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any())).thenReturn("画像内容");
 
         service.refresh(2L, 3L, buildMessages(3));
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), captor.capture());
-        String prompt = captor.getValue().get(0).get("content");
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.BACKGROUND), captor.capture());
+        String prompt = captor.getValue().get(0).content();
         assertThat(prompt)
                 .as("现有画像为空时，prompt 必须用 (暂无) 占位避免 LLM 看到孤零零的'现有画像：'")
                 .contains("（暂无）");
@@ -132,7 +132,7 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileRefreshService service = newService();
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("旧画像");
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn("   \n  ");
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any())).thenReturn("   \n  ");
 
         MemoryProfileEntity result = service.refresh(1L, 1L, buildMessages(3));
 
@@ -145,7 +145,7 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileRefreshService service = newService();
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("旧画像");
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn(null);
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any())).thenReturn(null);
 
         MemoryProfileEntity result = service.refresh(1L, 1L, buildMessages(3));
 
@@ -158,8 +158,8 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileRefreshService service = newService();
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("旧画像");
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any()))
-                .thenThrow(new BusinessException(LlmErrCode.LLM_UPSTREAM_UNAVAILABLE));
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any()))
+                .thenThrow(new BusinessException(CommonErrCode.INTERNAL_ERROR));
 
         MemoryProfileEntity result = service.refresh(1L, 1L, buildMessages(3));
 
@@ -176,7 +176,7 @@ class MemoryProfileRefreshServiceTest {
         assertThat(service.refresh(1L, 1L, null)).as("null 输入 → null").isNull();
         assertThat(service.refresh(1L, 1L, List.of())).as("空列表输入 → null").isNull();
         verify(repository, never()).findByUserIdAndCharacterId(any(), any());
-        verify(llmRouter, never()).chat(any(), any());
+        verify(llmApi, never()).chat(any(), any());
     }
 
     // ============ LLM 路由 / prompt 守护 ============
@@ -187,15 +187,15 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("旧画像");
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
         when(repository.save(any(MemoryProfileEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(llmRouter.chat(any(LLMTaskType.class), any())).thenReturn("new summary");
+        when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("new summary");
 
         service.refresh(1L, 1L, buildMessages(3));
 
-        ArgumentCaptor<LLMTaskType> taskTypeCaptor = ArgumentCaptor.forClass(LLMTaskType.class);
-        verify(llmRouter).chat(taskTypeCaptor.capture(), any());
+        ArgumentCaptor<LlmTaskType> taskTypeCaptor = ArgumentCaptor.forClass(LlmTaskType.class);
+        verify(llmApi).chat(taskTypeCaptor.capture(), any());
         assertThat(taskTypeCaptor.getValue())
                 .as("画像刷新属于后台任务，必须路由到 BACKGROUND（低成本模型）")
-                .isEqualTo(LLMTaskType.BACKGROUND);
+                .isEqualTo(LlmTaskType.BACKGROUND);
     }
 
     @Test
@@ -217,17 +217,18 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("张三是工程师");
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
         when(repository.save(any(MemoryProfileEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(llmRouter.chat(any(LLMTaskType.class), any())).thenReturn("new");
+        when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("new");
 
-        List<MessageEntity> messages = buildMessages(2);
-        messages.get(0).setContent("你好啊");
-        messages.get(1).setContent("好呀，吃了吗");
+        // MessageDto 是 record（不可变），用显式构造覆盖默认 content
+        List<MessageDto> messages = List.of(
+                new MessageDto(0L, 1L, SenderType.USER, "你好啊", null),
+                new MessageDto(1L, 1L, SenderType.AI, "好呀，吃了吗", null));
         service.refresh(1L, 1L, messages);
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmRouter).chat(eq(LLMTaskType.BACKGROUND), captor.capture());
-        String prompt = captor.getValue().get(0).get("content");
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.BACKGROUND), captor.capture());
+        String prompt = captor.getValue().get(0).content();
 
         assertThat(prompt).as("prompt 必须包含现有画像").contains("张三是工程师");
         assertThat(prompt).as("prompt 必须包含最近对话内容").contains("你好啊").contains("好呀，吃了吗");
@@ -241,7 +242,7 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileRefreshService service = newService();
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("旧画像");
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn("new summary");
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any())).thenReturn("new summary");
         when(repository.save(any(MemoryProfileEntity.class)))
                 .thenThrow(new OptimisticLockingFailureException("conflict 1"))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -258,7 +259,7 @@ class MemoryProfileRefreshServiceTest {
         MemoryProfileRefreshService service = newService();
         MemoryProfileEntity existing = MemoryProfileTestFixtures.profileWithSummary("旧画像");
         when(repository.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(existing));
-        when(llmRouter.chat(eq(LLMTaskType.BACKGROUND), any())).thenReturn("new summary");
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), any())).thenReturn("new summary");
         when(repository.save(any(MemoryProfileEntity.class)))
                 .thenThrow(new OptimisticLockingFailureException("conflict 1"))
                 .thenThrow(new OptimisticLockingFailureException("conflict 2"));
@@ -272,14 +273,15 @@ class MemoryProfileRefreshServiceTest {
 
     // ============ helpers ============
 
-    private static List<MessageEntity> buildMessages(int count) {
-        List<MessageEntity> messages = new ArrayList<>();
+    private static List<MessageDto> buildMessages(int count) {
+        List<MessageDto> messages = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            MessageEntity m = new MessageEntity();
-            m.setUserId(1L);
-            m.setSenderType(i % 2 == 0 ? SenderType.USER : SenderType.AI);
-            m.setContent(i % 2 == 0 ? "用户消息 " + i : "AI 回复 " + i);
-            messages.add(m);
+            messages.add(new MessageDto(
+                    (long) i,
+                    1L,
+                    i % 2 == 0 ? SenderType.USER : SenderType.AI,
+                    i % 2 == 0 ? "用户消息 " + i : "AI 回复 " + i,
+                    null));
         }
         return messages;
     }

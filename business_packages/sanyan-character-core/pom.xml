@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-character-core</artifactId>
+    <name>sanyan-character-core</name>
+    <packaging>jar</packaging>
+
+    <!--
+        S3 Phase 2：character 域实现模块。
+        - internal/ AiCharacterEntity + AiCharacterRepository + CharacterErrCode（从 sanyan-business 迁入）
+        - api/      CharacterApiImpl（实现 sanyan-character-api 的 CharacterApi）
+        依赖：本域 -api + foundation 必需项 + Spring Boot starters。
+        故意不引其他业务模块 —— character 域不依赖任何其他业务。
+    -->
+    <dependencies>
+        <!-- 本域 -api 契约 -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-api</artifactId></dependency>
+
+        <!-- foundation -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-error</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-web</artifactId></dependency>
+
+        <!-- Spring Boot 必备 -->
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
+        <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
+
+        <!-- 测试 -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

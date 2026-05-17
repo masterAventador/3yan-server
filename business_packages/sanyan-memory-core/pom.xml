@@ -21,10 +21,14 @@
 
         Task N0：补 junit-jupiter + assertj-core 用于 MemoryConstants 对齐铁律测试。
         Task N1：补 spring-boot-starter-data-jpa（Entity + Repository）+ Postgres driver + sanyan-common-test（Testcontainers PG）。
-        Task N2：补 sanyan-business（compile scope）——MemorySummaryService 需要调
-                 LLMProviderRouter + 引用 MessageEntity/SenderType/LLMTaskType。理由同上：
+        Task N2：补 sanyan-business（compile scope）——MemorySummaryService 需要
+                 引用 chat 域的 MessageEntity/SenderType + PromptBuilder。理由同上：
                  Plan 1 没把 chat 拆 -api/-core，所以现阶段只能整包依赖；Plan 3 拆完后改成
                  只依赖 sanyan-chat-api（拿到 MessageDto + LLM 路由契约）。
+
+        S3 Phase 3：LLM 路由从 sanyan-business 拆到 sanyan-llm-core，跨模块改走
+                    sanyan-llm-api 契约（LlmApi 接口 + LlmTaskType + ChatMessage），不再持有
+                    LLMProviderRouter。摘要 / profile 刷新两条链路都换成 LlmApi.chat。
 
         Task O4：补 sanyan-common-cache —— UserMessageProfileExtractListener 用 KvCache.setIfAbsent
                  做 5 分钟节流（同一 user/character 5 分钟内最多触发一次档案抽取）。
@@ -48,18 +52,60 @@
             <artifactId>sanyan-memory-api</artifactId>
         </dependency>
         <!--
-            Plan 2 妥协依赖：调 LLM router + 引用 chat 的 MessageEntity / SenderType。
-            未来 Plan 3 把 sanyan-business 拆 -api/-core 后，本依赖改成只引 chat-api / llm-api。
+            S3 Phase 5：删除 Plan 2 时代的 sanyan-business 整包妥协依赖。
+
+            历史：Plan 2 时代 chat 域还在 sanyan-business 里，memory-core 需要访问
+            MessageEntity / MessageRepository / SenderType / PromptBuilder，只能整包依赖
+            sanyan-business（已在 enforcer 例外里登记）。
+
+            S3 Phase 5 拆出 sanyan-chat-api + sanyan-chat-core 后：
+            - memory-core 通过 sanyan-chat-api (ChatApi 契约 + MessageDto + SenderType + MessagePersistedEvent) 拿数据
+            - 不再需要看 chat 域的 internal 任何东西
+            - 不再需要看 sanyan-business 内的 PromptBuilder（memory-core 自己内联拼装 ChatMessage）
+
+            至此 Plan 2 妥协彻底结束，java-backend §3.3「跨模块不引 internal」铁律重新生效。
         -->
         <dependency>
             <groupId>com.sanyan</groupId>
-            <artifactId>sanyan-business</artifactId>
+            <artifactId>sanyan-chat-api</artifactId>
+        </dependency>
+
+        <!--
+            S3 Phase 3：MemorySummaryService + MemoryProfileRefreshService 跨模块调 LLM
+            走 LlmApi 契约（不再直接持有 LLMProviderRouter）。
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-llm-api</artifactId>
+        </dependency>
+
+        <!--
+            S3 Phase 4：MemoryRagSearchService + MemoryEmbeddingService 跨模块调 embedding
+            走 EmbeddingApi 契约（取代 Plan 2 时代的 EmbeddingProvider，后者已删）。
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-embedding-api</artifactId>
         </dependency>
 
         <!-- O4：Redis 节流走 common-cache 的 KvCache（不直接碰 RedisTemplate） -->
         <dependency>
             <groupId>com.sanyan</groupId>
             <artifactId>sanyan-common-cache</artifactId>
+        </dependency>
+
+        <!--
+            S3 Phase 5：删 sanyan-business 整包依赖后，这些原本经 business 传递的依赖必须直接声明：
+            - common-error：MemoryErrCode / BusinessException / ErrCode
+            - jackson-databind：MessageEmbeddingIndexListener / RagIndexWorker 序列化 ChunkIndexJob
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-common-error</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
 
         <!-- 主代码：JPA Entity + Repository -->
@@ -117,6 +163,15 @@
             <artifactId>sanyan-common-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+            S3 Phase 6：sanyan-business 模块彻底删除。Flyway V*.sql 主副本已迁到
+            bootstrap/src/main/resources/db/migration/（生产 schema 归属 bootstrap）。
+            本模块 RAG IT（ChatEmbeddingRepositoryIT / MemoryRagSearchServiceIT）通过
+            spring.flyway.locations=classpath:db/migration 找 SQL，所以在
+            src/test/resources/db/migration/ 留一份**测试副本**——
+            副本而非引用，保持 memory-core 测试与其它模块资源完全解耦。
+            副本同步规则：生产 V*.sql 改动时，需要手动同步到本模块 test resources。
+        -->
     </dependencies>
 
     <build>

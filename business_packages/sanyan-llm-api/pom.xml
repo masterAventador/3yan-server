@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-llm-api</artifactId>
+    <name>sanyan-llm-api</name>
+    <packaging>jar</packaging>
+
+    <!--
+        S3 Phase 3：llm 域对内契约。
+        含 LlmApi 接口 + LlmTaskType enum + ChatMessage record。零依赖。
+        embedding 已独立成 sanyan-embedding-api（Phase 4），llm-api 不含 embedding 能力。
+    -->
+    <dependencies>
+        <!-- 故意为空：-api 只含接口 + DTO + 事件 -->
+    </dependencies>
+</project>

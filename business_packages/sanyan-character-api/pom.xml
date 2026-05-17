@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-character-api</artifactId>
+    <name>sanyan-character-api</name>
+    <packaging>jar</packaging>
+
+    <!--
+        S3 Phase 2：character 域对内契约。
+        只含 CharacterApi 接口 + AiCharacterDto record。零依赖。
+    -->
+    <dependencies>
+        <!-- 故意为空：-api 只含接口 + DTO + 事件，纯 Java，无依赖 -->
+    </dependencies>
+</project>

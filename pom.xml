@@ -23,7 +23,16 @@
         <module>foundation_packages/sanyan-common-util</module>
         <module>foundation_packages/sanyan-common-test</module>
         <module>foundation_packages/sanyan-common-ws</module>
-        <module>business_packages/sanyan-business</module>
+        <module>business_packages/sanyan-user-api</module>
+        <module>business_packages/sanyan-user-core</module>
+        <module>business_packages/sanyan-character-api</module>
+        <module>business_packages/sanyan-character-core</module>
+        <module>business_packages/sanyan-llm-api</module>
+        <module>business_packages/sanyan-llm-core</module>
+        <module>business_packages/sanyan-embedding-api</module>
+        <module>business_packages/sanyan-embedding-core</module>
+        <module>business_packages/sanyan-chat-api</module>
+        <module>business_packages/sanyan-chat-core</module>
         <module>business_packages/sanyan-memory-api</module>
         <module>business_packages/sanyan-memory-core</module>
         <module>bootstrap</module>
@@ -47,9 +56,18 @@
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-util</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-ws</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-business</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-api</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-user-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-user-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-core</artifactId><version>${project.version}</version></dependency>
 
             <!-- 第三方库锁版本 -->
             <dependency>
@@ -103,7 +121,7 @@
         </pluginManagement>
 
         <plugins>
-            <!-- 全模块强制校验 Maven / Java 版本 -->
+            <!-- 全模块强制校验 Maven / Java 版本 + -core 互斥 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
@@ -119,6 +137,34 @@
                                 <requireJavaVersion>
                                     <version>17</version>
                                 </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                    <!--
+                        S3 Phase 7：跟 ArchitectureTest 形成双层守护。
+                        ArchUnit 抓"代码引了不该引的 internal 类"（测试期 mvn test）；
+                        本规则抓"pom 声明了不该声明的模块依赖"（构建期 mvn validate，fail-fast）。
+
+                        规则：任何 com.sanyan:*-core 不允许出现在依赖图里——
+                          - 子模块编译时 ${project.artifactId} 自动展开为自己的 artifactId，
+                            includes 等于"豁免自身依赖自身"的语法兜底（实际不会有人这么写）
+                          - 真正生效的语义是：本模块不允许依赖任何其他 -core
+                          - bootstrap 必须依赖所有 -core 装配 fat jar，所以在 bootstrap/pom.xml
+                            里通过 <phase>none</phase> 跳过本 execution
+                    -->
+                    <execution>
+                        <id>enforce-no-cross-core-dep</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>com.sanyan:*-core</exclude>
+                                    </excludes>
+                                    <includes>
+                                        <include>com.sanyan:${project.artifactId}</include>
+                                    </includes>
+                                </bannedDependencies>
                             </rules>
                         </configuration>
                     </execution>

@@ -1,9 +1,9 @@
 package com.sanyan.memory.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sanyan.chat.ChatApi;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.chat.event.MessagePersistedEvent;
-import com.sanyan.chat.internal.MessageEntity;
-import com.sanyan.chat.internal.MessageRepository;
 import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.internal.rag.MemoryChunkBuilder;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +32,7 @@ import java.util.Map;
  *   <li><b>累积模型</b>：每条消息按 {@code pending:userId:characterId} key push 到 Redis list；
  *       累积量 &lt; {@link MemoryConstants#RAG_CHUNK_MIN_SIZE} 直接返回；累积量 &ge;
  *       {@link MemoryConstants#RAG_CHUNK_MAX_SIZE} 时一次性把 pending list 全部 pop 出来，
- *       回查 {@link MessageRepository#findAllById} 拿原始消息，按 id 升序排，交给
+ *       通过 {@link ChatApi#findAllByIds} 回查原始消息，按 id 升序排，交给
  *       {@link MemoryChunkBuilder#build} 切片，每个 chunk 序列化成 {@link ChunkIndexJob}
  *       XADD 到 stream</li>
  *   <li><b>消息内容不放 Redis</b>：只存 message id 到 pending list，避免 Redis 占用过多内存；
@@ -64,7 +65,7 @@ public class MessageEmbeddingIndexListener {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final MessageRepository messageRepository;
+    private final ChatApi chatApi;
     private final MemoryChunkBuilder chunkBuilder;
     private final StringRedisTemplate redis;
 
@@ -93,8 +94,11 @@ public class MessageEmbeddingIndexListener {
             List<Long> ids = popped.stream().map(Long::valueOf).toList();
 
             // 3) 回查原始消息，按 id 升序排（保证 chunk 内时间正序）
-            List<MessageEntity> messages = messageRepository.findAllById(ids);
-            messages.sort(Comparator.comparing(MessageEntity::getId));
+            // ChatApi.findAllByIds 返回不可变 List，sort 前必须拷成可变 List
+            // ChatApi.findAllByIds 返回不可变 List（MessageDtoMapper.toDtos 用 stream.toList()），
+            // 后续 sort 需要可变 List，因此 wrap 一次
+            List<MessageDto> messages = new ArrayList<>(chatApi.findAllByIds(ids));
+            messages.sort(Comparator.comparing(MessageDto::id));
 
             // 4) 切 chunks → XADD 到 stream
             List<MemoryChunkBuilder.Chunk> chunks = chunkBuilder.build(messages);

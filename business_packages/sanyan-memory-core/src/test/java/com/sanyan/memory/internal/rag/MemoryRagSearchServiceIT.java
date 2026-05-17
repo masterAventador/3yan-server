@@ -2,7 +2,7 @@ package com.sanyan.memory.internal.rag;
 
 import com.sanyan.common.test.PostgresTestcontainerSupport;
 import com.sanyan.common.test.TestApplication;
-import com.sanyan.llm.internal.EmbeddingProvider;
+import com.sanyan.embedding.EmbeddingApi;
 import com.sanyan.memory.dto.MemoryFragment;
 import com.sanyan.memory.MemoryConstants;
 import org.junit.jupiter.api.Test;
@@ -33,7 +33,7 @@ import static org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTest
  * <p>测试套路：
  * <ul>
  *   <li>用受控的简单向量（2 维，便于推算相似度）插入若干 chunks</li>
- *   <li>Mock {@link EmbeddingProvider} 返回已知 query 向量</li>
+ *   <li>Mock {@link EmbeddingApi} 返回已知 query 向量</li>
  *   <li>断言返回的 {@link MemoryFragment} 顺序 / 数量 / 相似度落在预期</li>
  * </ul>
  *
@@ -41,7 +41,7 @@ import static org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTest
  * 输入，只要写入 / 查询时维度一致即可（IT 这里 query 和 stored chunk 都用 1024 维，
  * 但只在前两个分量上做差异化设计，其余补 0，相似度按前两个分量主导）。
  *
- * <p>{@code @MockBean} 替换 EmbeddingProvider：M2c 的 RemoteBgeM3Provider 是 @Component
+ * <p>{@code @MockBean} 替换 EmbeddingApi：真实实现（SiliconFlowEmbeddingProvider 委托）是 @Component
  * 但需要 RestClient + retry 配置，启动太重，本 IT 只关心 service → repo 的 SQL 链路。
  *
  * <p>本 IT 跟 {@link ChatEmbeddingRepositoryIT} 共用同一个 Testcontainer + 同一套 Flyway 配置。
@@ -67,7 +67,7 @@ class MemoryRagSearchServiceIT extends PostgresTestcontainerSupport {
     }
 
     @MockBean
-    private EmbeddingProvider embeddingProvider;
+    private EmbeddingApi embeddingApi;
 
     @Autowired
     private ChatEmbeddingRepository repository;
@@ -107,7 +107,7 @@ class MemoryRagSearchServiceIT extends PostgresTestcontainerSupport {
         repository.flush();
 
         // Mock query 向量 = [1, 0, 0, ...]
-        when(embeddingProvider.embed(anyList())).thenReturn(List.of(vec2d(1f, 0f)));
+        when(embeddingApi.embed(anyList())).thenReturn(List.of(vec2d(1f, 0f)));
 
         List<MemoryFragment> result = service.search(1L, 1L, "再聊聊猫");
 
@@ -137,7 +137,7 @@ class MemoryRagSearchServiceIT extends PostgresTestcontainerSupport {
         }
         repository.flush();
 
-        when(embeddingProvider.embed(anyList())).thenReturn(List.of(vec2d(1f, 0f)));
+        when(embeddingApi.embed(anyList())).thenReturn(List.of(vec2d(1f, 0f)));
 
         List<MemoryFragment> result = service.search(2L, 1L, "test");
 
@@ -156,7 +156,7 @@ class MemoryRagSearchServiceIT extends PostgresTestcontainerSupport {
         insertChunk(11L, 1L, "user11-char1 高相关", vec2d(1f, 0f));
         repository.flush();
 
-        when(embeddingProvider.embed(anyList())).thenReturn(List.of(vec2d(1f, 0f)));
+        when(embeddingApi.embed(anyList())).thenReturn(List.of(vec2d(1f, 0f)));
 
         List<MemoryFragment> result = service.search(10L, 1L, "test");
 
@@ -166,7 +166,7 @@ class MemoryRagSearchServiceIT extends PostgresTestcontainerSupport {
 
     @Test
     void search_shouldReturnEmptyWhenNoChunksExist() {
-        when(embeddingProvider.embed(anyList())).thenReturn(List.of(vec2d(1f, 0f)));
+        when(embeddingApi.embed(anyList())).thenReturn(List.of(vec2d(1f, 0f)));
 
         List<MemoryFragment> result = service.search(999L, 999L, "test");
 
