@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +95,9 @@ public class MessageEmbeddingIndexListener {
 
             // 3) 回查原始消息，按 id 升序排（保证 chunk 内时间正序）
             // ChatApi.findAllByIds 返回不可变 List，sort 前必须拷成可变 List
-            List<MessageDto> messages = new java.util.ArrayList<>(chatApi.findAllByIds(ids));
+            // ChatApi.findAllByIds 返回不可变 List（MessageDtoMapper.toDtos 用 stream.toList()），
+            // 后续 sort 需要可变 List，因此 wrap 一次
+            List<MessageDto> messages = new ArrayList<>(chatApi.findAllByIds(ids));
             messages.sort(Comparator.comparing(MessageDto::id));
 
             // 4) 切 chunks → XADD 到 stream

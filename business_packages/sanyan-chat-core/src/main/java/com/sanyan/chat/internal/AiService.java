@@ -40,8 +40,9 @@ import java.util.Map;
  * </ol>
  *
  * <p>S3 Phase 3 重构：跨模块调 LLM 走 {@link LlmApi} 契约（不再直接持 LLMProviderRouter）。
- * PromptBuilder 仍在 sanyan-business（Phase 5 才搬 chat-core），所以本类继续用其输出的
- * {@code List<Map<String,String>>}，最后转一次 {@code List<ChatMessage>} 喂给 LlmApi。
+ * S3 Phase 5：PromptBuilder 与本类一起搬到 sanyan-chat-core/internal/，仍输出
+ * {@code List<Map<String,String>>}（历史 OpenAI 兼容形态），本类把它转成 {@code List<ChatMessage>}
+ * 喂给 LlmApi。未来可考虑让 PromptBuilder 直接返回 {@code List<ChatMessage>} 省一次转换。
  *
  * <p>Q3 task 改动：
  * <ul>

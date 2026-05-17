@@ -23,11 +23,14 @@ import static org.mockito.Mockito.when;
 /**
  * Plan 2 Task N2：MemorySummaryService 单元测试（Q3 适配新签名）。
  *
- * <p>Q3 task 改动：router 签名变更为 {@code chat(taskType, openAiMessages)}，service 通过
- * 真实 {@link PromptBuilder}（无状态 + 纯函数，可直接 new）拼好 messages 后传给 router。
+ * <p>Q3 task 改动：router 签名变更为 {@code chat(taskType, openAiMessages)}，service 拼好
+ * messages 后传给 router。
  *
  * <p>S3 Phase 3 重构：mock {@link LlmApi} 取代 LLMProviderRouter；captor 类型相应改为
  * {@code List<ChatMessage>}。
+ *
+ * <p>S3 Phase 5 重构：service 不再依赖共享 PromptBuilder（已留在 chat-core/internal/），
+ * 内联拼装 system prompt + history 形式的 {@code List<ChatMessage>}。
  *
  * <p>验证：
  * <ul>
@@ -36,7 +39,7 @@ import static org.mockito.Mockito.when;
  *   <li>system prompt 模板必须包含关键约束词："小婉"、"100-200 字"、"对话纪要"——
  *       这些是产品定义的硬要求，prompt 改动出错时测试要能 catch 住</li>
  *   <li>service 返回值必须直接是 router 返回的 LLM 输出（service 不应对 LLM 输出做任何加工）</li>
- *   <li>PromptBuilder 输出的 messages 第一条必须是 system role + SYSTEM_PROMPT 内容</li>
+ *   <li>service 内联拼装的 messages 第一条必须是 system role + SYSTEM_PROMPT 内容</li>
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
@@ -67,7 +70,7 @@ class MemorySummaryServiceTest {
     }
 
     @Test
-    void summarize_shouldPassMessagesViaPromptBuilder() {
+    void summarize_shouldSendSystemPromptPlusHistoryToLlm() {
         List<MessageDto> messages = buildFixtureMessages(30);
         when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("摘要内容");
 

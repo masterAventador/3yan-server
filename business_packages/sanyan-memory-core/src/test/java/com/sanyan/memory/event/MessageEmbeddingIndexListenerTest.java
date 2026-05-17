@@ -110,8 +110,8 @@ class MessageEmbeddingIndexListenerTest {
         }
         when(listOps.range(PENDING_KEY, 0, size - 1)).thenReturn(popped);
 
-        List<MessageDto> entities = buildMessageEntities(1000L, size);
-        when(chatApi.findAllByIds(any())).thenReturn(entities);
+        List<MessageDto> dtos = buildMessageDtos(1000L, size);
+        when(chatApi.findAllByIds(any())).thenReturn(dtos);
 
         MemoryChunkBuilder.Chunk chunk = new MemoryChunkBuilder.Chunk(
                 List.of(1000L, 1001L, 1002L, 1003L, 1004L), "chunk-text", 80);
@@ -152,7 +152,7 @@ class MessageEmbeddingIndexListenerTest {
             popped.add(String.valueOf(2000L + i));
         }
         when(listOps.range(PENDING_KEY, 0, size - 1)).thenReturn(popped);
-        when(chatApi.findAllByIds(any())).thenReturn(buildMessageEntities(2000L, size));
+        when(chatApi.findAllByIds(any())).thenReturn(buildMessageDtos(2000L, size));
 
         // 2 个 chunks
         MemoryChunkBuilder.Chunk c1 = new MemoryChunkBuilder.Chunk(List.of(2000L, 2001L, 2002L, 2003L, 2004L), "c1", 50);
@@ -186,7 +186,7 @@ class MessageEmbeddingIndexListenerTest {
             popped.add(String.valueOf(3000L + i));
         }
         lenient().when(listOps.range(PENDING_KEY, 0, size - 1)).thenReturn(popped);
-        lenient().when(chatApi.findAllByIds(any())).thenReturn(buildMessageEntities(3000L, size));
+        lenient().when(chatApi.findAllByIds(any())).thenReturn(buildMessageDtos(3000L, size));
         lenient().when(chunkBuilder.build(any())).thenReturn(List.of());
 
         listener.onMessagePersisted(event(3009L));
@@ -198,7 +198,7 @@ class MessageEmbeddingIndexListenerTest {
         return new MessagePersistedEvent(messageId, USER_ID, CHARACTER_ID, SenderType.USER);
     }
 
-    private static List<MessageDto> buildMessageEntities(long startId, int count) {
+    private static List<MessageDto> buildMessageDtos(long startId, int count) {
         List<MessageDto> list = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             list.add(new MessageDto(

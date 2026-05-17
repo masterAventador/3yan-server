@@ -31,6 +31,10 @@ public final class MessageDtoMapper {
                 e.getCreatedAt());
     }
 
+    /**
+     * 注：返回的是 {@code stream().toList()} 不可变 list。调用方若需要 sort / 增删，
+     * 请先 {@code new ArrayList<>(...)} 拷一份。
+     */
     public static List<MessageDto> toDtos(List<MessageEntity> entities) {
         if (entities == null) {
             return List.of();
