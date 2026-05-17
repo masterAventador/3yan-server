@@ -20,6 +20,12 @@
             （AuthController / UserRegister/Login Service / UserApiImpl 等），启动后 user API 全 404。
         -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-user-core</artifactId></dependency>
+        <!--
+            S3 Phase 2：character 域已从 sanyan-business 拆出到独立的 sanyan-character-core。
+            bootstrap 必须显式 compile 依赖 sanyan-character-core，否则 fat jar 缺少 CharacterApiImpl Bean，
+            chat 业务（MessageService.handleAiReply）走 CharacterApi 时启动期就装配失败。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-core</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>

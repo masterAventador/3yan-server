@@ -26,6 +26,8 @@
         <module>business_packages/sanyan-business</module>
         <module>business_packages/sanyan-user-api</module>
         <module>business_packages/sanyan-user-core</module>
+        <module>business_packages/sanyan-character-api</module>
+        <module>business_packages/sanyan-character-core</module>
         <module>business_packages/sanyan-memory-api</module>
         <module>business_packages/sanyan-memory-core</module>
         <module>bootstrap</module>
@@ -54,6 +56,8 @@
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-core</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-user-api</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-user-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-core</artifactId><version>${project.version}</version></dependency>
 
             <!-- 第三方库锁版本 -->
             <dependency>

@@ -2,10 +2,8 @@ package com.sanyan.chat.internal;
 
 import com.sanyan.chat.event.MessagePersistedEvent;
 import com.sanyan.chat.web.MessageData;
-import com.sanyan.character.internal.AiCharacterEntity;
-import com.sanyan.character.internal.AiCharacterRepository;
-import com.sanyan.character.internal.CharacterErrCode;
-import com.sanyan.common.error.BusinessException;
+import com.sanyan.character.CharacterApi;
+import com.sanyan.character.dto.AiCharacterDto;
 import com.sanyan.common.util.TextProcessor;
 import com.sanyan.llm.internal.AiService;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +28,7 @@ public class MessageService {
     private static final Long DEFAULT_CHARACTER_ID = 1L;
 
     private final MessageRepository messageRepository;
-    private final AiCharacterRepository characterRepository;
+    private final CharacterApi characterApi;
     private final AiService aiService;
     /**
      * Plan 2 Task N3：消息落库后发布 {@link MessagePersistedEvent}，
@@ -64,9 +62,8 @@ public class MessageService {
      */
     @Transactional
     public List<MessageEntity> handleAiReply(Long userId) {
-        AiCharacterEntity character = characterRepository.findById(DEFAULT_CHARACTER_ID)
-                .orElseThrow(() -> new BusinessException(CharacterErrCode.CHARACTER_NOT_FOUND));
-        log.info("调用豆包 AI: userId={}, character={}", userId, character.getName());
+        AiCharacterDto character = characterApi.getById(DEFAULT_CHARACTER_ID);
+        log.info("调用豆包 AI: userId={}, character={}", userId, character.name());
         String rawReply = aiService.chat(character, userId);
         String cleaned = TextProcessor.cleanAiReply(rawReply);
         List<String> bubbles = TextProcessor.splitIntoBubbles(cleaned, MAX_AI_BUBBLES);

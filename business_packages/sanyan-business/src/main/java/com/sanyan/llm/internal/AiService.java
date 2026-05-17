@@ -1,6 +1,6 @@
 package com.sanyan.llm.internal;
 
-import com.sanyan.character.internal.AiCharacterEntity;
+import com.sanyan.character.dto.AiCharacterDto;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
 import com.sanyan.chat.internal.SenderType;
@@ -49,7 +49,7 @@ import java.util.Map;
  * <ul>
  *   <li>注入 {@link MemoryApi}，主对话前调 {@code getRelevantContext} 拿长期记忆 context 传给 PromptBuilder</li>
  *   <li>RAG query 取最近一条 {@link SenderType#USER} 消息内容；无 user 消息时用空串占位</li>
- *   <li>characterId 优先 {@code character.getId()}；为 null 时回落到
+ *   <li>characterId 优先 {@code character.id()}；为 null 时回落到
  *       {@code sanyan.memory.default-character-id}（默认 1L，MVP 单角色阶段的兜底）</li>
  *   <li><b>降级</b>：MemoryApi 抛异常时 catch + {@code log.warn} 跳过长期记忆，主对话继续不受影响</li>
  * </ul>
@@ -69,7 +69,7 @@ public class AiService {
 
     /**
      * Plan 1 MVP 单角色阶段的兜底 characterId。
-     * <p>chat 入参 {@link AiCharacterEntity} 通常带 id（来自 DB），但容错路径上 character 可能没 id
+     * <p>chat 入参 {@link AiCharacterDto} 通常带 id（来自 DB 经 CharacterApi 查询），但容错路径上 character 可能没 id
      * （例如 fixture 未持久化、未来某角色字段缺失等），此时回落到本默认值，与 N3/O4 的硬编码 1L 对齐。
      * <p>通过 {@code @Value} 注入，方便后续 application.yml 显式配置或多角色 Plan 3 直接弃用。
      */
@@ -99,7 +99,7 @@ public class AiService {
      *   <li>用 {@link PromptBuilder} 拼装 OpenAI 消息数组，委托 {@link LLMProviderRouter}</li>
      * </ol>
      */
-    public String chat(AiCharacterEntity character, Long userId) {
+    public String chat(AiCharacterDto character, Long userId) {
         String systemPrompt = assembleSystemPrompt(systemPromptTemplate, formatCurrentTime());
 
         List<MessageEntity> recentMessages = messageRepository
@@ -149,11 +149,11 @@ public class AiService {
     }
 
     /**
-     * 优先 {@code character.getId()}，否则回落 {@link #defaultCharacterId}。
+     * 优先 {@code character.id()}，否则回落 {@link #defaultCharacterId}。
      */
-    private Long resolveCharacterId(AiCharacterEntity character) {
-        if (character != null && character.getId() != null) {
-            return character.getId();
+    private Long resolveCharacterId(AiCharacterDto character) {
+        if (character != null && character.id() != null) {
+            return character.id();
         }
         return defaultCharacterId;
     }

@@ -1,7 +1,6 @@
 package com.sanyan.llm.internal;
 
-import com.sanyan.character.internal.AiCharacterEntity;
-import com.sanyan.character.internal.AiCharacterTestFixtures;
+import com.sanyan.character.dto.AiCharacterDto;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageRepository;
 import com.sanyan.chat.internal.SenderType;
@@ -74,7 +73,7 @@ class AiServiceTest {
         when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
                 .thenReturn("hello-from-router");
 
-        AiCharacterEntity character = AiCharacterTestFixtures.xiaowan();
+        AiCharacterDto character = xiaowanDto();
         String reply = service.chat(character, 1L);
 
         assertThat(reply).isEqualTo("hello-from-router");
@@ -88,7 +87,7 @@ class AiServiceTest {
         when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
                 .thenReturn("ok");
 
-        service.chat(AiCharacterTestFixtures.xiaowan(), 1L);
+        service.chat(xiaowanDto(), 1L);
 
         // Q3：AiService 走 PromptBuilder 拼成 OpenAI messages，第一条必须是包含资源文件人设的 system 消息
         @SuppressWarnings("unchecked")
@@ -119,7 +118,7 @@ class AiServiceTest {
         when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
                 .thenReturn("ack");
 
-        service.chat(AiCharacterTestFixtures.xiaowan(), 1L);
+        service.chat(xiaowanDto(), 1L);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
@@ -138,7 +137,7 @@ class AiServiceTest {
         when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
                 .thenReturn("ok");
 
-        service.chat(AiCharacterTestFixtures.xiaowan(), 1L);
+        service.chat(xiaowanDto(), 1L);
 
         ArgumentCaptor<PageRequest> pageCaptor = ArgumentCaptor.forClass(PageRequest.class);
         verify(messageRepository).findByUserIdOrderByIdDesc(eq(1L), pageCaptor.capture());
@@ -163,7 +162,7 @@ class AiServiceTest {
         when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
                 .thenReturn("ok");
 
-        String reply = service.chat(AiCharacterTestFixtures.xiaowan(), 42L);
+        String reply = service.chat(xiaowanDto(), 42L);
         assertThat(reply).isEqualTo("ok");
 
         @SuppressWarnings("unchecked")
@@ -188,7 +187,7 @@ class AiServiceTest {
         when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
                 .thenReturn("好呀我陪你");
 
-        service.chat(AiCharacterTestFixtures.xiaowan(), 42L);
+        service.chat(xiaowanDto(), 42L);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Map<String, String>>> captor = ArgumentCaptor.forClass(List.class);
@@ -224,18 +223,16 @@ class AiServiceTest {
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), any())).thenReturn(null);
         when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any())).thenReturn("ok");
 
-        AiCharacterEntity character = AiCharacterTestFixtures.xiaowan();  // id = 1L
+        AiCharacterDto character = xiaowanDto();  // id = 1L
         service.chat(character, 7L);
 
-        // 必须用「最新的 user 消息内容」作为 RAG query，characterId 用 character.getId()
+        // 必须用「最新的 user 消息内容」作为 RAG query，characterId 用 character.id()
         verify(memoryApi).getRelevantContext(eq(7L), eq(1L), eq("帮我推荐去东京的路线"));
     }
 
     @Test
     void chat_shouldFallbackToDefaultCharacterIdWhenEntityHasNoId() {
-        AiCharacterEntity withoutId = new AiCharacterEntity();
-        withoutId.setName("无 id 的角色");
-        withoutId.setId(null);
+        AiCharacterDto withoutId = new AiCharacterDto(null, "无 id 的角色", null);
 
         MessageEntity userMsg = new MessageEntity();
         userMsg.setSenderType(SenderType.USER);
@@ -247,7 +244,7 @@ class AiServiceTest {
 
         service.chat(withoutId, 9L);
 
-        // character.getId() 为 null 时回落到 defaultCharacterId (=1L)
+        // character.id() 为 null 时回落到 defaultCharacterId (=1L)
         verify(memoryApi).getRelevantContext(eq(9L), eq(DEFAULT_CHARACTER_ID), eq("你好"));
     }
 
@@ -264,7 +261,7 @@ class AiServiceTest {
         when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any()))
                 .thenReturn("ok");
 
-        String reply = service.chat(AiCharacterTestFixtures.xiaowan(), 1L);
+        String reply = service.chat(xiaowanDto(), 1L);
         assertThat(reply).isEqualTo("ok");
 
         @SuppressWarnings("unchecked")
@@ -289,10 +286,18 @@ class AiServiceTest {
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), any())).thenReturn(null);
         when(llmRouter.chat(eq(LLMTaskType.USER_FACING), any())).thenReturn("ok");
 
-        service.chat(AiCharacterTestFixtures.xiaowan(), 1L);
+        service.chat(xiaowanDto(), 1L);
 
         // 没有 user 消息时，RAG query 用空串占位（不传 null，避免 -core 端 NPE）
         verify(memoryApi).getRelevantContext(eq(1L), eq(DEFAULT_CHARACTER_ID), eq(""));
+    }
+
+    /**
+     * 测试用的 xiaowan DTO 构造器（id = 1L，与 character-core 内 AiCharacterTestFixtures.xiaowan() 对齐）。
+     * <p>AiCharacterDto 是简单 record，按 java-backend rules §5.2「简单 DTO 不强制 Object Mother」直接在本测试内构造。
+     */
+    private static AiCharacterDto xiaowanDto() {
+        return new AiCharacterDto(1L, "小婉", null);
     }
 
     @Test
