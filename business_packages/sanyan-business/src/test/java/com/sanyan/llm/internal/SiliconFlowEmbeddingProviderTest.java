@@ -16,35 +16,39 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Task M2c：{@link RemoteBgeM3Provider} 单元测试。
+ * {@link SiliconFlowEmbeddingProvider} 单元测试。
  *
- * <p>用 {@link MockWebServer} 模拟远程 embedding-server，验证：
+ * <p>用 {@link MockWebServer} 模拟硅基流动 OpenAI 兼容 {@code POST /embeddings}，验证：
  * <ul>
- *   <li>200 成功：返回 vectors，请求头带 {@code X-Internal-Token} + body 是 {@code EmbedRequest} JSON</li>
- *   <li>401：4xx 不重试，直接抛 {@code BusinessException(EMBEDDING_SERVICE_UNAVAILABLE)}</li>
+ *   <li>200 成功：返回 vectors，请求头 {@code Authorization: Bearer <key>} +
+ *       body {@code {model, input, encoding_format}}</li>
+ *   <li>401：4xx 不重试，直接抛 {@link LlmErrCode#EMBEDDING_SERVICE_UNAVAILABLE}</li>
  *   <li>503 重试后成功：第一次 503，第二次 200，调用方拿到成功结果（mockServer 收到 2 个 request）</li>
- *   <li>503 重试耗尽：连续 503，抛 {@code BusinessException(EMBEDDING_SERVICE_UNAVAILABLE)}（总共 maxRetries+1 次 request）</li>
- *   <li>连接 timeout：mockServer shutdown，重试耗尽后抛 {@code BusinessException(EMBEDDING_SERVICE_UNAVAILABLE)}</li>
+ *   <li>503 重试耗尽：连续 503，抛 {@code BusinessException(EMBEDDING_SERVICE_UNAVAILABLE)}</li>
+ *   <li>连接 timeout：mockServer shutdown，重试耗尽后抛</li>
+ *   <li>200 但响应缺 data：不重试，直接抛</li>
  * </ul>
  */
-class RemoteBgeM3ProviderTest {
+class SiliconFlowEmbeddingProviderTest {
 
-    private static final String INTERNAL_TOKEN = "test-internal-token-deadbeef";
+    private static final String API_KEY = "sk-test-key-deadbeef";
+    private static final String MODEL = "BAAI/bge-m3";
     private static final int CONNECT_TIMEOUT_MS = 1000;
     private static final int READ_TIMEOUT_MS = 1000;
     private static final int MAX_RETRIES = 2;
-    private static final long RETRY_BACKOFF_MS = 10;  // 测试里把退避压到 10ms，避免拖慢测试
+    private static final long RETRY_BACKOFF_MS = 10;
 
     private MockWebServer mockServer;
-    private RemoteBgeM3Provider provider;
+    private SiliconFlowEmbeddingProvider provider;
 
     @BeforeEach
     void setUp() throws IOException {
         mockServer = new MockWebServer();
         mockServer.start();
-        provider = new RemoteBgeM3Provider(
+        provider = new SiliconFlowEmbeddingProvider(
+                API_KEY,
                 mockServer.url("").toString(),
-                INTERNAL_TOKEN,
+                MODEL,
                 CONNECT_TIMEOUT_MS,
                 READ_TIMEOUT_MS,
                 MAX_RETRIES,
@@ -65,10 +69,12 @@ class RemoteBgeM3ProviderTest {
         mockServer.enqueue(new MockResponse()
                 .setResponseCode(200)
                 .setHeader("Content-Type", "application/json")
-                .setBody("{\"success\":true,\"code\":0,\"message\":\"ok\",\"data\":{"
-                        + "\"vectors\":[[0.1,0.2,0.3],[0.4,0.5,0.6]],"
-                        + "\"dim\":3,"
-                        + "\"latencyMs\":15}}"));
+                .setBody("{\"object\":\"list\",\"model\":\"BAAI/bge-m3\","
+                        + "\"data\":["
+                        + "{\"object\":\"embedding\",\"index\":0,\"embedding\":[0.1,0.2,0.3]},"
+                        + "{\"object\":\"embedding\",\"index\":1,\"embedding\":[0.4,0.5,0.6]}"
+                        + "],"
+                        + "\"usage\":{\"prompt_tokens\":4,\"total_tokens\":4}}"));
 
         List<float[]> vectors = provider.embed(List.of("你好", "世界"));
 
@@ -79,57 +85,53 @@ class RemoteBgeM3ProviderTest {
         RecordedRequest request = mockServer.takeRequest(2, TimeUnit.SECONDS);
         assertThat(request).isNotNull();
         assertThat(request.getMethod()).isEqualTo("POST");
-        assertThat(request.getPath()).isEqualTo("/embed");
-        assertThat(request.getHeader("X-Internal-Token")).isEqualTo(INTERNAL_TOKEN);
+        assertThat(request.getPath()).isEqualTo("/embeddings");
+        assertThat(request.getHeader("Authorization")).isEqualTo("Bearer " + API_KEY);
         assertThat(request.getHeader("Content-Type")).contains("application/json");
 
         String body = request.getBody().readUtf8();
-        // EmbedRequest 序列化为 { "texts": [...] }
-        assertThat(body).contains("\"texts\"");
+        // OpenAI 兼容请求体：{ "model": "...", "input": ["..."], "encoding_format": "float" }
+        assertThat(body).contains("\"model\":\"" + MODEL + "\"");
+        assertThat(body).contains("\"input\"");
         assertThat(body).contains("你好");
         assertThat(body).contains("世界");
+        assertThat(body).contains("\"encoding_format\":\"float\"");
     }
 
     @Test
     void embed_shouldThrowOnUnauthorizedWithoutRetry() throws Exception {
-        // 401 token 错——不应重试，直接抛
         mockServer.enqueue(new MockResponse()
                 .setResponseCode(401)
-                .setBody("{\"success\":false,\"code\":6001,\"message\":\"invalid token\"}"));
+                .setBody("{\"error\":{\"message\":\"Invalid API key\"}}"));
 
         assertThatThrownBy(() -> provider.embed(List.of("hi")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
                 .isEqualTo(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
 
-        // 关键：4xx 不重试，只发出 1 次请求
+        // 4xx 不重试，只发出 1 次请求
         assertThat(mockServer.getRequestCount()).isEqualTo(1);
     }
 
     @Test
     void embed_shouldRetryAndSucceedOn503ThenOk() throws Exception {
-        // 序列：第一次 503，第二次 200
         mockServer.enqueue(new MockResponse().setResponseCode(503).setBody("upstream busy"));
         mockServer.enqueue(new MockResponse()
                 .setResponseCode(200)
                 .setHeader("Content-Type", "application/json")
-                .setBody("{\"success\":true,\"code\":0,\"message\":\"ok\",\"data\":{"
-                        + "\"vectors\":[[0.7,0.8]],"
-                        + "\"dim\":2,"
-                        + "\"latencyMs\":20}}"));
+                .setBody("{\"object\":\"list\",\"model\":\"BAAI/bge-m3\","
+                        + "\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[0.7,0.8]}],"
+                        + "\"usage\":{\"prompt_tokens\":2,\"total_tokens\":2}}"));
 
         List<float[]> vectors = provider.embed(List.of("retry test"));
 
         assertThat(vectors).hasSize(1);
         assertThat(vectors.get(0)).containsExactly(0.7f, 0.8f);
-
-        // 总共发出 2 个请求：1 次失败 + 1 次成功 = 重试 1 次
         assertThat(mockServer.getRequestCount()).isEqualTo(2);
     }
 
     @Test
     void embed_shouldThrowAfterRetriesExhaustedOn503() {
-        // maxRetries=2 → 总共最多发 maxRetries+1 = 3 次请求
         mockServer.enqueue(new MockResponse().setResponseCode(503).setBody("busy 1"));
         mockServer.enqueue(new MockResponse().setResponseCode(503).setBody("busy 2"));
         mockServer.enqueue(new MockResponse().setResponseCode(503).setBody("busy 3"));
@@ -144,7 +146,6 @@ class RemoteBgeM3ProviderTest {
 
     @Test
     void embed_shouldThrowAfterRetriesExhaustedOnConnectFailure() throws IOException {
-        // 模拟服务完全不可达：先关掉 mockServer，再调
         mockServer.shutdown();
 
         assertThatThrownBy(() -> provider.embed(List.of("connect fail")))
@@ -154,19 +155,52 @@ class RemoteBgeM3ProviderTest {
     }
 
     @Test
-    void embed_shouldThrowWhenResponseBodyHasSuccessFalse() throws Exception {
-        // 上游 200 但 BaseResp.success=false（如服务器侧业务错误：模型未 ready 等）
+    void embed_shouldThrowWhenResponseMissingData() throws Exception {
+        // 200 但响应体没 data 字段（理论上硅基不会返这种，但防御性测试）
         mockServer.enqueue(new MockResponse()
                 .setResponseCode(200)
                 .setHeader("Content-Type", "application/json")
-                .setBody("{\"success\":false,\"code\":6002,\"message\":\"model not ready\",\"data\":null}"));
+                .setBody("{\"object\":\"list\",\"model\":\"BAAI/bge-m3\","
+                        + "\"usage\":{\"prompt_tokens\":2,\"total_tokens\":2}}"));
 
         assertThatThrownBy(() -> provider.embed(List.of("hi")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
                 .isEqualTo(LlmErrCode.EMBEDDING_SERVICE_UNAVAILABLE);
 
-        // 200 算成功通信，不触发重试
         assertThat(mockServer.getRequestCount()).isEqualTo(1);
+    }
+
+    @Test
+    void embed_shouldPreserveOrderAndDimensions() throws Exception {
+        // 关键契约：3 条输入 → 返回 3 个向量，顺序与入参一致（OpenAI 协议 data[].index 保证）
+        // 这里模拟硅基真实场景：1024 维向量，3 条输入
+        StringBuilder body = new StringBuilder("{\"object\":\"list\",\"model\":\"BAAI/bge-m3\",\"data\":[");
+        for (int i = 0; i < 3; i++) {
+            if (i > 0) body.append(',');
+            body.append("{\"object\":\"embedding\",\"index\":").append(i).append(",\"embedding\":[");
+            for (int d = 0; d < 1024; d++) {
+                if (d > 0) body.append(',');
+                body.append(i + d * 0.001f);
+            }
+            body.append("]}");
+        }
+        body.append("],\"usage\":{\"prompt_tokens\":6,\"total_tokens\":6}}");
+
+        mockServer.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(body.toString()));
+
+        List<float[]> vectors = provider.embed(List.of("第一句", "第二句", "第三句"));
+
+        assertThat(vectors).hasSize(3);
+        assertThat(vectors.get(0)).hasSize(1024);
+        assertThat(vectors.get(1)).hasSize(1024);
+        assertThat(vectors.get(2)).hasSize(1024);
+        // 顺序：index=0 的向量首位 ≈ 0，index=1 的 ≈ 1，index=2 的 ≈ 2
+        assertThat(vectors.get(0)[0]).isCloseTo(0f, org.assertj.core.data.Offset.offset(0.001f));
+        assertThat(vectors.get(1)[0]).isCloseTo(1f, org.assertj.core.data.Offset.offset(0.001f));
+        assertThat(vectors.get(2)[0]).isCloseTo(2f, org.assertj.core.data.Offset.offset(0.001f));
     }
 }

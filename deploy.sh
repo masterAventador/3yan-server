@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # 部署 sanyan-server 到默认服务器（new = 49.233.213.109）
-# 前置条件：服务器 /opt/3yan/3yan-server/.env 已配置（JWT_SECRET / DOUBAO_API_KEY / PG_USER / PG_PASSWORD），权限 600
+# 前置条件：服务器 /opt/3yan/3yan-server/.env 已配置以下 key（权限 600）：
+#   JWT_SECRET / PG_USER / PG_PASSWORD
+#   DOUBAO_API_KEY / DEEPSEEK_API_KEY / SILICONFLOW_API_KEY
+# 启动命令带 -Dspring.profiles.active=prod，触发 application-prod.yml，
+# 任何一个 API key 环境变量缺失都会让 Spring 直接 fail-fast。
 # 用法: ./deploy.sh
 
 set -euo pipefail
@@ -57,7 +61,7 @@ set -a
 source "$ENV_FILE"
 set +a
 
-nohup java -jar "$REMOTE_JAR" > "$LOG_FILE" 2>&1 &
+nohup java -Dspring.profiles.active=prod -jar "$REMOTE_JAR" > "$LOG_FILE" 2>&1 &
 NEW_PID=$!
 disown
 echo "    新进程 PID=$NEW_PID，日志: $LOG_FILE"

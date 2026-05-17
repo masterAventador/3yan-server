@@ -15,38 +15,6 @@ spring:
 server:
   port: 8080
 
-sanyan:
-  doubao:
-    # USER_FACING 任务（用户对话）走豆包 doubao-seed-character；M3 task 把豆包抽到 DoubaoAdapter，按 LLMProvider 接口接入 LLMProviderRouter
-    api-key: ${DOUBAO_API_KEY:76022745-db00-4016-9613-880c4318e5d4}
-    base-url: https://ark.cn-beijing.volces.com/api/v3
-    model: ep-20260408102845-f86mb
-  llm:
-    deepseek:
-      # BACKGROUND 任务（摘要 / 档案抽取）用 DeepSeek V4-Flash；API key 由环境变量注入，未配置时 adapter 仍能装配但调用会被上游 401 拒绝
-      api-key: ${DEEPSEEK_API_KEY:}
-      base-url: https://api.deepseek.com
-      model: deepseek-v4-flash
-  # 远程 embedding 服务（M2b 部署到 old，M2c 实现的 RemoteBgeM3Provider HTTP 客户端读取本配置）
-  embedding:
-    # dev 默认指向本机；生产部署时由 systemd EnvironmentFile 注入 SANYAN_EMBEDDING_BASE_URL=http://154.8.162.83:8080
-    base-url: ${SANYAN_EMBEDDING_BASE_URL:http://localhost:8080}
-    # 与 embedding-server 共享的 token，由 /etc/sanyan/embedding-token.env 注入；dev 无 token 时调用会被服务端 401 拒绝
-    internal-token: ${EMBEDDING_INTERNAL_TOKEN:}
-    http:
-      # 公网 RTT ~12-15ms（new ↔ old），connect 给 3s 足够覆盖偶发抖动
-      connect-timeout-ms: 3000
-      # embedding 计算耗时 100-500ms（取决于 batch 大小），10s 是充足的兜底
-      read-timeout-ms: 10000
-      # 5xx / 网络异常重试 2 次（共 3 次尝试），4xx 不重试
-      max-retries: 2
-      # 首次退避 500ms，按 2 倍指数增长（500 → 1000 → 2000）
-      retry-backoff-ms: 500
-  sms:
-    access-key-id: ${SMS_ACCESS_KEY_ID:}
-    access-key-secret: ${SMS_ACCESS_KEY_SECRET:}
-    sign-name: 三言
-    template-code: ${SMS_TEMPLATE_CODE:}
-  push:
-    app-key: ${JPUSH_APP_KEY:}
-    master-secret: ${JPUSH_MASTER_SECRET:}
+# 注：sanyan.doubao / sanyan.llm.deepseek / sanyan.embedding.* 配置全部继承 application.yml base config，
+# 本机 dev 启动靠 ~/.zshrc 中 export 的环境变量注入 3 个 API key。
+# 配置缺失时 ${KEY:} 默认空字符串，启动不挂，但调用上游会被 401 拒绝。

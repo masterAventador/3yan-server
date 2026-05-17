@@ -79,29 +79,6 @@
                 </configuration>
             </plugin>
 
-            <!--
-                Plan 2 Enforcer：主 bootstrap 只能依赖 sanyan-embedding-api（协议契约），
-                禁止依赖 sanyan-embedding-core（实现层，那是 embedding-bootstrap 的事）。
-            -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-enforcer-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>enforce-bootstrap-no-embedding-core</id>
-                        <goals><goal>enforce</goal></goals>
-                        <configuration>
-                            <rules>
-                                <bannedDependencies>
-                                    <excludes>
-                                        <exclude>com.sanyan:sanyan-embedding-core</exclude>
-                                    </excludes>
-                                </bannedDependencies>
-                            </rules>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
 </project>

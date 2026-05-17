@@ -21,9 +21,6 @@
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-util</artifactId></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-ws</artifactId></dependency>
 
-        <!-- 业务契约：远程 embedding 服务协议（EmbedRequest / EmbedResponse / EmbeddingApi） -->
-        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-api</artifactId></dependency>
-
         <!--
             Plan 2 Q3：sanyan-memory-api 契约（MemoryContext DTO + MemoryConstants 跨模块共享常量）。
             PromptBuilder 注入长期记忆需要 MemoryContext，AiService 短期窗口对齐需要 MemoryConstants.SHORT_TERM_WINDOW_SIZE。

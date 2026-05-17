@@ -1,0 +1,16 @@
+# 生产 profile：仅覆盖 3 个第三方 API key 的 placeholder 语法为"无 fallback"，
+# 启动时如果环境变量缺失会让 Spring 直接抛 IllegalArgumentException 启动失败（fail-fast），
+# 而不是带着空 key 跑起来运行时再 401 静默掉。
+#
+# 由 deploy.sh 启动命令 `-Dspring.profiles.active=prod` 激活。
+# 环境变量来源：/opt/3yan/3yan-server/.env （deploy.sh 启动前 source）。
+
+sanyan:
+  doubao:
+    api-key: ${DOUBAO_API_KEY}            # 无冒号 = 严格，缺失时启动失败
+  llm:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY}
+  embedding:
+    siliconflow:
+      api-key: ${SILICONFLOW_API_KEY}
