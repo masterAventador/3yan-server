@@ -1,6 +1,9 @@
 package com.sanyan.chat.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sanyan.character.event.IntimacyChangedEvent;
+import com.sanyan.character.event.StageEntryStoryEvent;
+import com.sanyan.character.event.StageTransitionEvent;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageService;
 import com.sanyan.chat.web.MessageData;
@@ -11,6 +14,7 @@ import com.sanyan.common.ws.WsMessage;
 import com.sanyan.common.ws.WsTyping;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -116,6 +120,30 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         List<MessageData> data = messages.stream().map(messageService::toData).toList();
         sendObject(session, new WsSyncResult(data));
         log.info("消息同步完成: userId={}, 总消息数={}", userId, data.size());
+    }
+
+    // ----- 事件监听：亲密度/阶段变化主动推送 -----
+
+    @EventListener
+    public void onIntimacyChanged(IntimacyChangedEvent event) {
+        pushToUser(event.userId(), new WsIntimacyUpdate(
+                "intimacy_update", event.newScore(), event.delta(), event.reason()));
+    }
+
+    @EventListener
+    public void onStageTransition(StageTransitionEvent event) {
+        pushToUser(event.userId(), new WsStageTransition(
+                "stage_transition", event.fromStage(), event.toStage()));
+    }
+
+    @EventListener
+    public void onStageEntryStory(StageEntryStoryEvent event) {
+        pushToUser(event.userId(), new WsStageStory(
+                "stage_story", event.toStage(), event.storyMessage()));
+    }
+
+    private void pushToUser(Long userId, Object payload) {
+        sessionManager.getSession(userId).ifPresent(s -> sendObject(s, payload));
     }
 
     public void sendToSession(WebSocketSession session, String payload) {
