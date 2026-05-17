@@ -101,12 +101,51 @@
                     <artifactId>maven-enforcer-plugin</artifactId>
                     <version>3.4.1</version>
                 </plugin>
+
+                <!--
+                    Plan 3 R1：Testcontainers 配置统一上提到父 pom（不再让每个 IT-using 子模块重复写）
+
+                    两块配置说明：
+                      1. systemPropertyVariables.api.version=1.44
+                         docker-java 3.4.x（Testcontainers 1.21.3 内嵌）客户端默认声明 API 1.32，
+                         Docker Engine 25+ 要求最低 1.44。**必须**用 system property 传 fork JVM；
+                         env 变量 DOCKER_API_VERSION 在 docker-java 3.4.x 上不生效（亲测）。
+                      2. environmentVariables.TESTCONTAINERS_RYUK_DISABLED=true
+                         开发机若用 Colima 等 rootless Docker，Ryuk 清理工无法绑定 host 上的
+                         docker.sock；本地禁用 Ryuk，依赖 JVM 退出时 GenericContainer.stop() 自己清理。
+                         CI / Linux Docker 上可通过 CLI 覆盖打开。
+
+                    DOCKER_HOST 由开发机的 ~/.testcontainers.properties 或 shell env 配置
+                    （macOS Colima 用户需要 `docker.host=unix:///Users/<u>/.colima/default/docker.sock`）。
+
+                    Surefire 是 Maven 默认 plugin，所有 jar 模块自动 inherit；Failsafe 需要子模块
+                    显式 <plugin> 声明才激活（但配置仍 inherit），见各 IT-using 子模块的 pom。
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <systemPropertyVariables>
+                            <api.version>1.44</api.version>
+                        </systemPropertyVariables>
+                        <environmentVariables>
+                            <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                        </environmentVariables>
+                    </configuration>
+                </plugin>
+
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-failsafe-plugin</artifactId>
                     <version>3.1.2</version>
                     <configuration>
                         <includes><include>**/*IT.java</include></includes>
+                        <systemPropertyVariables>
+                            <api.version>1.44</api.version>
+                        </systemPropertyVariables>
+                        <environmentVariables>
+                            <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                        </environmentVariables>
                     </configuration>
                     <executions>
                         <execution>

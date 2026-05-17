@@ -41,6 +41,7 @@
 
     <build>
         <plugins>
+            <!-- 激活 failsafe（surefire 默认激活）；Testcontainers 配置由父 pom pluginManagement 提供 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
