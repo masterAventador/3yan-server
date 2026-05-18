@@ -6,6 +6,7 @@ import com.sanyan.character.internal.RelationshipRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 检测亲密度涨分后是否跨越阶段边界，跨阶段则更新 stage 并发布 StageTransitionEvent。
@@ -19,6 +20,7 @@ public class StageTransitionDetectService {
     private final RelationshipRepository repo;
     private final ApplicationEventPublisher publisher;
 
+    @Transactional
     public void maybeTransition(RelationshipEntity rel, int newScore) {
         int newStage = stageDef.stageFor(newScore);
         int oldStage = rel.getCurrentStage();
