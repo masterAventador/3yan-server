@@ -2,9 +2,7 @@ package com.sanyan.character.internal.intimacy;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
-@Component
 @ConfigurationProperties("sanyan.intimacy")
 @Data
 public class IntimacyProperties {
@@ -15,10 +13,10 @@ public class IntimacyProperties {
 
     @Data
     public static class Stages {
-        int strangerEnd;
-        int friendEnd;
-        int ambiguousEnd;
-        int loverEnd;
+        int strangerEnd = 100;
+        int friendEnd = 300;
+        int ambiguousEnd = 600;
+        int loverEnd = 1000;
     }
 
     @Data
