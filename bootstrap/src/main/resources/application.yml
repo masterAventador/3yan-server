@@ -37,6 +37,21 @@ sanyan:
     secret: ${JWT_SECRET:your-256-bit-secret-key-for-sanyan-app-change-in-production}
     expiration-days: 30
 
+  # ===== 短信发送配置 =====
+  # provider=log（默认）：验证码只打到 server 日志，本地联调用；不消耗任何外部资源
+  # provider=aliyun：走阿里云 dysmsapi.SendSms，下面 4 个值必须从 .env / 环境变量注入：
+  #   - 在阿里云控制台「短信服务」申请签名（如"三言"），等审核通过得 sign-name
+  #   - 申请模板，模板内容必须含 ${code} 变量（如"您的验证码是 ${code}，5 分钟内有效"），得 template-code（形如 SMS_xxx）
+  #   - 在 RAM 控制台为短信服务创建一个 AccessKey 子用户，仅授 AliyunDysmsFullAccess
+  sms:
+    provider: ${SMS_PROVIDER:log}
+    aliyun:
+      access-key-id: ${ALIYUN_SMS_AK:}
+      access-key-secret: ${ALIYUN_SMS_SK:}
+      sign-name: ${ALIYUN_SMS_SIGN_NAME:}
+      template-code: ${ALIYUN_SMS_TEMPLATE_CODE:}
+      endpoint: dysmsapi.aliyuncs.com
+
   # ===== 第三方 LLM / Embedding 配置（base，对所有 profile 生效）=====
   # API key 走环境变量注入，配置文件不写 fallback 值：
   #   - 本机 dev：从 ~/.zshrc export DOUBAO_API_KEY / DEEPSEEK_API_KEY / SILICONFLOW_API_KEY
