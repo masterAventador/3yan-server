@@ -1,116 +1,64 @@
 package com.sanyan.character.internal.intimacy;
 
-import com.sanyan.character.event.IntimacyChangedEvent;
 import com.sanyan.character.internal.CharacterErrCode;
-import com.sanyan.character.internal.RelationshipEntity;
-import com.sanyan.character.internal.RelationshipRepository;
-import com.sanyan.character.internal.fixtures.RelationshipTestFixtures;
-import com.sanyan.character.internal.stage.StageDefinition;
-import com.sanyan.character.internal.stage.StageTransitionDetectService;
 import com.sanyan.common.error.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
 
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
+/**
+ * 测试 {@link IntimacyRecordService#recordEvent} 的 retry 行为。
+ *
+ * <p>只 mock {@link IntimacyRecordTransaction}，验证：
+ * <ul>
+ *   <li>正常路径：第一次 doRecord 成功直接返回</li>
+ *   <li>乐观锁路径：OptimisticLockingFailureException 时 retry 3 次，3 次后抛 BusinessException</li>
+ *   <li>中途成功：第 2 次才成功时整体成功，不抛异常</li>
+ * </ul>
+ */
 @ExtendWith(MockitoExtension.class)
 class IntimacyRecordServiceTest {
 
-    @Mock RelationshipRepository relRepo;
-    @Mock IntimacyLogRepository logRepo;
-    @Mock IntimacyCalculator calculator;
-    @Mock DailyBehaviorCounter dailyCounter;
-    @Mock StageTransitionDetectService stageTransition;
-    @Mock ApplicationEventPublisher publisher;
-    @Mock StageDefinition stageDef;
+    @Mock IntimacyRecordTransaction tx;
     @InjectMocks IntimacyRecordService service;
 
     @Test
-    void should_accumulate_and_publish_intimacy_changed_event() {
-        RelationshipEntity rel = RelationshipTestFixtures.relationshipWithScore(1L, 1L, 50);
-        when(relRepo.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(rel));
-        when(calculator.compute(any())).thenReturn(5);
-        when(stageDef.stageFor(55)).thenReturn(0);
-
+    void should_succeed_on_first_attempt() {
+        // doRecord 不抛异常（默认 void mock 行为）
         service.recordEvent(IntimacyEvent.messageSent(1L, 1L));
 
-        assertThat(rel.getIntimacyScore()).isEqualTo(55);
-        verify(logRepo).save(any(IntimacyLogEntity.class));
-        verify(publisher).publishEvent(any(IntimacyChangedEvent.class));
-        verify(dailyCounter).incr(1L, 5);  // MESSAGE_SENT + delta>0 → 累计
+        verify(tx, times(1)).doRecord(any());
     }
 
     @Test
-    void should_call_stage_transition_when_score_changes() {
-        RelationshipEntity rel = RelationshipTestFixtures.relationshipWithScore(1L, 1L, 95);
-        when(relRepo.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(rel));
-        when(calculator.compute(any())).thenReturn(10);
-
-        service.recordEvent(IntimacyEvent.messageSent(1L, 1L));
-
-        verify(stageTransition).maybeTransition(rel, 105);
-    }
-
-    @Test
-    void should_still_write_log_when_delta_is_zero_capped() {
-        RelationshipEntity rel = RelationshipTestFixtures.relationshipWithScore(1L, 1L, 50);
-        when(relRepo.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(rel));
-        when(calculator.compute(any())).thenReturn(0);
-
-        service.recordEvent(IntimacyEvent.messageSent(1L, 1L));
-
-        ArgumentCaptor<IntimacyLogEntity> cap = ArgumentCaptor.forClass(IntimacyLogEntity.class);
-        verify(logRepo).save(cap.capture());
-        assertThat(cap.getValue().getReason()).isEqualTo("CAPPED");
-        verify(dailyCounter, never()).incr(any(), anyInt());
-    }
-
-    @Test
-    void should_throw_intimacy_concurrent_update_after_retry_exhausted() {
-        RelationshipEntity rel = RelationshipTestFixtures.relationshipWithScore(1L, 1L, 50);
-        when(relRepo.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(rel));
-        when(calculator.compute(any())).thenReturn(5);
-        when(relRepo.save(any())).thenThrow(new OptimisticLockingFailureException("lock"));
+    void should_throw_business_exception_after_retry_exhausted() {
+        doThrow(new OptimisticLockingFailureException("lock"))
+                .when(tx).doRecord(any());
 
         assertThatThrownBy(() -> service.recordEvent(IntimacyEvent.messageSent(1L, 1L)))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errCode", CharacterErrCode.INTIMACY_CONCURRENT_UPDATE);
 
         // 应该 retry 3 次
-        verify(relRepo, times(3)).save(any());
+        verify(tx, times(3)).doRecord(any());
     }
 
     @Test
-    void should_throw_relationship_not_found_when_missing() {
-        when(relRepo.findByUserIdAndCharacterId(999L, 1L)).thenReturn(Optional.empty());
+    void should_succeed_when_second_attempt_succeeds() {
+        doThrow(new OptimisticLockingFailureException("lock"))
+                .doNothing()
+                .when(tx).doRecord(any());
 
-        assertThatThrownBy(() -> service.recordEvent(IntimacyEvent.messageSent(999L, 1L)))
-                .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errCode", CharacterErrCode.RELATIONSHIP_NOT_FOUND);
-    }
+        // 第 2 次成功，整体不抛异常
+        service.recordEvent(IntimacyEvent.messageSent(1L, 1L));
 
-    @Test
-    void plot_milestone_reason_should_include_rule_id() {
-        RelationshipEntity rel = RelationshipTestFixtures.relationshipWithScore(1L, 1L, 50);
-        when(relRepo.findByUserIdAndCharacterId(1L, 1L)).thenReturn(Optional.of(rel));
-        when(calculator.compute(any())).thenReturn(50);
-
-        service.recordEvent(IntimacyEvent.plot(1L, 1L, "deep_night_chat", 50));
-
-        ArgumentCaptor<IntimacyLogEntity> cap = ArgumentCaptor.forClass(IntimacyLogEntity.class);
-        verify(logRepo).save(cap.capture());
-        assertThat(cap.getValue().getReason()).isEqualTo("PLOT:deep_night_chat");
+        verify(tx, times(2)).doRecord(any());
     }
 }
