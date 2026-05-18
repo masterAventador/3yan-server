@@ -50,4 +50,22 @@ class StageTransitionStoryListenerTest {
                 && e.storyMessage().contains("宝贝")
                 && e.userId().equals(1L)));
     }
+
+    @Test
+    void stage_0_should_not_trigger_story_or_milestone() {
+        // stage 0 的 STORIES[0] 是空字符串，不演出也不写 milestone
+        listener.onStageTransition(new StageTransitionEvent(1L, 1L, 1, 0));
+
+        verifyNoInteractions(milestoneRepo);
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void out_of_range_to_stage_should_skip_silently() {
+        // toStage 越界时不写 milestone 也不发事件
+        listener.onStageTransition(new StageTransitionEvent(1L, 1L, 4, 99));
+
+        verifyNoInteractions(milestoneRepo);
+        verifyNoInteractions(publisher);
+    }
 }

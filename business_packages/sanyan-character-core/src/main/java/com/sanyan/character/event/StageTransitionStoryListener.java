@@ -4,6 +4,7 @@ import com.sanyan.character.internal.plotrule.RelationshipMilestoneEntity;
 import com.sanyan.character.internal.plotrule.RelationshipMilestoneId;
 import com.sanyan.character.internal.plotrule.RelationshipMilestoneRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -11,9 +12,10 @@ import org.springframework.stereotype.Component;
 /**
  * 监听 StageTransitionEvent → 写 relationship_milestones（防重）+ 发 StageEntryStoryEvent。
  *
- * <p>剧情演出文案按目标 stage 选取（STORIES[0] 空字符串保留位置）。
+ * <p>剧情演出文案按目标 stage 选取（STORIES[0] 空字符串保留位置，stage 0 不演出）。
  * <p>milestones 表的 rule_id 格式 "stage_entry_&lt;N&gt;"。
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class StageTransitionStoryListener {
@@ -31,7 +33,21 @@ public class StageTransitionStoryListener {
 
     @EventListener
     public void onStageTransition(StageTransitionEvent event) {
-        String ruleId = "stage_entry_" + event.toStage();
+        int toStage = event.toStage();
+
+        // 边界检查前置：越界直接返回，不写 milestone 也不发事件
+        if (toStage < 0 || toStage >= STORIES.length) {
+            log.warn("toStage {} 超出 STORIES 范围，跳过", toStage);
+            return;
+        }
+
+        String story = STORIES[toStage];
+        if (story.isBlank()) {
+            // stage 0 默认无剧情演出，直接跳过（不写 milestone，不发事件）
+            return;
+        }
+
+        String ruleId = "stage_entry_" + toStage;
         var id = new RelationshipMilestoneId(event.userId(), event.characterId(), ruleId);
         if (milestoneRepo.existsById(id)) {
             return;
@@ -43,10 +59,7 @@ public class StageTransitionStoryListener {
         m.setRuleId(ruleId);
         milestoneRepo.save(m);
 
-        if (event.toStage() >= 0 && event.toStage() < STORIES.length) {
-            String story = STORIES[event.toStage()];
-            publisher.publishEvent(new StageEntryStoryEvent(
-                    event.userId(), event.characterId(), event.toStage(), story));
-        }
+        publisher.publishEvent(new StageEntryStoryEvent(
+                event.userId(), event.characterId(), toStage, story));
     }
 }
