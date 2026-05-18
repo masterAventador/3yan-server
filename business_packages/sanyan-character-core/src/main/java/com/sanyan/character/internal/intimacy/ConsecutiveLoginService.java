@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 /**
@@ -40,14 +41,30 @@ public class ConsecutiveLoginService {
         }
 
         int newStreak;
-        if (lastDateStr != null && LocalDate.parse(lastDateStr).plusDays(1).equals(today)) {
+        if (lastDateStr != null && isYesterday(lastDateStr, today)) {
             newStreak = prevStreak + 1;
         } else {
             newStreak = 1;
         }
 
-        redis.opsForHash().put(key, "streak", String.valueOf(newStreak));
-        redis.opsForHash().put(key, "last_date", today.toString());
+        // 用 putAll 原子写入两个字段，避免两次 put 之间崩溃导致数据不一致
+        redis.opsForHash().putAll(key, Map.of(
+                "streak", String.valueOf(newStreak),
+                "last_date", today.toString()
+        ));
         return new LoginResult(true, newStreak);
+    }
+
+    /**
+     * 检查 lastDateStr 是否为 today 的前一天。
+     * DateTimeParseException 时视为无历史（数据损坏），返回 false 让 streak 重置为 1。
+     */
+    private static boolean isYesterday(String lastDateStr, LocalDate today) {
+        try {
+            return LocalDate.parse(lastDateStr).plusDays(1).equals(today);
+        } catch (DateTimeParseException e) {
+            // Redis 中存储了非法日期格式，视为无历史，streak 重置
+            return false;
+        }
     }
 }
