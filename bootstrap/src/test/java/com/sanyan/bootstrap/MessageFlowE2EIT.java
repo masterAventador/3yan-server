@@ -9,6 +9,7 @@ import com.sanyan.chat.event.MessagePersistedEvent;
 import com.sanyan.common.test.PostgresTestcontainerSupport;
 import com.sanyan.llm.LlmApi;
 import com.sanyan.memory.internal.rag.RagIndexWorker;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +21,6 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.util.AopTestUtils;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Connection;
 import java.time.Duration;
@@ -181,6 +181,24 @@ class MessageFlowE2EIT extends PostgresTestcontainerSupport {
         lenient().when(chatApi.listRecentByUser(any(), anyInt())).thenReturn(List.of());
     }
 
+    @AfterEach
+    void cleanupTestData() throws Exception {
+        // 测试方法不加 @Transactional（因为 IntimacyRecordTransaction 用 REQUIRES_NEW，
+        // 测试事务 + REQUIRES_NEW 会导致内层事务读不到外层未提交的 relationship 行）。
+        // 改用 @AfterEach JDBC 直连删除测试数据，确保测试间隔离。
+        try (Connection conn = newConnection()) {
+            conn.createStatement().execute(
+                    "DELETE FROM intimacy_logs WHERE user_id IN (" + USER_ID_MSG + ", " + USER_ID_AI_MSG + ")"
+            );
+            conn.createStatement().execute(
+                    "DELETE FROM relationship_milestones WHERE user_id IN (" + USER_ID_MSG + ", " + USER_ID_AI_MSG + ")"
+            );
+            conn.createStatement().execute(
+                    "DELETE FROM relationships WHERE user_id IN (" + USER_ID_MSG + ", " + USER_ID_AI_MSG + ")"
+            );
+        }
+    }
+
     /**
      * 链路验证：user 消息事件 → 亲密度涨分 → DB 状态正确。
      *
@@ -188,7 +206,6 @@ class MessageFlowE2EIT extends PostgresTestcontainerSupport {
      * 验证：relationships 懒创建，intimacy_score >= 1；intimacy_logs 有 reason='MESSAGE_SENT' delta>0。
      */
     @Test
-    @Transactional
     void user_message_event_should_create_relationship_and_accumulate_intimacy() {
         MessagePersistedListener rawListener = AopTestUtils.getTargetObject(messagePersistedListener);
         rawListener.onMessagePersisted(
