@@ -126,4 +126,17 @@ class AuthControllerIT {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("密码错误"));
     }
+
+    @Test
+    void shouldRejectInvalidPhoneFormatOnSmsSend() throws Exception {
+        SmsSendReq req = new SmsSendReq();
+        req.setPhone("not-a-phone");
+
+        mockMvc.perform(post("/api/auth/sms/send")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("手机号格式不正确"));
+    }
 }
