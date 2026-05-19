@@ -1356,12 +1356,79 @@ async def run_plan3_stage_transition(token: str, db: DbHandle, user_id: int, cha
     milestone_ok = milestone_row is not None
     log.debug(f"PLOT:stage_entry_1 行: {milestone_row}")
 
+    # ---- 漏点 1: stage_story WS 帧的 story_message 内容断言 ----
+    # StageTransitionStoryListener 由 AFTER_COMMIT 异步触发，可能比 turn_complete 晚到。
+    # 若当前 stage_stories_received 为空，额外等 3s 再发一条消息看是否补到。
+    if not stage_stories_received:
+        log.info("    stage_story 帧未随 turn_complete 到达，等 3s 后再发一条消息补捞...")
+        await asyncio.sleep(3)
+        extra_replies = await chat_p3(token, ["再聊一句看看"], log)
+        for r in extra_replies:
+            stage_stories_received.extend(r.stage_stories)
+
+    story_msg_ok = False
+    story_msg_detail = "未收到 stage_story 帧"
+    if stage_stories_received:
+        for frame in stage_stories_received:
+            sm = frame.get("storyMessage", frame.get("story_message", ""))
+            log.debug(f"stage_story frame storyMessage={sm!r}")
+            if "她第一次自然地叫了你的名字" in sm:
+                story_msg_ok = True
+                story_msg_detail = f"storyMessage 含目标文案 ✓ ({sm[:40]!r})"
+                break
+        if not story_msg_ok:
+            msgs_seen = [
+                frame.get("storyMessage", frame.get("story_message", ""))
+                for frame in stage_stories_received
+            ]
+            story_msg_detail = f"stage_story 帧存在但 storyMessage 未含目标文案，实际: {msgs_seen}"
+    log.debug(f"story_message 断言: {story_msg_detail}")
+
+    if not story_msg_ok:
+        return ScenarioResult(
+            "plan3_stage_transition", "FAIL",
+            f"stage 0→1 ✓; DB stage=1; PLOT:stage_entry_1={'✓' if milestone_ok else '⚠'}; "
+            f"story_message 断言失败: {story_msg_detail}"
+        )
+
+    # ---- 漏点 2: relationship_milestones stage_entry 去重断言 ----
+    # 验证 existsById 保证同一 rule_id='stage_entry_1' 只落一行（即使 AFTER_COMMIT listener 多次跑）
+    log.info("    验证 relationship_milestones stage_entry_1 去重（应只 1 行）...")
+    count1 = int(db.query(
+        f"SELECT COUNT(*) FROM relationship_milestones "
+        f"WHERE user_id = {user_id} AND character_id = {character_id} "
+        f"AND rule_id = 'stage_entry_1'"
+    )[0][0])
+    log.debug(f"milestone stage_entry_1 count after first trigger: {count1}")
+
+    # 再发一条消息，让 AFTER_COMMIT listener 再跑一轮（触发 StageTransitionStoryListener 链路）
+    await chat_p3(token, ["多聊一句验证去重"], log)
+    await asyncio.sleep(2)  # 等 AFTER_COMMIT listener 完成
+
+    count2 = int(db.query(
+        f"SELECT COUNT(*) FROM relationship_milestones "
+        f"WHERE user_id = {user_id} AND character_id = {character_id} "
+        f"AND rule_id = 'stage_entry_1'"
+    )[0][0])
+    log.debug(f"milestone stage_entry_1 count after second trigger: {count2}")
+
+    if count1 != 1:
+        return ScenarioResult(
+            "plan3_stage_transition", "FAIL",
+            f"stage 0→1 ✓; relationship_milestones stage_entry_1 首次触发后应有 1 行，实际 {count1} 行"
+        )
+    if count2 != 1:
+        return ScenarioResult(
+            "plan3_stage_transition", "FAIL",
+            f"stage 0→1 ✓; relationship_milestones stage_entry_1 去重失败: "
+            f"listener 二次触发后行数从 {count1} 变为 {count2}（期望仍为 1）"
+        )
+
     detail = (
         f"stage 0→1 ✓; DB current_stage=1; "
         f"PLOT:stage_entry_1 {'✓' if milestone_ok else '⚠ 未找到（软断言）'}; "
-        f"stage_story 帧: {len(stage_stories_received)} 个"
+        f"story_message ✓; milestone 去重 ✓ (count={count2})"
     )
-    # stage_entry milestone 是软断言（可能 StageTransitionStoryListener 异步延迟）
     return ScenarioResult("plan3_stage_transition", "PASS", detail)
 
 
@@ -1435,26 +1502,62 @@ async def run_plan3_plot_deep_night(token: str, db: DbHandle, user_id: int, char
             "relationship_milestones 表没有 deep_night_chat 记录（去重防重机制异常）"
         )
 
-    # 验证幂等：再发一条消息，不应再次触发（已有 milestone 记录）
-    log.info("    验证幂等：再发一条，不应再次触发 deep_night_chat")
-    count_before = int(db.query(
+    # ---- 漏点 3: PLOT rule 一次性去重（重新满足触发条件后也不应再加分）----
+    # 第一步：验证当前 intimacy_logs 里 PLOT:deep_night_chat 精确只有 1 行
+    log.info("    验证 PLOT:deep_night_chat 首次触发只有 1 行...")
+    log1_count = int(db.query(
         f"SELECT COUNT(*) FROM intimacy_logs "
         f"WHERE user_id = {user_id} AND character_id = {character_id} "
         f"AND reason = 'PLOT:deep_night_chat'"
     )[0][0])
-    await chat_p3(token, ["还是睡不着"], log)
-    time.sleep(3)
-    count_after = int(db.query(
+    log.debug(f"PLOT:deep_night_chat log count (首次触发后): {log1_count}")
+
+    if log1_count != 1:
+        return ScenarioResult(
+            "plan3_plot_deep_night", "FAIL",
+            f"delta={actual_delta}; milestone 存在; "
+            f"但 intimacy_logs PLOT:deep_night_chat 首次触发后应有 1 行，实际 {log1_count} 行"
+        )
+
+    # 第二步：再次 INSERT 3 晚深夜消息（模拟"连续 3 晚再聊"，重新满足 DeepNightChatRule 条件）
+    log.info("    重新 INSERT 3 晚 22:30 消息，模拟再次满足触发条件...")
+    today = datetime.date.today()
+    for i in range(4, 7):  # 用更早的 3 天，避免与之前插的重叠
+        night_dt = datetime.datetime.combine(
+            today - datetime.timedelta(days=i),
+            datetime.time(22, 45, 0)
+        )
+        night_str = night_dt.strftime("%Y-%m-%d %H:%M:%S")
+        db.execute(
+            f"INSERT INTO message (user_id, character_id, sender_type, content, created_at) "
+            f"VALUES ({user_id}, {character_id}, 'USER', '深夜再聊一次', '{night_str}')"
+        )
+    log.debug("已再 INSERT 3 晚 22:45 历史消息（触发条件再次满足）")
+
+    # 触发 PlotMilestoneEngine（AFTER_COMMIT listener 链路）
+    log.info("    发触发消息（二次触发验证）...")
+    await chat_p3(token, ["晚上好"], log)
+    await asyncio.sleep(2)  # 等 AFTER_COMMIT listener
+
+    # 第三步：intimacy_logs 仍应只有 1 行 PLOT:deep_night_chat（ctx.triggeredRuleIds 去重）
+    log2_count = int(db.query(
         f"SELECT COUNT(*) FROM intimacy_logs "
         f"WHERE user_id = {user_id} AND character_id = {character_id} "
         f"AND reason = 'PLOT:deep_night_chat'"
     )[0][0])
-    idempotent = (count_after == count_before)
-    log.debug(f"幂等验证: before={count_before}, after={count_after}, ok={idempotent}")
+    log.debug(f"PLOT:deep_night_chat log count (二次触发后): {log2_count}")
+
+    if log2_count != 1:
+        return ScenarioResult(
+            "plan3_plot_deep_night", "FAIL",
+            f"delta={actual_delta}; milestone 存在; "
+            f"PLOT 一次性去重失败: 重新满足条件后 intimacy_logs 行数从 {log1_count} 变为 {log2_count}，"
+            f"期望仍为 1（PlotMilestoneEngine 应因 ctx.triggeredRuleIds 含 'deep_night_chat' 而跳过）"
+        )
 
     detail = (
         f"delta={actual_delta}; milestone 记录存在; "
-        f"幂等 {'✓' if idempotent else '⚠ 触发了 2 次（软断言）'}"
+        f"PLOT 一次性去重 ✓ (二次触发后 log count 仍={log2_count})"
     )
     return ScenarioResult("plan3_plot_deep_night", "PASS", detail)
 
