@@ -85,12 +85,12 @@ rollback_plan3_env() {
         ssh "$SERVER" "sudo cp $REMOTE_ENV_BAK $REMOTE_ENV" 2>/dev/null || \
             echo "  [warn] 恢复 env 文件失败，请手动执行: sudo cp $REMOTE_ENV_BAK $REMOTE_ENV" >&2
     fi
-    ssh "$SERVER" "sudo systemctl restart sanyan-server" 2>/dev/null || \
-        echo "  [warn] 重启 sanyan-server 失败，请手动重启" >&2
+    ssh "$SERVER" "sudo systemctl restart 3yan-server" 2>/dev/null || \
+        echo "  [warn] 重启 3yan-server 失败，请手动重启" >&2
     echo "==> [plan3 rollback] 等待服务启动（最多 30s）..."
     ssh "$SERVER" "
         for i in \$(seq 1 30); do
-            if systemctl is-active --quiet sanyan-server; then
+            if systemctl is-active --quiet 3yan-server; then
                 echo '  服务已就绪'
                 exit 0
             fi
@@ -137,13 +137,16 @@ _OVERRIDE_EOF_
     "
     PLAN3_ENV_APPLIED=true
 
-    echo "==> [plan3] 重启 sanyan-server 使配置生效..."
-    ssh "$SERVER" "sudo systemctl restart sanyan-server"
+    echo "==> [plan3] 重启 3yan-server 使配置生效..."
+    ssh "$SERVER" "sudo systemctl restart 3yan-server"
 
-    echo "==> [plan3] 等待服务启动（最多 30s）..."
+    echo "==> [plan3] 等待服务启动（最多 60s，三重检查 port+active+Started 日志）..."
     SERVICE_UP=false
-    for i in $(seq 1 30); do
-        if ssh "$SERVER" "systemctl is-active --quiet sanyan-server" 2>/dev/null; then
+    for i in $(seq 1 60); do
+        PORT_OK="$(ssh "$SERVER" "ss -tln | grep -q ':8080 '" 2>/dev/null && echo y || echo n)"
+        ACTIVE_OK="$(ssh "$SERVER" "systemctl is-active 3yan-server" 2>/dev/null || echo failed)"
+        STARTED_OK="$(ssh "$SERVER" "journalctl -u 3yan-server --since '90 seconds ago' --no-pager 2>/dev/null | grep -q 'Started SanyanApplication'" 2>/dev/null && echo y || echo n)"
+        if [[ "$PORT_OK" == "y" && "$ACTIVE_OK" == "active" && "$STARTED_OK" == "y" ]]; then
             SERVICE_UP=true
             break
         fi
@@ -151,13 +154,10 @@ _OVERRIDE_EOF_
     done
 
     if ! $SERVICE_UP; then
-        echo "  [error] sanyan-server 30s 内未就绪，中止测试" >&2
+        echo "  [error] 3yan-server 60s 内未就绪 (port=${PORT_OK} active=${ACTIVE_OK} started=${STARTED_OK})" >&2
         exit 1
     fi
-    echo "  服务已就绪"
-
-    # 额外等 2s 让 Spring 初始化完成（端口监听就绪）
-    sleep 2
+    echo "  服务已就绪（port=LISTEN active 应用已 Started）"
 fi
 
 # ---- 跑测试 ----

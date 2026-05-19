@@ -1,6 +1,7 @@
 package com.sanyan.bootstrap;
 
 import com.sanyan.character.event.MessagePersistedListener;
+import com.sanyan.character.internal.RelationshipFetchService;
 import com.sanyan.character.internal.RelationshipRepository;
 import com.sanyan.character.internal.intimacy.IntimacyLogRepository;
 import com.sanyan.chat.ChatApi;
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -115,6 +117,8 @@ class MessageFlowE2EIT extends PostgresTestcontainerSupport {
     private static final Long USER_ID_MSG = 9042L;
     /** ai 消息不触发测试用的 userId。 */
     private static final Long USER_ID_AI_MSG = 9043L;
+    /** RelationshipFetchService 事务边界回归测试用的 userId。 */
+    private static final Long USER_ID_FETCH = 9044L;
     /** 小婉 character_id（V6 seed 保证存在）。 */
     private static final Long CHARACTER_ID = 1L;
 
@@ -144,6 +148,9 @@ class MessageFlowE2EIT extends PostgresTestcontainerSupport {
     @Autowired
     private IntimacyLogRepository logRepo;
 
+    @Autowired
+    private RelationshipFetchService fetchService;
+
     @MockBean
     private ChatApi chatApi;
 
@@ -156,7 +163,8 @@ class MessageFlowE2EIT extends PostgresTestcontainerSupport {
             conn.createStatement().execute(
                     "INSERT INTO users (id, phone, password, nickname) VALUES " +
                     "(" + USER_ID_MSG + ", 'e2e-fk-" + USER_ID_MSG + "', 'x', 'e2e-9042'), " +
-                    "(" + USER_ID_AI_MSG + ", 'e2e-fk-" + USER_ID_AI_MSG + "', 'x', 'e2e-9043') " +
+                    "(" + USER_ID_AI_MSG + ", 'e2e-fk-" + USER_ID_AI_MSG + "', 'x', 'e2e-9043'), " +
+                    "(" + USER_ID_FETCH + ", 'e2e-fk-" + USER_ID_FETCH + "', 'x', 'e2e-9044') " +
                     "ON CONFLICT (id) DO NOTHING"
             );
         }
@@ -172,6 +180,13 @@ class MessageFlowE2EIT extends PostgresTestcontainerSupport {
         lenient().when(valueOps.get(anyString())).thenReturn(null);
         lenient().when(valueOps.increment(anyString(), any(Long.class))).thenReturn(1L);
         lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
+
+        // ConsecutiveLoginService.recordLogin 走 redis.opsForHash().entries(key)。
+        // mock 返回空 Map → 视为首日登录 → streak=1, isFirstToday=true → 触发 DAILY_LOGIN。
+        // 用 doReturn 绕过 stringRedisTemplate.opsForHash() 的泛型限制（when().thenReturn 在 raw cast 时失败）。
+        HashOperations hashOps = mock(HashOperations.class);
+        org.mockito.Mockito.doReturn(hashOps).when(stringRedisTemplate).opsForHash();
+        lenient().when(hashOps.entries(anyString())).thenReturn(java.util.Map.of());
     }
 
     @BeforeEach
@@ -188,13 +203,16 @@ class MessageFlowE2EIT extends PostgresTestcontainerSupport {
         // 改用 @AfterEach JDBC 直连删除测试数据，确保测试间隔离。
         try (Connection conn = newConnection()) {
             conn.createStatement().execute(
-                    "DELETE FROM intimacy_logs WHERE user_id IN (" + USER_ID_MSG + ", " + USER_ID_AI_MSG + ")"
+                    "DELETE FROM intimacy_logs WHERE user_id IN ("
+                            + USER_ID_MSG + ", " + USER_ID_AI_MSG + ", " + USER_ID_FETCH + ")"
             );
             conn.createStatement().execute(
-                    "DELETE FROM relationship_milestones WHERE user_id IN (" + USER_ID_MSG + ", " + USER_ID_AI_MSG + ")"
+                    "DELETE FROM relationship_milestones WHERE user_id IN ("
+                            + USER_ID_MSG + ", " + USER_ID_AI_MSG + ", " + USER_ID_FETCH + ")"
             );
             conn.createStatement().execute(
-                    "DELETE FROM relationships WHERE user_id IN (" + USER_ID_MSG + ", " + USER_ID_AI_MSG + ")"
+                    "DELETE FROM relationships WHERE user_id IN ("
+                            + USER_ID_MSG + ", " + USER_ID_AI_MSG + ", " + USER_ID_FETCH + ")"
             );
         }
     }
@@ -235,6 +253,42 @@ class MessageFlowE2EIT extends PostgresTestcontainerSupport {
      *
      * <p>非 user role 应被 SenderType.USER.equalsIgnoreCase 过滤，不触发涨分，也不懒创建 relationship。
      */
+    /**
+     * 事务边界回归（K2 dogfood 暴露）：
+     * 首次 fetchMyRelationship 必须既懒建关系又触发 DAILY_LOGIN 涨分，不抛 RELATIONSHIP_NOT_FOUND。
+     *
+     * <p>Bug 历史：RelationshipFetchService.fetchMyRelationship 早期标了 @Transactional，
+     * 内部先 findOrCreate save（外层事务未 commit），随后调 IntimacyRecordTransaction.doRecord
+     * (REQUIRES_NEW)。REQUIRES_NEW 会挂起外层事务并在新事务里再查 relationship —— 此时
+     * 新事务读不到外层未提交的行，抛 RELATIONSHIP_NOT_FOUND(3002)。修复 = 去掉 fetchMyRelationship
+     * 的 @Transactional，让 findOrCreate 用自己的事务先 commit 再调 doRecord。
+     */
+    @Test
+    void fetchMyRelationship_should_lazy_create_and_trigger_daily_login_on_first_call() {
+        var dto = fetchService.fetchMyRelationship(USER_ID_FETCH, CHARACTER_ID);
+
+        assertThat(dto).as("首次调用应返回 DTO 而不是抛异常").isNotNull();
+        assertThat(dto.userId()).isEqualTo(USER_ID_FETCH);
+        assertThat(dto.characterId()).isEqualTo(CHARACTER_ID);
+        // DAILY_LOGIN 触发后 score 应 > 0（具体涨多少取决于 streak 配置）
+        assertThat(dto.intimacyScore())
+                .as("首次登录应触发 DAILY_LOGIN，intimacy_score 应 > 0")
+                .isPositive();
+
+        var rel = relRepo.findByUserIdAndCharacterId(USER_ID_FETCH, CHARACTER_ID);
+        assertThat(rel).as("relationship 应被懒创建").isPresent();
+        assertThat(rel.get().getIntimacyScore())
+                .as("DB 中的 intimacy_score 应与 DTO 一致")
+                .isEqualTo(dto.intimacyScore());
+
+        var logs = logRepo.findTop10ByUserIdAndCharacterIdOrderByCreatedAtDesc(
+                USER_ID_FETCH, CHARACTER_ID);
+        assertThat(logs).as("应有 intimacy_logs 审计行").isNotEmpty();
+        assertThat(logs.stream().anyMatch(l -> "DAILY_LOGIN".equals(l.getReason())))
+                .as("应至少有一行 reason=DAILY_LOGIN")
+                .isTrue();
+    }
+
     @Test
     void ai_message_event_should_be_ignored_with_no_db_changes() {
         MessagePersistedListener rawListener = AopTestUtils.getTargetObject(messagePersistedListener);

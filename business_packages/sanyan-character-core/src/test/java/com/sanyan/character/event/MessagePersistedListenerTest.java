@@ -9,6 +9,8 @@ import com.sanyan.character.internal.intimacy.IntimacyRecordService;
 import com.sanyan.character.internal.intimacy.ai.ConversationQualityEvaluator;
 import com.sanyan.character.internal.intimacy.ai.QualityScoreResponse;
 import com.sanyan.character.internal.plotrule.PlotMilestoneEngine;
+import com.sanyan.character.internal.plotrule.RelationshipMilestoneEntity;
+import com.sanyan.character.internal.plotrule.RelationshipMilestoneId;
 import com.sanyan.character.internal.plotrule.RelationshipMilestoneRepository;
 import com.sanyan.chat.ChatApi;
 import com.sanyan.chat.dto.MessageDto;
@@ -82,6 +84,47 @@ class MessagePersistedListenerTest {
         verify(recordService).recordEvent(argThat(e ->
                 e.type() == IntimacyEvent.Type.PLOT_MILESTONE
                 && "deep_night_chat".equals(e.payloadStr())));
+    }
+
+    /**
+     * 回归：PLOT 触发后必须 save 到 relationship_milestones 表（去重表）。
+     * 否则下次新消息会再次触发同一规则（plotEngine 看到 triggeredRuleIds 为空），
+     * 且 dogfood 断言 milestone 表存在记录会失败。
+     */
+    @Test
+    void should_save_milestone_when_plot_triggers() {
+        when(relRepo.findByUserIdAndCharacterId(1L, 1L))
+                .thenReturn(Optional.of(RelationshipTestFixtures.validRelationship(1L, 1L)));
+        when(chatApi.listRecentByUser(1L, 32)).thenReturn(List.of());
+        when(milestoneRepo.findAllByUserIdAndCharacterId(1L, 1L)).thenReturn(List.of());
+        when(milestoneRepo.existsById(any(RelationshipMilestoneId.class))).thenReturn(false);
+        when(plotEngine.evaluate(any()))
+                .thenReturn(List.of(IntimacyEvent.plot(1L, 1L, "deep_night_chat", 50)));
+
+        listener.onMessagePersisted(new MessagePersistedEvent(99L, 1L, 1L, "user"));
+
+        verify(milestoneRepo).save(argThat((RelationshipMilestoneEntity m) ->
+                m.getUserId().equals(1L)
+                && m.getCharacterId().equals(1L)
+                && "deep_night_chat".equals(m.getRuleId())));
+    }
+
+    /**
+     * 回归：相同 ruleId 已 save 过时不应重复 save（existsById=true 时跳过）。
+     */
+    @Test
+    void should_skip_save_milestone_when_already_triggered() {
+        when(relRepo.findByUserIdAndCharacterId(1L, 1L))
+                .thenReturn(Optional.of(RelationshipTestFixtures.validRelationship(1L, 1L)));
+        when(chatApi.listRecentByUser(1L, 32)).thenReturn(List.of());
+        when(milestoneRepo.findAllByUserIdAndCharacterId(1L, 1L)).thenReturn(List.of());
+        when(milestoneRepo.existsById(any(RelationshipMilestoneId.class))).thenReturn(true);
+        when(plotEngine.evaluate(any()))
+                .thenReturn(List.of(IntimacyEvent.plot(1L, 1L, "deep_night_chat", 50)));
+
+        listener.onMessagePersisted(new MessagePersistedEvent(99L, 1L, 1L, "user"));
+
+        verify(milestoneRepo, never()).save(any(RelationshipMilestoneEntity.class));
     }
 
     @Test

@@ -10,6 +10,7 @@ import com.sanyan.character.internal.intimacy.ai.QualityScoreResponse;
 import com.sanyan.character.internal.plotrule.MessageContext;
 import com.sanyan.character.internal.plotrule.PlotMilestoneEngine;
 import com.sanyan.character.internal.plotrule.RelationshipMilestoneEntity;
+import com.sanyan.character.internal.plotrule.RelationshipMilestoneId;
 import com.sanyan.character.internal.plotrule.RelationshipMilestoneRepository;
 import com.sanyan.chat.ChatApi;
 import com.sanyan.chat.SenderType;
@@ -77,6 +78,7 @@ public class MessagePersistedListener {
 
             for (IntimacyEvent plotEvent : plotEngine.evaluate(ctx)) {
                 recordService.recordEvent(plotEvent);
+                markMilestoneTriggered(event.userId(), event.characterId(), plotEvent.payloadStr());
             }
 
             // 4) AI 对话质量评估（每 N 条用户消息触发一次）
@@ -94,6 +96,28 @@ public class MessagePersistedListener {
         } catch (Exception e) {
             log.error("MessagePersistedListener 失败 userId={} characterId={} messageId={}",
                     event.userId(), event.characterId(), event.messageId(), e);
+        }
+    }
+
+    /**
+     * 把 PLOT 规则触发结果落到 relationship_milestones 表（去重表）。
+     * 否则下次新消息 plotEngine 看到 triggeredRuleIds 仍为空，会再次触发同一规则。
+     * 并发首次 INSERT 冲突时静默忽略——下次 onMessagePersisted 内 existsById 会返回 true。
+     */
+    private void markMilestoneTriggered(Long userId, Long characterId, String ruleId) {
+        RelationshipMilestoneId id = new RelationshipMilestoneId(userId, characterId, ruleId);
+        if (milestoneRepo.existsById(id)) {
+            return;
+        }
+        RelationshipMilestoneEntity m = new RelationshipMilestoneEntity();
+        m.setUserId(userId);
+        m.setCharacterId(characterId);
+        m.setRuleId(ruleId);
+        try {
+            milestoneRepo.save(m);
+        } catch (Exception e) {
+            log.debug("milestone 并发写入冲突（已存在），userId={} characterId={} ruleId={}",
+                    userId, characterId, ruleId);
         }
     }
 

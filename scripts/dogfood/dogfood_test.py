@@ -66,10 +66,10 @@ RAG_INDEX_WAIT_SECONDS = 30.0
 # ---- Plan 3 相关常量 ----
 
 # dogfood 模式下的缩短阈值（与 plan3_env_override.env 保持一致）
-P3_STRANGER_END = 5
-P3_FRIEND_END = 15
-P3_AMBIGUOUS_END = 30
-P3_LOVER_END = 50
+P3_STRANGER_END = 20
+P3_FRIEND_END = 40
+P3_AMBIGUOUS_END = 60
+P3_LOVER_END = 80
 P3_MESSAGE_DAILY_CAP = 50
 P3_AI_TRIGGER_N = 3      # 每 3 条 user 消息触发一次 AI 质量评估
 
@@ -1044,12 +1044,12 @@ async def run_plan3_daily_login(token: str, db: DbHandle, user_id: int, characte
         )
     log.debug(f"DAILY_LOGIN 行: {row}")
 
-    # 验证 delta=10（streak=1，bonus=0）
+    # 验证 delta=15（streak=1，dailyLogin=10 + bonus = min(1*5, 50)=5 → 15）
     actual_delta = int(row["delta"])
-    if actual_delta != 10:
+    if actual_delta != 15:
         return ScenarioResult(
             "plan3_daily_login", "FAIL",
-            f"DAILY_LOGIN delta 期望 10，实际 {actual_delta}"
+            f"DAILY_LOGIN delta 期望 15（streak=1: 10 base + 5 bonus），实际 {actual_delta}"
         )
 
     # 验证 Redis streak=1
@@ -1156,7 +1156,7 @@ async def run_plan3_streak_gap_reset(token: str, db: DbHandle, user_id: int, cha
         )
 
     actual_delta = int(row["delta"])
-    expected_delta = 10  # streak=1, bonus=0
+    expected_delta = 15  # streak=1（重置后）: 10 base + min(1*5, 50)=5 bonus → 15
 
     streak_val = redis_cmd("HGET", streak_key, "streak")
     log.debug(f"streak 重置后 Redis streak={streak_val!r}, DAILY_LOGIN delta={actual_delta}")
@@ -1164,7 +1164,7 @@ async def run_plan3_streak_gap_reset(token: str, db: DbHandle, user_id: int, cha
     if actual_delta != expected_delta:
         return ScenarioResult(
             "plan3_streak_gap_reset", "FAIL",
-            f"中断后 delta 期望 {expected_delta}（streak=1），实际 {actual_delta}"
+            f"中断后 delta 期望 {expected_delta}（streak=1: 10+5），实际 {actual_delta}"
         )
     if streak_val.strip() != "1":
         return ScenarioResult(
@@ -1459,8 +1459,8 @@ async def run_plan3_plot_deep_night(token: str, db: DbHandle, user_id: int, char
         )
         night_str = night_dt.strftime("%Y-%m-%d %H:%M:%S")
         db.execute(
-            f"INSERT INTO message (user_id, character_id, sender_type, content, created_at) "
-            f"VALUES ({user_id}, {character_id}, 'USER', '好困啊还不想睡', '{night_str}')"
+            f"INSERT INTO message (user_id, sender_type, content, created_at) "
+            f"VALUES ({user_id}, 'USER', '好困啊还不想睡', '{night_str}')"
         )
     log.debug("已 INSERT 3 晚 22:30 历史消息")
 
@@ -1529,8 +1529,8 @@ async def run_plan3_plot_deep_night(token: str, db: DbHandle, user_id: int, char
         )
         night_str = night_dt.strftime("%Y-%m-%d %H:%M:%S")
         db.execute(
-            f"INSERT INTO message (user_id, character_id, sender_type, content, created_at) "
-            f"VALUES ({user_id}, {character_id}, 'USER', '深夜再聊一次', '{night_str}')"
+            f"INSERT INTO message (user_id, sender_type, content, created_at) "
+            f"VALUES ({user_id}, 'USER', '深夜再聊一次', '{night_str}')"
         )
     log.debug("已再 INSERT 3 晚 22:45 历史消息（触发条件再次满足）")
 

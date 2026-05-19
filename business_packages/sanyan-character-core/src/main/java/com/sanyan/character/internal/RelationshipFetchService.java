@@ -7,7 +7,6 @@ import com.sanyan.character.internal.intimacy.IntimacyRecordService;
 import com.sanyan.character.internal.stage.StageDefinition;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 
@@ -20,6 +19,13 @@ import java.time.LocalDate;
  *   <li>拼 RelationshipDto 返回（含 stage name / next_threshold / percent）</li>
  * </ol>
  * <p>日级幂等：同日重复调用不重复涨分（recordLogin 内部判断 last_date）。
+ *
+ * <p><b>本方法没有 @Transactional —— 关键事务边界：</b>
+ * findOrCreateService.findOrCreate 自带 @Transactional（save 在它自己事务内 commit），
+ * intimacyRecordService.recordEvent 内部 IntimacyRecordTransaction.doRecord 是 REQUIRES_NEW。
+ * 如果 fetchMyRelationship 外包一层 @Transactional，REQUIRES_NEW 会挂起外层，在新事务里查不到
+ * 外层未提交的 relationship 行 → 抛 RELATIONSHIP_NOT_FOUND。
+ * 不加 @Transactional 让两步各自独立提交，是 K2 dogfood 暴露并修复的设计。
  */
 @Service
 @RequiredArgsConstructor
@@ -30,7 +36,6 @@ public class RelationshipFetchService {
     private final IntimacyRecordService intimacyRecordService;
     private final StageDefinition stageDef;
 
-    @Transactional
     public RelationshipDto fetchMyRelationship(Long userId, Long characterId) {
         RelationshipEntity rel = findOrCreateService.findOrCreate(userId, characterId);
 
