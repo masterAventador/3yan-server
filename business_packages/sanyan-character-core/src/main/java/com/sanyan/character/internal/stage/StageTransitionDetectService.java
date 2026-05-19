@@ -24,7 +24,9 @@ public class StageTransitionDetectService {
     public void maybeTransition(RelationshipEntity rel, int newScore) {
         int newStage = stageDef.stageFor(newScore);
         int oldStage = rel.getCurrentStage();
-        if (newStage == oldStage) return;
+        // 只升不降：阈值临时改高（dogfood 调参 / 运营回退）后 stageFor 可能算出更小值，
+        // 此时不应把 DB stage 降级 + 发"退回去"的 StageTransitionEvent。
+        if (newStage <= oldStage) return;
 
         rel.setCurrentStage((short) newStage);
         repo.save(rel);

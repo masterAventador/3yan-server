@@ -81,12 +81,25 @@ rollback_plan3_env() {
     fi
     echo ""
     echo "==> [plan3 rollback] 恢复 $REMOTE_ENV → 重启服务..."
+
+    # 双保险：① cp bak 覆盖，② 显式 sed 删除 plan3 override 块（防 bak 文件本身被污染）。
+    # 不再吞 stderr —— 任何一步失败都要让用户看到。
     if [[ -n "$REMOTE_ENV_BAK" ]]; then
-        ssh "$SERVER" "sudo cp $REMOTE_ENV_BAK $REMOTE_ENV" 2>/dev/null || \
-            echo "  [warn] 恢复 env 文件失败，请手动执行: sudo cp $REMOTE_ENV_BAK $REMOTE_ENV" >&2
+        ssh "$SERVER" "sudo cp $REMOTE_ENV_BAK $REMOTE_ENV" || {
+            echo "  [error] cp bak 失败，请手动执行: sudo cp $REMOTE_ENV_BAK $REMOTE_ENV" >&2
+        }
     fi
-    ssh "$SERVER" "sudo systemctl restart 3yan-server" 2>/dev/null || \
+    ssh "$SERVER" "sudo sed -i '/^# -- plan3 dogfood override --\$/,/^# -- end plan3 dogfood override --\$/d' $REMOTE_ENV"
+
+    # rollback 后立即 verify：env 文件里绝对不能再有 plan3 override 标记。
+    REMAINING="$(ssh "$SERVER" "sudo grep -c 'plan3 dogfood override' $REMOTE_ENV || true")"
+    if [[ "$REMAINING" != "0" ]]; then
+        echo "  [error] env 文件仍残留 plan3 override 标记 ${REMAINING} 行，请手动检查 $REMOTE_ENV" >&2
+    fi
+
+    ssh "$SERVER" "sudo systemctl restart 3yan-server" || {
         echo "  [warn] 重启 3yan-server 失败，请手动重启" >&2
+    }
     echo "==> [plan3 rollback] 等待服务启动（最多 30s）..."
     ssh "$SERVER" "
         for i in \$(seq 1 30); do
@@ -98,7 +111,7 @@ rollback_plan3_env() {
         done
         echo '  [warn] 30s 后服务仍未就绪' >&2
         exit 0
-    " 2>/dev/null || true
+    " || true
     PLAN3_ENV_APPLIED=false
     echo "==> [plan3 rollback] 完成"
 }
