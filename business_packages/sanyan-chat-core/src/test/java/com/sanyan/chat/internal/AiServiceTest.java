@@ -1,5 +1,6 @@
 package com.sanyan.chat.internal;
 
+import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.AiCharacterDto;
 import com.sanyan.chat.SenderType;
 import com.sanyan.llm.LlmApi;
@@ -28,7 +29,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -50,6 +53,7 @@ class AiServiceTest {
     @Mock MessageRepository messageRepository;
     @Mock LlmApi llmApi;
     @Mock MemoryApi memoryApi;
+    @Mock CharacterApi characterApi;
 
     private AiService service;
 
@@ -60,7 +64,8 @@ class AiServiceTest {
     void setUp() {
         // Q3 起 AiService 直接持有 PromptBuilder（无状态 Spring Bean，可在测试里直接 new）。
         // Q4 起再注入 MemoryApi，主对话前调 getRelevantContext 拿长期记忆 context。
-        service = new AiService(messageRepository, llmApi, new PromptBuilder(), memoryApi);
+        // I3 起注入 CharacterApi，调 getStagePromptSegment 拼入 stage prompt。
+        service = new AiService(messageRepository, llmApi, new PromptBuilder(), memoryApi, characterApi);
         Resource resource = new ByteArrayResource(
                 SYSTEM_PROMPT_MARKER.getBytes(StandardCharsets.UTF_8));
         ReflectionTestUtils.setField(service, "systemPromptResource", resource);
@@ -297,6 +302,56 @@ class AiServiceTest {
 
         // 没有 user 消息时，RAG query 用空串占位（不传 null，避免 -core 端 NPE）
         verify(memoryApi).getRelevantContext(eq(1L), eq(DEFAULT_CHARACTER_ID), eq(""));
+    }
+
+    // ------------------------------------------------------------------
+    // I3：AiService 调 CharacterApi.getStagePromptSegment 注入 stage prompt
+    // ------------------------------------------------------------------
+
+    @Test
+    void chat_shouldInjectStagePromptSegmentFromCharacterApi() {
+        when(messageRepository.findByUserIdOrderByIdDesc(eq(42L), any()))
+                .thenReturn(new ArrayList<>(List.of()));
+        when(memoryApi.getRelevantContext(anyLong(), anyLong(), any()))
+                .thenReturn(null);
+        when(characterApi.getStagePromptSegment(42L, 1L))
+                .thenReturn("当前关系阶段：朋友。称呼：你。");
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any()))
+                .thenReturn("ok");
+
+        service.chat(xiaowanDto(), 42L);
+
+        // 验证 PromptBuilder 接到了 characterApi 返回的 stage prompt
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.USER_FACING), captor.capture());
+        List<ChatMessage> sent = captor.getValue();
+        // system[0] = 人设；system[1] = stage prompt segment
+        assertThat(sent).hasSize(2);
+        assertThat(sent.get(1).role()).isEqualTo("system");
+        assertThat(sent.get(1).content()).isEqualTo("当前关系阶段：朋友。称呼：你。");
+    }
+
+    @Test
+    void chat_shouldSkipStagePromptWhenCharacterApiReturnsBlank() {
+        when(messageRepository.findByUserIdOrderByIdDesc(anyLong(), any()))
+                .thenReturn(new ArrayList<>(List.of()));
+        when(memoryApi.getRelevantContext(anyLong(), anyLong(), any()))
+                .thenReturn(null);
+        when(characterApi.getStagePromptSegment(anyLong(), anyLong()))
+                .thenReturn("");
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any()))
+                .thenReturn("ok");
+
+        service.chat(xiaowanDto(), 1L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.USER_FACING), captor.capture());
+        List<ChatMessage> sent = captor.getValue();
+        // stage prompt 为空时 PromptBuilder 跳过，只有人设 system 消息
+        assertThat(sent).hasSize(1);
+        assertThat(sent.get(0).role()).isEqualTo("system");
     }
 
     /**

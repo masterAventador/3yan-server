@@ -21,4 +21,15 @@ public final class AiCharacterTestFixtures {
         c.setName(name);
         return c;
     }
+
+    /**
+     * 构造一个带 basePrompt 和 personaConfigJson 的角色 fixture。
+     * 基于 xiaowan() 基线，调用方可再覆盖 name 等字段。
+     */
+    public static AiCharacterEntity withPersonaConfig(String basePrompt, String personaConfigJson) {
+        AiCharacterEntity c = xiaowan();
+        c.setBasePrompt(basePrompt);
+        c.setPersonaConfig(personaConfigJson);
+        return c;
+    }
 }

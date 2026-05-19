@@ -46,6 +46,16 @@
             AiService / PromptBuilder 等 Bean，主对话链路启动期装配失败。
         -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-core</artifactId></dependency>
+
+        <!--
+            S3 Phase 6 / V1 baseline 修复：原 sanyan-business 引了 flyway-core 通过传递依赖
+            到 bootstrap fat jar。Phase 6 删 sanyan-business 后这条传递断了，导致
+            fat jar 里缺 flyway 类，启动时 Hibernate validate 直接挂（没 flyway 跑 schema）。
+            bootstrap 显式声明这两个依赖：flyway 主体 + PG 方言（PG 17 需要 flyway-database-postgresql）。
+        -->
+        <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-core</artifactId></dependency>
+        <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-database-postgresql</artifactId></dependency>
+
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
@@ -84,48 +94,10 @@
                 </executions>
             </plugin>
 
-            <!--
-                Testcontainers 在 surefire 派生 JVM 里的两块配置：
-                  1. systemPropertyVariables.api.version=1.44：docker-java 3.4.x 客户端默认
-                     声明 API 版本 1.32，与 Docker Engine 25+ 最小要求 1.44 不兼容；docker-java
-                     通过系统属性 {@code api.version} 读取目标版本（**不是** {@code DOCKER_API_VERSION}
-                     环境变量，env 在 3.4.x 上不生效，亲测 L2 验证）。
-                  2. environmentVariables.TESTCONTAINERS_RYUK_DISABLED=true：开发机若用 Colima
-                     等 rootless Docker，Ryuk 清理容器无法绑定 host 上的 docker.sock；本地禁用
-                     Ryuk，依赖 JVM 退出时 GenericContainer.stop() 自己清理。CI / Linux Docker
-                     上可通过 CLI 覆盖打开。
-                DOCKER_HOST 通过开发机的 ~/.testcontainers.properties 或 shell env 配置。
-            -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <systemPropertyVariables>
-                        <api.version>1.44</api.version>
-                    </systemPropertyVariables>
-                    <environmentVariables>
-                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
-                    </environmentVariables>
-                </configuration>
-            </plugin>
-            <!--
-                R1 task：failsafe 派生 JVM 需要与 surefire 同样的 docker-java api.version + Ryuk 禁用
-                环境，否则 *IT 跑 Testcontainers PG 时报 "Could not find a valid Docker environment"。
-                父 pom 的 pluginManagement 只定义了 failsafe 的 includes / executions 绑定，没含
-                Testcontainers 配置；各 IT-using 子模块（如 sanyan-memory-core）都自己在 failsafe
-                上显式补这两块配置。bootstrap 一直缺这块，R1 写第一个 IT 时暴露并补齐。
-            -->
+            <!-- Testcontainers 配置（api.version + RYUK_DISABLED）由父 pom pluginManagement 统一提供 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <configuration>
-                    <systemPropertyVariables>
-                        <api.version>1.44</api.version>
-                    </systemPropertyVariables>
-                    <environmentVariables>
-                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
-                    </environmentVariables>
-                </configuration>
             </plugin>
 
         </plugins>

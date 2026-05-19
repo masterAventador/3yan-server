@@ -1,6 +1,7 @@
 package com.sanyan.character;
 
 import com.sanyan.character.dto.AiCharacterDto;
+import com.sanyan.character.dto.RelationshipDto;
 
 /**
  * Character 域对内 API 契约。
@@ -23,4 +24,19 @@ public interface CharacterApi {
      * 业务调用方期望必定能拿到的场景用这个，避免每个调用点重复写 if-null 判断。
      */
     AiCharacterDto getById(Long characterId);
+
+    // ----- Plan 3 新增（关系 / Stage prompt） -----
+
+    /** 唯一懒创建入口：返回 user × character 关系；不存在则创建一条 score=0 stage=0 的记录。 */
+    RelationshipDto findOrCreateRelationship(Long userId, Long characterId);
+
+    /** GET /api/relationships/me 编排入口：findOrCreate + 触发每日首次登录涨分 + 拼好 DTO 返回。 */
+    RelationshipDto fetchMyRelationship(Long userId, Long characterId);
+
+    /**
+     * 返回拼好的 stage prompt 片段，供 chat-core 注入到 system 消息。
+     * 示例返回："当前关系阶段：暧昧。称呼用户用：宝。语调：撒娇、试探、害羞。"
+     * 当 character 不存在 / persona_config 缺失 / stage 无 override 时返回空字符串。
+     */
+    String getStagePromptSegment(Long userId, Long characterId);
 }

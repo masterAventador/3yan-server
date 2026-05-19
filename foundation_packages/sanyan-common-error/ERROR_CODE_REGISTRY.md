@@ -57,6 +57,8 @@
 | Code | 常量 | 文案 |
 |---|---|---|
 | 3001 | `CHARACTER_NOT_FOUND` | 角色不存在 |
+| 3002 | `RELATIONSHIP_NOT_FOUND` | 关系不存在 |
+| 3003 | `INTIMACY_CONCURRENT_UPDATE` | 亲密度并发更新失败 |
 
 ### LlmErrCode（4000-4999）
 
@@ -104,3 +106,4 @@
 | 2026-05-17 | 创建本表；同日 embedding 模块下线，6xxx 区间转为保留 |
 | 2026-05-17 | S3 Phase 4：6xxx 启用 embedding 域；EmbeddingErrCode 新建 6001；LlmErrCode 删 4004 EMBEDDING_SERVICE_UNAVAILABLE（迁到 EmbeddingErrCode 6001） |
 | 2026-05-17 | S3 Phase 7：sanyan-business 单体拆完，ErrCode 位置全部更新到新 -core 模块路径 |
+| 2026-05-18 | Plan 3 A5：character 域新增 3002 RELATIONSHIP_NOT_FOUND / 3003 INTIMACY_CONCURRENT_UPDATE |

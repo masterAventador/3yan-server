@@ -1,5 +1,6 @@
 package com.sanyan.chat.internal;
 
+import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.AiCharacterDto;
 import com.sanyan.chat.SenderType;
 import com.sanyan.llm.LlmApi;
@@ -69,6 +70,7 @@ public class AiService {
     private final LlmApi llmApi;
     private final PromptBuilder promptBuilder;
     private final MemoryApi memoryApi;
+    private final CharacterApi characterApi;
 
     @Value("classpath:prompts/xiaowan-system.md")
     private Resource systemPromptResource;
@@ -123,8 +125,15 @@ public class AiService {
             log.warn("MemoryApi 调用失败，跳过长期记忆: {}", e.getMessage());
         }
 
+        String stagePromptSegment = "";
+        try {
+            stagePromptSegment = characterApi.getStagePromptSegment(userId, characterId);
+        } catch (Exception e) {
+            // CharacterApi 失败不能影响主对话——降级跳过 stage prompt，与 MemoryApi 降级策略对称
+            log.warn("CharacterApi.getStagePromptSegment 失败，跳过 stage prompt: {}", e.getMessage());
+        }
         List<Map<String, String>> openAiMessages =
-                promptBuilder.build(systemPrompt, memoryContext, recentMessages);
+                promptBuilder.build(systemPrompt, stagePromptSegment, memoryContext, recentMessages);
         List<ChatMessage> chatMessages = openAiMessages.stream()
                 .map(m -> new ChatMessage(m.get("role"), m.get("content")))
                 .toList();

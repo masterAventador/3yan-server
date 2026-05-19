@@ -2,12 +2,15 @@ package com.sanyan.character;
 
 import com.sanyan.character.api.CharacterApiImpl;
 import com.sanyan.character.internal.AiCharacterRepository;
+import com.sanyan.chat.ChatApi;
 import com.sanyan.common.test.TestApplication;
+import com.sanyan.llm.LlmApi;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
@@ -35,9 +38,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 @AutoConfigureTestDatabase
 @TestPropertySource(properties = {
         "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "sanyan.jwt.secret=test-secret-key-at-least-256-bits-long-for-hmac-sha-testing",
+        "sanyan.jwt.expiration-days=1"
 })
 class CharacterApplicationContextIT {
+
+    // Plan 3 F1/G2：character-core 引入 chat-api / llm-api 跨模块依赖；本测试上下文
+    // 没有 chat-core / llm-core 实现，用 @MockBean 提供空实现让 Spring 装配通过。
+    @MockBean ChatApi chatApi;
+    @MockBean LlmApi llmApi;
 
     @Autowired
     private CharacterApi characterApi;

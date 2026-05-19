@@ -24,6 +24,7 @@ import java.util.Map;
  * <p>拼装顺序（强约束）：
  * <ol>
  *   <li>system: {@code characterPrompt}（人设 + 当前时间等基底）</li>
+ *   <li>system: {@code stagePromptSegment}（"当前关系阶段：xxx。称呼：yyy。语调：zzz。"），非 blank 时</li>
  *   <li>system: 「她对你的记忆：\n」+ {@code memoryContext.text()}（仅当 memoryContext 非空且非 blank）</li>
  *   <li>历史消息按入参顺序追加，最多保留尾部 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条</li>
  * </ol>
@@ -47,14 +48,24 @@ public class PromptBuilder {
     /**
      * 拼接 OpenAI Chat Completion 兼容的消息数组。
      *
-     * @param characterPrompt 人设 / 角色 system prompt 文本（可为 null 或 blank，但通常非空）
-     * @param memoryContext   长期记忆整合上下文，为 null / EMPTY / blank 时跳过该 system 段
-     * @param recentMessages  按时间正序的最近消息列表（如超过 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE}
-     *                        条，只保留尾部 32 条）
+     * <p>拼装顺序（强约束）：
+     * <ol>
+     *   <li>system: {@code characterPrompt}（人设 + 当前时间等基底）</li>
+     *   <li>system: {@code stagePromptSegment}（"当前关系阶段：xxx。称呼：yyy。语调：zzz。"），非 blank 时</li>
+     *   <li>system: 「她对你的记忆：\n」+ {@code memoryContext.text()}（仅当 memoryContext 非空且非 blank）</li>
+     *   <li>历史消息按入参顺序追加，最多保留尾部 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条</li>
+     * </ol>
+     *
+     * @param characterPrompt    人设 / 角色 system prompt 文本（可为 null 或 blank，但通常非空）
+     * @param stagePromptSegment 当前关系阶段 segment，caller 拼好后传入（可为 null 或 blank，为 blank 时跳过）
+     * @param memoryContext      长期记忆整合上下文，为 null / EMPTY / blank 时跳过该 system 段
+     * @param recentMessages     按时间正序的最近消息列表（如超过 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE}
+     *                           条，只保留尾部 32 条）
      * @return OpenAI 兼容的 {@code [{role, content}, ...]} 数组（保证非 null，可能为空列表）
      */
     public List<Map<String, String>> build(
             String characterPrompt,
+            String stagePromptSegment,
             MemoryContext memoryContext,
             List<MessageEntity> recentMessages) {
 
@@ -62,6 +73,10 @@ public class PromptBuilder {
 
         if (characterPrompt != null && !characterPrompt.isBlank()) {
             messages.add(Map.of("role", "system", "content", characterPrompt));
+        }
+
+        if (stagePromptSegment != null && !stagePromptSegment.isBlank()) {
+            messages.add(Map.of("role", "system", "content", stagePromptSegment));
         }
 
         if (memoryContext != null && !memoryContext.isEmpty()) {

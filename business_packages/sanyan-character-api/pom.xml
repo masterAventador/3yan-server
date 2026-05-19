@@ -19,5 +19,8 @@
     -->
     <dependencies>
         <!-- 故意为空：-api 只含接口 + DTO + 事件，纯 Java，无依赖 -->
+
+        <!-- 测试：事件 record 契约测试 -->
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
     </dependencies>
 </project>

@@ -1,6 +1,9 @@
 package com.sanyan.chat.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sanyan.character.event.IntimacyChangedEvent;
+import com.sanyan.character.event.StageEntryStoryEvent;
+import com.sanyan.character.event.StageTransitionEvent;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageService;
 import com.sanyan.chat.web.MessageData;
@@ -11,6 +14,7 @@ import com.sanyan.common.ws.WsMessage;
 import com.sanyan.common.ws.WsTyping;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -80,7 +84,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         sendObject(session, new WsTyping());
 
         // 4. async: AI 调用 + 拆分多条 + 按节奏推送（typing → delay → message → gap → typing → ...）
+        //    成功 / 失败两条路径都要发 turn_complete，让客户端不必靠"静默 Xs 没新事件"猜结束
         CompletableFuture.runAsync(() -> {
+            int pushedCount = 0;
             try {
                 List<MessageEntity> aiMessages = messageService.handleAiReply(userId);
                 for (int i = 0; i < aiMessages.size(); i++) {
@@ -93,6 +99,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     long delay = TypingDelayCalculator.calculateTypingDelay(aiMsg.getContent());
                     Thread.sleep(delay);
                     sendObject(session, new WsNewMessage(messageService.toData(aiMsg)));
+                    pushedCount++;
                     log.info("AI 回复气泡推送: userId={}, msgId={}, idx={}/{}",
                             userId, aiMsg.getId(), i + 1, aiMessages.size());
                 }
@@ -101,6 +108,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 log.error("处理 AI 回复失败, userId={}", userId, e);
                 sendObject(session, new WsError(wsMsg.getClientMsgId(),
                         WsErrorMessage.MESSAGE_PROCESSING_FAILED));
+            } finally {
+                sendObject(session, new WsTurnComplete(wsMsg.getClientMsgId(), pushedCount));
             }
         });
     }
@@ -111,6 +120,30 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         List<MessageData> data = messages.stream().map(messageService::toData).toList();
         sendObject(session, new WsSyncResult(data));
         log.info("消息同步完成: userId={}, 总消息数={}", userId, data.size());
+    }
+
+    // ----- 事件监听：亲密度/阶段变化主动推送 -----
+
+    @EventListener
+    public void onIntimacyChanged(IntimacyChangedEvent event) {
+        pushToUser(event.userId(), new WsIntimacyUpdate(
+                "intimacy_update", event.newScore(), event.delta(), event.reason()));
+    }
+
+    @EventListener
+    public void onStageTransition(StageTransitionEvent event) {
+        pushToUser(event.userId(), new WsStageTransition(
+                "stage_transition", event.fromStage(), event.toStage()));
+    }
+
+    @EventListener
+    public void onStageEntryStory(StageEntryStoryEvent event) {
+        pushToUser(event.userId(), new WsStageStory(
+                "stage_story", event.toStage(), event.storyMessage()));
+    }
+
+    private void pushToUser(Long userId, Object payload) {
+        sessionManager.getSession(userId).ifPresent(s -> sendObject(s, payload));
     }
 
     public void sendToSession(WebSocketSession session, String payload) {
