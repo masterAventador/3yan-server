@@ -249,3 +249,21 @@ async def test_run_memory_recall_wait_fn返回False立即FAIL(monkeypatch):
     assert result.status == "FAIL"
     assert "未在 30s 内落库" in result.detail or "上游" in result.detail
     assert chat_call_count["n"] == 1
+
+
+# ---------------- run_summary regression：summary_text 含 \n 不应 unpack 错 ----------------
+
+def test_run_summary查summary表必须用regexp_replace处理换行():
+    """防回归：DbHandle.query 用 splitlines 切 psql 输出，summary_text 含 \\n 时会被切散成
+    多行单列，导致 `latest_summary, msg_cnt = rows[0]` ValueError('expected 2, got 1')。
+    SQL 层必须用 regexp_replace 把 \\n 替换为空格，保证 query 返回 1 行 2 列。
+    """
+    import inspect
+    src = inspect.getsource(dt.run_summary)
+    # SELECT summary_text 的语句必须包到 regexp_replace 里
+    has_safe_select = "regexp_replace(summary_text" in src
+    assert has_safe_select, (
+        "run_summary 必须用 regexp_replace(summary_text, E'\\n', ' ', 'g') 包 SELECT，"
+        "否则 AI 生成的多行 summary_text 会让 DbHandle.query splitlines 切散成 N 行单列，"
+        "rows[0] 解包成 (latest_summary, msg_cnt) 时 ValueError。"
+    )

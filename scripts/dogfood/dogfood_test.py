@@ -814,9 +814,12 @@ async def run_summary(token: str, db: DbHandle, user_id: int, character_id: int,
             f"30+ 条消息后 summary 表没有新记录 (before={summary_count_before}, after={summary_count_after})"
         )
 
-    # 拿最新的 summary
+    # 拿最新的 summary。
+    # regexp_replace 把 summary_text 里的 \n 替换为空格——DbHandle.query 用 splitlines
+    # 切 psql 输出，summary_text 含 \n 时会被切散成 N 行单列，导致 rows[0] 解包失败。
     rows = db.query(
-        f"SELECT summary_text, message_count FROM memory_summaries "
+        f"SELECT regexp_replace(summary_text, E'\\n', ' ', 'g'), message_count "
+        f"FROM memory_summaries "
         f"WHERE user_id = {user_id} AND character_id = {character_id} "
         f"ORDER BY created_at DESC LIMIT 1"
     )
