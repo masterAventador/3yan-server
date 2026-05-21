@@ -357,6 +357,39 @@ def clean_test_data(db: DbHandle, user_id: int, log: Logger) -> None:
     log.debug("[clean] 完成")
 
 
+# ----------------------------- 记忆召回 wait helper -----------------------------
+
+async def _wait_table_has_row(
+    db: DbHandle, table: str, user_id: int, log: Logger, timeout: float = 30.0,
+) -> bool:
+    """轮询 `SELECT COUNT(*) FROM <table> WHERE user_id = ?` 直到 > 0 或 timeout。
+
+    1s 轮询间隔。首次查到立即返回 True，整个轮询超时返回 False。
+    """
+    start = time.monotonic()
+    while True:
+        rows = db.query(f"SELECT COUNT(*) FROM {table} WHERE user_id = {user_id}")
+        if rows and int(rows[0][0]) > 0:
+            log.debug(f"[wait] {table} user_id={user_id} 出现行")
+            return True
+        if time.monotonic() - start >= timeout:
+            log.warn(f"[wait] {table} user_id={user_id} 超时 {timeout}s 未出现行")
+            return False
+        await asyncio.sleep(1)
+
+
+async def _wait_profile_landed(db: DbHandle, user_id: int, log: Logger) -> bool:
+    return await _wait_table_has_row(db, "memory_profiles", user_id, log)
+
+
+async def _wait_summary_landed(db: DbHandle, user_id: int, log: Logger) -> bool:
+    return await _wait_table_has_row(db, "memory_summaries", user_id, log)
+
+
+async def _wait_rag_chunk_landed(db: DbHandle, user_id: int, log: Logger) -> bool:
+    return await _wait_table_has_row(db, "chat_embeddings", user_id, log)
+
+
 def clear_profile_throttle(user_id: int, character_id: int) -> None:
     """单独清节流 key，让 profile 抽取能立刻再触发。"""
     redis_cmd("DEL", f"{THROTTLE_KEY_PREFIX}{user_id}:{character_id}")
