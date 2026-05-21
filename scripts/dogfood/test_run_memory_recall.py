@@ -102,3 +102,150 @@ async def test_wait_3个包装函数指向正确的表名(monkeypatch):
     await dt._wait_rag_chunk_landed(db, 901, log)
 
     assert called_tables == ["memory_profiles", "memory_summaries", "chat_embeddings"]
+
+
+# ---------------- run_memory_recall 骨架测试 ----------------
+
+def _fake_wsreply(text: str) -> dt.WsReply:
+    """构造一个带 1 个 AI 气泡的 fake WsReply。"""
+    r = dt.WsReply()
+    r.new_messages.append({"id": 1, "senderType": "AI", "content": text, "createdAt": "x"})
+    return r
+
+
+def _fake_empty_wsreply() -> dt.WsReply:
+    """AI 没回任何气泡的 WsReply（链路异常）。"""
+    return dt.WsReply()
+
+
+@pytest.mark.asyncio
+async def test_run_memory_recall_6步按序执行(monkeypatch):
+    """骨架按 clean → plant_chat → wait1 → distract_chat → wait2 → probe_chat 顺序执行。"""
+    call_order = []
+
+    def fake_clean(db, user_id, log):
+        call_order.append("clean")
+
+    async def fake_chat(token, contents, log, wait_between=0.5):
+        if contents == ["plant1"]:
+            call_order.append("plant_chat")
+        elif contents == ["d1", "d2"]:
+            call_order.append("distract_chat")
+        elif contents == ["probe"]:
+            call_order.append("probe_chat")
+        return [_fake_wsreply("AI 回 含 关键词") for _ in contents]
+
+    async def fake_wait1(db, user_id, log):
+        call_order.append("wait1")
+        return True
+
+    async def fake_wait2(db, user_id, log):
+        call_order.append("wait2")
+        return True
+
+    monkeypatch.setattr(dt, "clean_test_data", fake_clean)
+    monkeypatch.setattr(dt, "chat", fake_chat)
+    monkeypatch.setattr(dt, "RECALL_DISTRACT_MESSAGES", ["d1", "d2", "d3"])  # 缩小让 distract_count=2 取前 2 条
+
+    result = await dt.run_memory_recall(
+        scenario_name="test_scenario",
+        plant_messages=["plant1"],
+        post_plant_wait_fn=fake_wait1,
+        distract_count=2,
+        post_distract_wait_fn=fake_wait2,
+        probe_message="probe",
+        expected_keywords=["关键词"],
+        token="t",
+        db=MagicMock(),
+        user_id=900,
+        character_id=1,
+        log=dt.Logger(False),
+    )
+
+    assert call_order == ["clean", "plant_chat", "wait1", "distract_chat", "wait2", "probe_chat"]
+    assert result.status == "PASS"
+
+
+@pytest.mark.asyncio
+async def test_run_memory_recall_关键词命中PASS(monkeypatch):
+    """probe AI 回复中含任一 expected_keyword → PASS。"""
+    monkeypatch.setattr(dt, "clean_test_data", lambda *a, **kw: None)
+
+    async def fake_chat(token, contents, log, wait_between=0.5):
+        return [_fake_wsreply("我记得你说过绵阳的事") for _ in contents]
+
+    monkeypatch.setattr(dt, "chat", fake_chat)
+    monkeypatch.setattr(dt, "RECALL_DISTRACT_MESSAGES", ["d"])
+
+    result = await dt.run_memory_recall(
+        scenario_name="test",
+        plant_messages=["plant"],
+        post_plant_wait_fn=None,
+        distract_count=1,
+        post_distract_wait_fn=None,
+        probe_message="probe",
+        expected_keywords=["绵阳", "四川"],
+        token="t", db=MagicMock(), user_id=900, character_id=1, log=dt.Logger(False),
+    )
+
+    assert result.status == "PASS"
+    assert "绵阳" in result.detail
+
+
+@pytest.mark.asyncio
+async def test_run_memory_recall_关键词全未命中FAIL(monkeypatch):
+    """probe AI 回复完全不含任何 expected_keyword → FAIL，detail 含 reply 全文。"""
+    monkeypatch.setattr(dt, "clean_test_data", lambda *a, **kw: None)
+
+    async def fake_chat(token, contents, log, wait_between=0.5):
+        return [_fake_wsreply("我不太记得了，你说说看") for _ in contents]
+
+    monkeypatch.setattr(dt, "chat", fake_chat)
+    monkeypatch.setattr(dt, "RECALL_DISTRACT_MESSAGES", ["d"])
+
+    result = await dt.run_memory_recall(
+        scenario_name="test",
+        plant_messages=["plant"],
+        post_plant_wait_fn=None,
+        distract_count=1,
+        post_distract_wait_fn=None,
+        probe_message="probe",
+        expected_keywords=["绵阳", "四川"],
+        token="t", db=MagicMock(), user_id=900, character_id=1, log=dt.Logger(False),
+    )
+
+    assert result.status == "FAIL"
+    assert "我不太记得了" in result.detail
+    assert "绵阳" in result.detail
+
+
+@pytest.mark.asyncio
+async def test_run_memory_recall_wait_fn返回False立即FAIL(monkeypatch):
+    """post_plant_wait_fn 返回 False（落库超时）→ 骨架直接 FAIL，不进 distract。"""
+    monkeypatch.setattr(dt, "clean_test_data", lambda *a, **kw: None)
+
+    chat_call_count = {"n": 0}
+
+    async def fake_chat(token, contents, log, wait_between=0.5):
+        chat_call_count["n"] += 1
+        return [_fake_wsreply("OK") for _ in contents]
+
+    async def fake_wait_timeout(db, user_id, log):
+        return False
+
+    monkeypatch.setattr(dt, "chat", fake_chat)
+
+    result = await dt.run_memory_recall(
+        scenario_name="test",
+        plant_messages=["plant"],
+        post_plant_wait_fn=fake_wait_timeout,
+        distract_count=1,
+        post_distract_wait_fn=None,
+        probe_message="probe",
+        expected_keywords=["OK"],
+        token="t", db=MagicMock(), user_id=900, character_id=1, log=dt.Logger(False),
+    )
+
+    assert result.status == "FAIL"
+    assert "未在 30s 内落库" in result.detail or "上游" in result.detail
+    assert chat_call_count["n"] == 1

@@ -390,6 +390,113 @@ async def _wait_rag_chunk_landed(db: DbHandle, user_id: int, log: Logger) -> boo
     return await _wait_table_has_row(db, "chat_embeddings", user_id, log)
 
 
+# ----------------------------- 记忆召回测试骨架 -----------------------------
+
+async def run_memory_recall(
+    scenario_name: str,
+    plant_messages: list[str],
+    post_plant_wait_fn: Optional[Callable],
+    distract_count: int,
+    post_distract_wait_fn: Optional[Callable],
+    probe_message: str,
+    expected_keywords: list[str],
+    token: str,
+    db: DbHandle,
+    user_id: int,
+    character_id: int,
+    log: Logger,
+) -> ScenarioResult:
+    """端到端记忆召回测试骨架。6 步：clean → plant → wait1 → distract → wait2 → probe。
+
+    spec: docs/superpowers/specs/2026-05-21-dogfood-memory-recall-design.md
+    """
+    # Step 1: clean
+    clean_test_data(db, user_id, log)
+
+    # Step 2: plant
+    log.info(f"    [plant] 发 {len(plant_messages)} 条事实植入消息")
+    plant_replies = await chat(token, plant_messages, log)
+    for i, r in enumerate(plant_replies):
+        if not r.new_messages:
+            return ScenarioResult(
+                scenario_name, "FAIL",
+                f"plant phase: 第 {i+1} 条 AI 没回复气泡，主对话链路异常",
+            )
+
+    # Step 3: wait1（plant 后）
+    if post_plant_wait_fn is not None:
+        log.info(f"    [wait1] 等记忆机制落库（30s 上限）")
+        ok = await post_plant_wait_fn(db, user_id, log)
+        if not ok:
+            n_profile = _count_rows(db, "memory_profiles", user_id)
+            n_summary = _count_rows(db, "memory_summaries", user_id)
+            n_emb = _count_rows(db, "chat_embeddings", user_id)
+            return ScenarioResult(
+                scenario_name, "FAIL",
+                f"上游机制未在 30s 内落库（DB 行数: profiles={n_profile}, "
+                f"summaries={n_summary}, embeddings={n_emb}），记忆上游断了，不是召回问题",
+            )
+
+    # Step 4: distract
+    distract_msgs = RECALL_DISTRACT_MESSAGES[:distract_count]
+    log.info(f"    [distract] 发 {len(distract_msgs)} 条无关消息推 plant 出短期窗口")
+    distract_replies = await chat(token, distract_msgs, log)
+    for i, r in enumerate(distract_replies):
+        if not r.new_messages:
+            return ScenarioResult(
+                scenario_name, "FAIL",
+                f"distract phase: 第 {i+1} 条无回复，跑测中断（已发送 {i+1} 条）",
+            )
+
+    # Step 5: wait2（distract 后，summary 场景用）
+    if post_distract_wait_fn is not None:
+        log.info(f"    [wait2] 等 distract 触发的机制落库（30s 上限）")
+        ok = await post_distract_wait_fn(db, user_id, log)
+        if not ok:
+            n_summary = _count_rows(db, "memory_summaries", user_id)
+            return ScenarioResult(
+                scenario_name, "FAIL",
+                f"上游机制（distract 后）未在 30s 内落库（DB 行数: summaries={n_summary}）",
+            )
+
+    # Step 6: probe
+    log.info(f"    [probe] 发提问消息，检查 AI 是否召回")
+    probe_replies = await chat(token, [probe_message], log)
+    if not probe_replies or not probe_replies[0].new_messages:
+        return ScenarioResult(
+            scenario_name, "FAIL",
+            "probe phase: AI 没回复气泡，无法判断召回",
+        )
+
+    reply_text = probe_replies[0].ai_concat
+    hit = next((kw for kw in expected_keywords if kw in reply_text), None)
+    if hit:
+        return ScenarioResult(
+            scenario_name, "PASS",
+            f"AI 回复命中关键词 '{hit}'；回复全文: {reply_text!r}",
+        )
+
+    n_profile = _count_rows(db, "memory_profiles", user_id)
+    n_summary = _count_rows(db, "memory_summaries", user_id)
+    n_emb = _count_rows(db, "chat_embeddings", user_id)
+    return ScenarioResult(
+        scenario_name, "FAIL",
+        f"召回失败: AI 回复未命中期望关键词\n"
+        f"  AI 回复全文: {reply_text!r}\n"
+        f"  期望关键词（任一命中即可）: {expected_keywords}\n"
+        f"  上下文统计: DB 行数 profiles={n_profile} summaries={n_summary} embeddings={n_emb}",
+    )
+
+
+def _count_rows(db: DbHandle, table: str, user_id: int) -> int:
+    """辅助：查表里 user_id 对应行数，错误时返回 -1（不阻断 FAIL detail 生成）。"""
+    try:
+        rows = db.query(f"SELECT COUNT(*) FROM {table} WHERE user_id = {user_id}")
+        return int(rows[0][0]) if rows else 0
+    except Exception:
+        return -1
+
+
 def clear_profile_throttle(user_id: int, character_id: int) -> None:
     """单独清节流 key，让 profile 抽取能立刻再触发。"""
     redis_cmd("DEL", f"{THROTTLE_KEY_PREFIX}{user_id}:{character_id}")
