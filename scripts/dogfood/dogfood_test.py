@@ -1953,6 +1953,73 @@ async def run_plan3_stage_prompt(token: str, db: DbHandle, user_id: int, charact
         )
 
 
+
+# ----------------------------- 记忆召回 3 个场景 -----------------------------
+
+async def run_memory_recall_profile(
+    token: str, db: DbHandle, user_id: int, character_id: int, log: Logger,
+) -> ScenarioResult:
+    """验证 profile 抽取：发暴露身份的消息 → 等 profile 落库 → distract 35 条挤出窗口 → 问老家。"""
+    return await run_memory_recall(
+        scenario_name="memory_recall_profile",
+        plant_messages=[
+            "我叫王莎莎，今年27岁，在杭州做 Java 后端",
+            "我老家是四川绵阳的，去年才来杭州工作",
+            "我特别怕辣，川菜里只敢吃糖醋排骨那种",
+            "周末喜欢打羽毛球，水平业余但能赢我同事",
+            "我有只叫汤圆的英短猫，今年3岁了",
+        ],
+        post_plant_wait_fn=_wait_profile_landed,
+        distract_count=35,
+        post_distract_wait_fn=None,
+        probe_message="对了 你还记得我老家是哪里的吗？",
+        expected_keywords=["绵阳", "四川", "川"],
+        token=token, db=db, user_id=user_id, character_id=character_id, log=log,
+    )
+
+
+async def run_memory_recall_summary(
+    token: str, db: DbHandle, user_id: int, character_id: int, log: Logger,
+) -> ScenarioResult:
+    """验证 summary：发吃坏肚子事件 → distract 35 条触发 summary → 等落库 → 问哪家店。"""
+    return await run_memory_recall(
+        scenario_name="memory_recall_summary",
+        plant_messages=[
+            "今天去公司楼下新开的那家寿司店吃饭",
+            "结果点的三文鱼刺身吃完拉肚子拉了一下午",
+            "下次绝对不去那家了",
+        ],
+        post_plant_wait_fn=None,
+        distract_count=35,
+        post_distract_wait_fn=_wait_summary_landed,
+        probe_message="前阵子我说过哪家店让我吃坏肚子来着？",
+        expected_keywords=["寿司", "刺身", "三文鱼"],
+        token=token, db=db, user_id=user_id, character_id=character_id, log=log,
+    )
+
+
+async def run_memory_recall_rag(
+    token: str, db: DbHandle, user_id: int, character_id: int, log: Logger,
+) -> ScenarioResult:
+    """验证 RAG 语义召回：发出差事件 → 等 chunk 入库 → distract 35 条 → 间接问哪天出差。"""
+    return await run_memory_recall(
+        scenario_name="memory_recall_rag",
+        plant_messages=[
+            "下周三我要去成都出差，跟一个甲方碰需求",
+            "项目是给某个银行做风控系统对接",
+            "本来不想去，但项目经理逼我",
+            "在成都待 3 天，周五晚上飞回来",
+            "酒店订的是春熙路那边",
+        ],
+        post_plant_wait_fn=_wait_rag_chunk_landed,
+        distract_count=35,
+        post_distract_wait_fn=None,
+        probe_message="提醒一下，我下周哪天要出差？",
+        expected_keywords=["周三", "星期三", "下周三"],
+        token=token, db=db, user_id=user_id, character_id=character_id, log=log,
+    )
+
+
 # ----------------------------- main runner -----------------------------
 
 SCENARIO_REGISTRY: dict[str, Callable] = {
@@ -1961,6 +2028,10 @@ SCENARIO_REGISTRY: dict[str, Callable] = {
     "throttle": run_throttle,
     "summary": run_summary,
     "rag": run_rag,
+    # ---- 记忆召回（plan2 端到端增强）----
+    "memory_recall_profile": run_memory_recall_profile,
+    "memory_recall_summary": run_memory_recall_summary,
+    "memory_recall_rag": run_memory_recall_rag,
     # ---- Plan 3 场景（10 个）----
     "plan3_baseline": run_plan3_baseline,
     "plan3_daily_login": run_plan3_daily_login,
@@ -1975,7 +2046,12 @@ SCENARIO_REGISTRY: dict[str, Callable] = {
 }
 
 # Plan 2 场景顺序（--scenario=all 默认）
-SCENARIO_ORDER = ["profile", "throttle", "summary", "rag"]
+SCENARIO_ORDER = [
+    "profile", "throttle", "summary", "rag",
+    "memory_recall_profile",
+    "memory_recall_summary",
+    "memory_recall_rag",
+]
 
 # Plan 3 场景顺序（--scenario=all-plan3 或 --plan3 使用）
 SCENARIO_ORDER_PLAN3 = [
@@ -1994,13 +2070,17 @@ SCENARIO_ORDER_PLAN3 = [
 # 每个场景独立 user_id（≥ 900 避免跟真实用户撞），并行跑时数据按 user_id 隔离不冲突。
 # V10 migration 给 message / memory_* / chat_embeddings 加了 FK，所以这些 user_id 必须
 # 在 users 表里真实存在——ensure_dogfood_users() 启动时按需 INSERT 占位行。
-# Plan 2: 901-904；Plan 3: 910-919（隔离，避免交叉污染）
+# Plan 2: 901-904；记忆召回: 905-907；Plan 3: 910-919（隔离，避免交叉污染）
 SCENARIO_USER_IDS = {
     # Plan 2
     "profile": 901,
     "throttle": 902,
     "summary": 903,
     "rag": 904,
+    # 记忆召回（plan2 端到端增强）
+    "memory_recall_profile": 905,
+    "memory_recall_summary": 906,
+    "memory_recall_rag": 907,
     # Plan 3（910-919）
     "plan3_baseline": 910,
     "plan3_daily_login": 911,
