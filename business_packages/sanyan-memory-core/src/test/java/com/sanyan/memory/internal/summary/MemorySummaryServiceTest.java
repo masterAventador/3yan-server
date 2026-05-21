@@ -70,7 +70,12 @@ class MemorySummaryServiceTest {
     }
 
     @Test
-    void summarize_shouldSendSystemPromptPlusHistoryToLlm() {
+    void summarize_shouldSendSystemPromptPlusSingleUserMessageContainingDialogue() {
+        // 关键：对话历史**必须**作为单条 user message 的 content 嵌入，不能展开成多个
+        // user/assistant turns——否则 LLM 会把它当作"正在进行的对话"接最后一条 user 消息的话
+        // 而不是执行 system 指令做摘要（dogfood 实测出来的 bug，FAIL detail:
+        //   summary_text 太短 (len=18), 内容: '月季和薄荷都是很适合阳台养的植物呢！'
+        // ——AI 接了用户第 13 条消息"种了几盆绿植，月季和薄荷活得最好"）。
         List<MessageDto> messages = buildFixtureMessages(30);
         when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("摘要内容");
 
@@ -80,12 +85,35 @@ class MemorySummaryServiceTest {
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
         verify(llmApi).chat(eq(LlmTaskType.BACKGROUND), captor.capture());
         List<ChatMessage> sent = captor.getValue();
-        // 1 system + 30 history
-        assertThat(sent).hasSize(31);
+        // 必须严格 2 条：system + user（对话历史嵌在 user message 的 content 里）
+        assertThat(sent)
+                .as("对话历史必须嵌入单条 user message，不能展开成 turns，否则 LLM 会接话不摘要")
+                .hasSize(2);
         assertThat(sent.get(0).role()).isEqualTo("system");
-        // 后续 30 条历史消息按 user/assistant role 映射
-        assertThat(sent.get(1).role()).isEqualTo("user");
-        assertThat(sent.get(2).role()).isEqualTo("assistant");
+        assertThat(sent.get(1).role())
+                .as("第 2 条必须是 user role（带对话上下文的请求），不能是 assistant")
+                .isEqualTo("user");
+    }
+
+    @Test
+    void summarize_userMessageShouldEmbedAllDialogueTurnsWithRoleMarkers() {
+        // 单条 user message 的 content 必须包含每条历史消息的内容 + 角色标记，
+        // 让 LLM 能在文本层面理解谁说了什么——不是把消息列表展开成 chat turns。
+        List<MessageDto> messages = buildFixtureMessages(4);
+        when(llmApi.chat(any(LlmTaskType.class), any())).thenReturn("摘要内容");
+
+        service.summarize(messages);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.BACKGROUND), captor.capture());
+        String userContent = captor.getValue().get(1).content();
+
+        // user message content 必须含所有 4 条 fixture 消息
+        assertThat(userContent).contains("用户消息 0");
+        assertThat(userContent).contains("AI 回复 1");
+        assertThat(userContent).contains("用户消息 2");
+        assertThat(userContent).contains("AI 回复 3");
     }
 
     @Test

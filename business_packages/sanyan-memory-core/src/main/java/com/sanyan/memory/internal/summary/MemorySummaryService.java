@@ -63,15 +63,26 @@ public class MemorySummaryService {
      * @return LLM 生成的纪要文本，service 不做任何加工原样返回
      */
     public String summarize(List<MessageDto> messages) {
-        List<ChatMessage> chatMessages = new ArrayList<>();
-        chatMessages.add(ChatMessage.system(SYSTEM_PROMPT));
+        // 对话历史**必须**作为单条 user message 的 content 嵌入文本，不能展开成多个
+        // user/assistant turns。展开成 turns 时 LLM 会把整体当作"正在进行的对话"，倾向
+        // 接最后一条 user message 的话而不是执行 system 指令做摘要（dogfood 实测过：
+        // FAIL summary: summary_text 太短 (len=18), 内容: '月季和薄荷都是很适合阳台养的植物呢！'
+        //   ——AI 接了用户第 13 条消息"种了几盆绿植，月季和薄荷活得最好"）。
+        // 参考 MemoryProfileRefreshService.callLlmForUpdatedSummary 的正确模式。
+        StringBuilder dialogue = new StringBuilder();
         if (messages != null) {
             for (MessageDto m : messages) {
-                String role = SenderType.USER.equalsIgnoreCase(m.senderType()) ? "user" : "assistant";
+                String roleLabel = SenderType.USER.equalsIgnoreCase(m.senderType()) ? "用户" : "小婉";
                 String content = m.content() == null ? "" : m.content();
-                chatMessages.add(new ChatMessage(role, content));
+                dialogue.append("[").append(roleLabel).append("] ").append(content).append("\n");
             }
         }
+        String userPrompt = "下面是用户和小婉的对话历史，请按 system 中的要求生成对话纪要：\n\n"
+                + dialogue;
+
+        List<ChatMessage> chatMessages = new ArrayList<>();
+        chatMessages.add(ChatMessage.system(SYSTEM_PROMPT));
+        chatMessages.add(new ChatMessage("user", userPrompt));
         return llmApi.chat(LlmTaskType.BACKGROUND, chatMessages);
     }
 }
