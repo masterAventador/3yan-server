@@ -109,7 +109,7 @@ class AiServiceTest {
                 .contains(SYSTEM_PROMPT_MARKER)
                 .contains("[当前时间]")
                 .contains("时间感知")
-                .contains("准确时间词");
+                .contains("时间跳跃");
     }
 
     @Test
