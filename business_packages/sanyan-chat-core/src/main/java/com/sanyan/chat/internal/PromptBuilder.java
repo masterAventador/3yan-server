@@ -5,8 +5,6 @@ import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.dto.MemoryContext;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,12 +47,10 @@ public class PromptBuilder {
     static final String MEMORY_PREFIX = "她对你的记忆：\n";
 
     /**
-     * 跨时间分隔点的时间显示格式（如 "5月21日 14:30"）。给 LLM 提供时间感的元数据。
+     * 历史消息时间 prefix 格式（如 "5月21日 14:30"）。让 LLM 知道每条消息发生时间，
+     * 回复时能用准确时间词（"刚才"/"昨天"/"前天"）而非默认"刚刚"。
      */
     static final DateTimeFormatter HISTORY_TIME_FMT = DateTimeFormatter.ofPattern("M月d日 HH:mm");
-
-    /** 相邻消息间隔超过此阈值（分钟），认为是"跨时间"，插入 system 分隔标记。 */
-    static final long TIME_JUMP_THRESHOLD_MINUTES = 60;
 
     /**
      * 拼接 OpenAI Chat Completion 兼容的消息数组。
@@ -95,22 +91,14 @@ public class PromptBuilder {
         }
 
         List<MessageEntity> limited = limitToWindow(recentMessages);
-        LocalDateTime prevCreatedAt = null;
         for (MessageEntity msg : limited) {
-            LocalDateTime cur = msg.getCreatedAt();
-            // 跨时间分隔：相邻两条 createdAt 都非 null 且间隔 >= 阈值时，
-            // 在中间插一个 system role 标记。用 system role 是因为 LLM 知道
-            // system 是元指令，不会模仿到对话回复里（曾经把时间 prefix 加到
-            // user content 开头，豆包直接复读到回复里 → 用户看到 "[5月23日 01:15] xxx"）。
-            if (prevCreatedAt != null && cur != null
-                    && Duration.between(prevCreatedAt, cur).toMinutes() >= TIME_JUMP_THRESHOLD_MINUTES) {
-                messages.add(Map.of("role", "system",
-                        "content", "（时间跳跃：以下消息发生在 " + cur.format(HISTORY_TIME_FMT) + "）"));
-            }
             String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
-            String content = msg.getContent() == null ? "" : msg.getContent();
+            String rawContent = msg.getContent() == null ? "" : msg.getContent();
+            // createdAt 非 null 时加 [时间] prefix；为 null（罕见，仅兜底测试 case）保留原文。
+            String content = msg.getCreatedAt() != null
+                    ? "[" + msg.getCreatedAt().format(HISTORY_TIME_FMT) + "] " + rawContent
+                    : rawContent;
             messages.add(Map.of("role", role, "content", content));
-            prevCreatedAt = cur;
         }
 
         return messages;

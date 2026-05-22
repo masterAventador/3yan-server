@@ -239,12 +239,12 @@ class PromptBuilderTest {
     }
 
     @Test
-    void build_shouldInsertSystemMarkerWhenAdjacentMessagesGapExceedsOneHour() {
-        // 相邻消息间隔 >= 1 小时，在两者间插入 system role 时间跳跃标记。
-        // LLM 看到 system role 不会模仿到回复（之前用 message prefix 被豆包复读到回复里）。
-        // 真实场景：前天聊完，今天再问——中间有跨天分隔，AI 应说"前天"而非"刚聊的"。
+    void build_shouldPrependTimestampToEachHistoryMessage() {
+        // 每条历史消息内容前应有 [M月d日 HH:mm] 时间前缀，让 LLM 知道消息发生时间，
+        // 回复时能用准确时间词（'刚才'/'昨天'/'前天'）而非默认"刚刚"。
+        // 真实场景：前天聊机器人，今天再问"科幻新思路是啥"，AI 不应说"刚聊的"。
         LocalDateTime t1 = LocalDateTime.of(2026, 5, 21, 14, 30);
-        LocalDateTime t2 = LocalDateTime.of(2026, 5, 23, 0, 18);  // 间隔 ~2 天
+        LocalDateTime t2 = LocalDateTime.of(2026, 5, 23, 0, 18);
         MessageEntity older = userMessage("我想写科幻小说");
         older.setCreatedAt(t1);
         MessageEntity newer = userMessage("那你说的科幻新思路是啥");
@@ -253,51 +253,27 @@ class PromptBuilderTest {
         List<Map<String, String>> result =
                 builder.build("你是小婉", null, null, List.of(older, newer));
 
-        // result[0]=system characterPrompt, result[1]=user(older),
-        // result[2]=system 时间跳跃标记, result[3]=user(newer)
-        assertThat(result).hasSize(4);
-        assertThat(result.get(1))
-                .containsEntry("role", "user")
-                .containsEntry("content", "我想写科幻小说");
-        assertThat(result.get(2).get("role")).isEqualTo("system");
+        assertThat(result.get(1).get("content"))
+                .as("第一条 history 应带 2026-05-21 14:30 的时间 prefix")
+                .startsWith("[5月21日 14:30] ")
+                .endsWith("我想写科幻小说");
         assertThat(result.get(2).get("content"))
-                .as("system 标记应含目标时间和'时间跳跃'关键词")
-                .contains("时间跳跃")
-                .contains("5月23日 00:18");
-        assertThat(result.get(3))
-                .containsEntry("role", "user")
-                .containsEntry("content", "那你说的科幻新思路是啥");
+                .as("第二条 history 应带 2026-05-23 00:18 的时间 prefix")
+                .startsWith("[5月23日 00:18] ")
+                .endsWith("那你说的科幻新思路是啥");
     }
 
     @Test
-    void build_shouldNotInsertMarkerWhenGapIsBelowOneHour() {
-        // 间隔 < 1 小时（连续对话）不插标记，避免噪音。
-        LocalDateTime t1 = LocalDateTime.of(2026, 5, 23, 14, 30);
-        LocalDateTime t2 = LocalDateTime.of(2026, 5, 23, 14, 35);  // 间隔 5 分钟
-        MessageEntity older = userMessage("早上好");
-        older.setCreatedAt(t1);
-        MessageEntity newer = userMessage("今天天气真好");
-        newer.setCreatedAt(t2);
+    void build_shouldNotPrependTimestampWhenCreatedAtIsNull() {
+        // createdAt 兜底 null（罕见但要防 NPE）：不加 prefix，保留原内容。
+        MessageEntity msg = userMessage("没时间戳的历史");
+        // createdAt 默认 null
 
         List<Map<String, String>> result =
-                builder.build("你是小婉", null, null, List.of(older, newer));
+                builder.build("你是小婉", null, null, List.of(msg));
 
-        // 仅 system characterPrompt + 2 条 user message，无标记
-        assertThat(result).hasSize(3);
-        assertThat(result.get(1)).containsEntry("content", "早上好");
-        assertThat(result.get(2)).containsEntry("content", "今天天气真好");
-    }
-
-    @Test
-    void build_shouldNotInsertMarkerWhenAdjacentCreatedAtIsNull() {
-        // createdAt 为 null（罕见兜底）不能算"间隔无穷"导致误插，直接当无标记处理。
-        MessageEntity m1 = userMessage("msg1");  // createdAt 默认 null
-        MessageEntity m2 = userMessage("msg2");
-
-        List<Map<String, String>> result =
-                builder.build("你是小婉", null, null, List.of(m1, m2));
-
-        assertThat(result).hasSize(3);  // system + 2 user，无标记
+        assertThat(result.get(1).get("content"))
+                .isEqualTo("没时间戳的历史");
     }
 
     private static MessageEntity userMessage(String content) {
