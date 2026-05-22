@@ -8,3 +8,6 @@ target/
 .DS_Store
 **/embedding-token*
 **/*.env
+__pycache__/
+*.pyc
+.pytest_cache/
