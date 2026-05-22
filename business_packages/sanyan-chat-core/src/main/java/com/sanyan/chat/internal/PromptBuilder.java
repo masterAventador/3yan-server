@@ -5,6 +5,7 @@ import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.dto.MemoryContext;
 import org.springframework.stereotype.Component;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +45,12 @@ public class PromptBuilder {
 
     /** 记忆段的固定前缀。统一前缀让 LLM prompt 风格稳定，也方便人工 review 时辨认。 */
     static final String MEMORY_PREFIX = "她对你的记忆：\n";
+
+    /**
+     * 历史消息时间 prefix 格式（如 "5月21日 14:30"）。让 LLM 知道每条消息发生时间，
+     * 回复时能用准确时间词（"刚才"/"昨天"/"前天"）而非默认"刚刚"。
+     */
+    static final DateTimeFormatter HISTORY_TIME_FMT = DateTimeFormatter.ofPattern("M月d日 HH:mm");
 
     /**
      * 拼接 OpenAI Chat Completion 兼容的消息数组。
@@ -86,7 +93,11 @@ public class PromptBuilder {
         List<MessageEntity> limited = limitToWindow(recentMessages);
         for (MessageEntity msg : limited) {
             String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
-            String content = msg.getContent() == null ? "" : msg.getContent();
+            String rawContent = msg.getContent() == null ? "" : msg.getContent();
+            // createdAt 非 null 时加 [时间] prefix；为 null（罕见，仅兜底测试 case）保留原文。
+            String content = msg.getCreatedAt() != null
+                    ? "[" + msg.getCreatedAt().format(HISTORY_TIME_FMT) + "] " + rawContent
+                    : rawContent;
             messages.add(Map.of("role", role, "content", content));
         }
 

@@ -141,7 +141,16 @@ public class AiService {
     }
 
     public String assembleSystemPrompt(String characterPrompt, String time) {
-        return characterPrompt + "\n\n[当前时间] " + time;
+        // [时间感知] 段配合 PromptBuilder 给每条 history 加的 [M月D日 HH:mm] 前缀使用：
+        // 让 LLM 看到对话历史时知道每条消息发生时间，回复时能用准确时间词（"刚才"/
+        // "昨天"/"前天"/"上周"）而非默认"刚刚聊的"。
+        // 真实场景：前天聊机器人，今天再问，AI 不应说"就是刚聊的那个机器人"。
+        return characterPrompt
+                + "\n\n[当前时间] " + time
+                + "\n\n[时间感知] 对话历史中每条消息前的 [M月D日 HH:MM] 是该消息发送时间。"
+                + "回复时如需提及过去对话，请结合当前时间和消息时间用准确时间词"
+                + "（如\"刚才\"、\"今天上午\"、\"昨天\"、\"前天\"、\"上周\"等），"
+                + "不要默认所有历史都是刚发生的。";
     }
 
     private String formatCurrentTime() {

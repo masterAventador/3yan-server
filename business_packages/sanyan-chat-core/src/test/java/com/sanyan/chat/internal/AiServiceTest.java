@@ -105,9 +105,11 @@ class AiServiceTest {
         assertThat(sent).isNotEmpty();
         assertThat(sent.get(0).role()).isEqualTo("system");
         assertThat(sent.get(0).content())
-                .as("system prompt 必须来自资源文件，且追加了当前时间")
+                .as("system prompt 必须来自资源文件，且追加了当前时间和时间感知引导")
                 .contains(SYSTEM_PROMPT_MARKER)
-                .contains("[当前时间]");
+                .contains("[当前时间]")
+                .contains("时间感知")
+                .contains("准确时间词");
     }
 
     @Test
