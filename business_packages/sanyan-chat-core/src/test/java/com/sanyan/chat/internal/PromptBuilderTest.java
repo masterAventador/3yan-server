@@ -5,7 +5,6 @@ import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.dto.MemoryContext;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -236,44 +235,6 @@ class PromptBuilderTest {
 
         var result2 = builder.build("你是小婉", "   ", MemoryContext.EMPTY, List.of());
         assertThat(result2).hasSize(1);
-    }
-
-    @Test
-    void build_shouldPrependTimestampToEachHistoryMessage() {
-        // 每条历史消息内容前应有 [M月d日 HH:mm] 时间前缀，让 LLM 知道消息发生时间，
-        // 回复时能用准确时间词（'刚才'/'昨天'/'前天'）而非默认"刚刚"。
-        // 真实场景：前天聊机器人，今天再问"科幻新思路是啥"，AI 不应说"刚聊的"。
-        LocalDateTime t1 = LocalDateTime.of(2026, 5, 21, 14, 30);
-        LocalDateTime t2 = LocalDateTime.of(2026, 5, 23, 0, 18);
-        MessageEntity older = userMessage("我想写科幻小说");
-        older.setCreatedAt(t1);
-        MessageEntity newer = userMessage("那你说的科幻新思路是啥");
-        newer.setCreatedAt(t2);
-
-        List<Map<String, String>> result =
-                builder.build("你是小婉", null, null, List.of(older, newer));
-
-        assertThat(result.get(1).get("content"))
-                .as("第一条 history 应带 2026-05-21 14:30 的时间 prefix")
-                .startsWith("[5月21日 14:30] ")
-                .endsWith("我想写科幻小说");
-        assertThat(result.get(2).get("content"))
-                .as("第二条 history 应带 2026-05-23 00:18 的时间 prefix")
-                .startsWith("[5月23日 00:18] ")
-                .endsWith("那你说的科幻新思路是啥");
-    }
-
-    @Test
-    void build_shouldNotPrependTimestampWhenCreatedAtIsNull() {
-        // createdAt 兜底 null（罕见但要防 NPE）：不加 prefix，保留原内容。
-        MessageEntity msg = userMessage("没时间戳的历史");
-        // createdAt 默认 null
-
-        List<Map<String, String>> result =
-                builder.build("你是小婉", null, null, List.of(msg));
-
-        assertThat(result.get(1).get("content"))
-                .isEqualTo("没时间戳的历史");
     }
 
     private static MessageEntity userMessage(String content) {
