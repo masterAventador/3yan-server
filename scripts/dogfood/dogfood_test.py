@@ -408,7 +408,7 @@ async def run_memory_recall(
 ) -> ScenarioResult:
     """端到端记忆召回测试骨架。6 步：clean → plant → wait1 → distract → wait2 → probe。
 
-    spec: docs/superpowers/specs/2026-05-21-dogfood-memory-recall-design.md
+    手册: docs/dogfood/memory-recall-dogfood.md
     """
     # Step 1: clean
     clean_test_data(db, user_id, log)
