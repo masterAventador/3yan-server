@@ -11,21 +11,20 @@ import java.util.Map;
 /**
  * LLM Provider 路由层（M3 task；Q3 task 进一步收窄职责）。
  *
- * <p>按 {@link LlmTaskType} 在所有 {@link LLMProvider} 实现中挑出第一个匹配的：
- * <ul>
- *   <li>{@link LlmTaskType#USER_FACING} → {@link DoubaoAdapter}</li>
- *   <li>{@link LlmTaskType#BACKGROUND} → {@link DeepSeekAdapter}</li>
- * </ul>
+ * <p>按 {@link LlmTaskType} 在所有 {@link LLMProvider} 实现中挑出 {@code supports()} 返回 true 的。
+ * 每个 provider 通过配置（如 application.yml 的 {@code sanyan.<provider>.task-types}）声明自己能接
+ * 哪些 task type，具体路由由配置决定，不再硬编码绑定。
  *
  * <p>装配方式：Spring 通过 {@code List<LLMProvider>} 收集所有 {@code @Component} 的 provider
- * 实现，按字段定义顺序构造注入。调用方（{@code AiService} / N2/O2 的后台 service）只依赖
- * router 这一层，不直接 import 具体 adapter。
+ * 实现。调用方（{@code AiService} / N2/O2 的后台 service）只依赖 router 这一层，不直接 import 具体 adapter。
  *
  * <p>错误语义：
  * <ul>
  *   <li>0 个 provider 匹配 → 抛 {@link BusinessException}(LLM_PROVIDER_NOT_FOUND)，意味着装配
  *       遗漏或配置缺失（生产期不应该发生）</li>
- *   <li>多个 provider 匹配 → log.warn + 取首个，行为可预期（按 Spring 注入顺序）</li>
+ *   <li>多个 provider 匹配 → 抛 {@link BusinessException}(LLM_PROVIDER_CONFLICT) fail-fast；
+ *       原"warn + 取首个"行为在 classpath 顺序变化下不稳定，改成显式失败，强制 ops 修
+ *       {@code task-types} 配置确保互斥</li>
  * </ul>
  *
  * <p><b>Q3 task 重构：</b>原 {@code buildOpenAiMessages} 拼装逻辑搬到 {@code PromptBuilder}。
@@ -64,10 +63,10 @@ public class LLMProviderRouter {
             throw new BusinessException(LlmErrCode.LLM_PROVIDER_NOT_FOUND);
         }
         if (matched.size() > 1) {
-            log.warn("Multiple LLM providers support task type {}: {}, picking first ({})",
+            log.error("LLM provider 冲突：task type {} 被多个 provider 同时支持 {}。请检查 application.yml 的 sanyan.<provider>.task-types 配置，确保 task type 互斥。",
                     taskType,
-                    matched.stream().map(p -> p.getClass().getSimpleName()).toList(),
-                    matched.get(0).getClass().getSimpleName());
+                    matched.stream().map(p -> p.getClass().getSimpleName()).toList());
+            throw new BusinessException(LlmErrCode.LLM_PROVIDER_CONFLICT);
         }
 
         LLMProvider provider = matched.get(0);

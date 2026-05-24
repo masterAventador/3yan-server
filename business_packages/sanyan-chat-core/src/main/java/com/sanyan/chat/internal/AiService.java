@@ -91,13 +91,18 @@ public class AiService {
      * <p>2026-05-24 v3 时间感知方案：PromptBuilder 在每条历史消息前插一条 system role 的
      * 「[消息时间：M月d日 HH:mm]」标签；本引导段告诉 LLM 标签是元数据、不要复述、
      * 并基于「当前时间」与「消息时间」的差距使用准确时间词。
+     * <p>2026-05-25 I5：追加"准确说时刻"引导，防 LLM 把数字时间幻觉成模糊表达
+     * （实测：当前时间 01:30 被 AI 说成"两点多"）。配合 {@link #formatCurrentTime()}
+     * 在「当前时间」后附中文口语版本「（凌晨一点半）」共同生效。
      */
     private static final String TIME_AWARENESS_GUIDE = """
             [时间感知]
             对话历史中，每条消息前会有一条 system 角色的"[消息时间：M月d日 HH:mm]"标签，\
             表明该条消息的发送时刻。这是系统元数据，请不要复述到你的回复里，也不要模仿这个格式。
             回复时请基于「当前时间」与「消息时间」的差距，使用准确的时间词（刚才/今天上午/昨天/前天/上周等），\
-            不要把几天前的对话说成"刚才聊的"，也不要把刚刚的对话说成"前几天聊的"。""";
+            不要把几天前的对话说成"刚才聊的"，也不要把刚刚的对话说成"前几天聊的"。
+            涉及具体时刻时（如"几点了"、"该睡了"），按上面「当前时间」括号里的中文口语版本准确说，\
+            不要模糊化（比如"一点半"不要说成"两点多"）。""";
 
     @PostConstruct
     void loadSystemPrompt() {
@@ -159,7 +164,58 @@ public class AiService {
 
     private String formatCurrentTime() {
         LocalDateTime now = LocalDateTime.now();
-        return now.format(DateTimeFormatter.ofPattern("yyyy年M月d日 E HH:mm", Locale.CHINESE));
+        String formatted = now.format(DateTimeFormatter.ofPattern("yyyy年M月d日 E HH:mm", Locale.CHINESE));
+        return formatted + "（" + toSpokenChineseTime(now) + "）";
+    }
+
+    /**
+     * 把 LocalDateTime 转换成中文口语时间描述，强化 LLM 对当前时间精度的感知。
+     * <p>例：01:30 → "凌晨一点半"，14:05 → "下午两点零五分"。
+     * <p>I5：实测豆包 / DeepSeek 在凌晨场景容易把 01:30 说成"两点多"，
+     * 把口语版本拼到「当前时间」括号里减少 LLM 数字→自然语言时间的幻觉。
+     */
+    static String toSpokenChineseTime(LocalDateTime time) {
+        int hour = time.getHour();
+        int minute = time.getMinute();
+        String period;
+        int hour12;
+        if (hour == 0) { period = "凌晨"; hour12 = 12; }
+        else if (hour < 6) { period = "凌晨"; hour12 = hour; }
+        else if (hour < 12) { period = "上午"; hour12 = hour; }
+        else if (hour == 12) { period = "中午"; hour12 = 12; }
+        else if (hour < 18) { period = "下午"; hour12 = hour - 12; }
+        else { period = "晚上"; hour12 = hour - 12; }
+
+        // 中文口语：2 点习惯说"两点"而非"二点"（分钟里的 2 仍说"二"）
+        String hourStr = (hour12 == 2 ? "两" : chineseNumber(hour12)) + "点";
+        String minuteStr;
+        if (minute == 0) {
+            minuteStr = "整";
+        } else if (minute == 30) {
+            minuteStr = "半";
+        } else if (minute < 10) {
+            minuteStr = "零" + chineseNumber(minute) + "分";
+        } else {
+            minuteStr = chineseDoubleDigitNumber(minute) + "分";
+        }
+        return period + hourStr + minuteStr;
+    }
+
+    private static final String[] DIGITS = {"零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二"};
+
+    private static String chineseNumber(int n) {
+        if (n >= 0 && n <= 12) return DIGITS[n];
+        return String.valueOf(n);  // 兜底（hour12 取值 1-12，minute 个位 0-9，不应该走到这里）
+    }
+
+    private static String chineseDoubleDigitNumber(int n) {
+        // 10-59 用于分钟（"十" / "十一" / ... / "五十九"）
+        if (n < 10) return DIGITS[n];
+        if (n == 10) return "十";
+        if (n < 20) return "十" + DIGITS[n - 10];
+        int tens = n / 10;
+        int ones = n % 10;
+        return DIGITS[tens] + "十" + (ones == 0 ? "" : DIGITS[ones]);
     }
 
     /**

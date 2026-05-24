@@ -68,6 +68,7 @@
 | 4002 | `LLM_UPSTREAM_4XX` | AI 服务请求被拒绝 |
 | 4003 | `LLM_UPSTREAM_UNAVAILABLE` | AI 服务暂时不可用 |
 | 4005 | `LLM_PROVIDER_NOT_FOUND` | 找不到支持该任务类型的 LLM provider |
+| 4006 | `LLM_PROVIDER_CONFLICT` | LLM provider 配置冲突：多个 provider 同时支持该 task type，请检查 application.yml |
 
 > 注：4004 `EMBEDDING_SERVICE_UNAVAILABLE` 已于 S3 Phase 4 退役，迁到 `EmbeddingErrCode` 6001。
 
@@ -107,3 +108,4 @@
 | 2026-05-17 | S3 Phase 4：6xxx 启用 embedding 域；EmbeddingErrCode 新建 6001；LlmErrCode 删 4004 EMBEDDING_SERVICE_UNAVAILABLE（迁到 EmbeddingErrCode 6001） |
 | 2026-05-17 | S3 Phase 7：sanyan-business 单体拆完，ErrCode 位置全部更新到新 -core 模块路径 |
 | 2026-05-18 | Plan 3 A5：character 域新增 3002 RELATIONSHIP_NOT_FOUND / 3003 INTIMACY_CONCURRENT_UPDATE |
+| 2026-05-25 | Final review I4：LLM 域新增 4006 LLM_PROVIDER_CONFLICT（多 provider 同 task type → fail-fast） |

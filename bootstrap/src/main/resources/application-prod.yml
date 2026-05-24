@@ -1,5 +1,5 @@
-# 生产 profile：仅覆盖 3 个第三方 API key 的 placeholder 语法为"无 fallback"，
-# 启动时如果环境变量缺失会让 Spring 直接抛 IllegalArgumentException 启动失败（fail-fast），
+# 生产 profile：覆盖第三方 API key 的 placeholder 语法。
+# 默认"无 fallback"，启动时如果环境变量缺失会让 Spring 直接抛 IllegalArgumentException 启动失败（fail-fast），
 # 而不是带着空 key 跑起来运行时再 401 静默掉。
 #
 # 由 deploy.sh 启动命令 `-Dspring.profiles.active=prod` 激活。
@@ -7,10 +7,13 @@
 
 sanyan:
   doubao:
-    api-key: ${DOUBAO_API_KEY}            # 无冒号 = 严格，缺失时启动失败
+    # 2026-05-25 起豆包默认禁用（task-types 空），API key 改成宽松模式：
+    # 若 task-types 也保持空，则缺 DOUBAO_API_KEY 不影响启动；
+    # 若未来 yml 重新启用豆包（task-types 设值），必须同时确保 DOUBAO_API_KEY 已注入，否则首次调用 401。
+    api-key: ${DOUBAO_API_KEY:}
   llm:
     deepseek:
-      api-key: ${DEEPSEEK_API_KEY}
+      api-key: ${DEEPSEEK_API_KEY}            # 仍严格（DeepSeek 是默认接所有任务的 provider）
   embedding:
     siliconflow:
       api-key: ${SILICONFLOW_API_KEY}
