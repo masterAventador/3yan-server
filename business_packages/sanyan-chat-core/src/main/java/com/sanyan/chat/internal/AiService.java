@@ -33,7 +33,7 @@ import java.util.Map;
  * <p>M3 task 重构：把豆包 HTTP 调用抽到 DoubaoAdapter（已迁 sanyan-llm-core），按
  * {@link LlmTaskType} 路由的逻辑放在 LLMProviderRouter。AiService 退化为薄编排层，只负责：
  * <ol>
- *   <li>加载人设资源文件 + 拼接当前时间组装 system prompt</li>
+ *   <li>加载人设资源文件 + 拼接当前时间 + 时间感知引导段组装 system prompt</li>
  *   <li>从 {@link MessageRepository} 拉取短期上下文（最近 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条）</li>
  *   <li>调 {@link MemoryApi#getRelevantContext} 拿长期记忆整合 context（Q4）</li>
  *   <li>用 {@link PromptBuilder} 拼成 OpenAI 兼容消息数组</li>
@@ -95,9 +95,9 @@ public class AiService {
     private static final String TIME_AWARENESS_GUIDE = """
             [时间感知]
             对话历史中，每条消息前会有一条 system 角色的"[消息时间：M月d日 HH:mm]"标签，\
-            表明该条消息的发送时刻。这是系统元数据，**不要复述到你的回复里**，也不要模仿这个格式。
+            表明该条消息的发送时刻。这是系统元数据，请不要复述到你的回复里，也不要模仿这个格式。
             回复时请基于「当前时间」与「消息时间」的差距，使用准确的时间词（刚才/今天上午/昨天/前天/上周等），\
-            不要把几天前的对话说成"刚才聊的"。""";
+            不要把几天前的对话说成"刚才聊的"，也不要把刚刚的对话说成"前几天聊的"。""";
 
     @PostConstruct
     void loadSystemPrompt() {
