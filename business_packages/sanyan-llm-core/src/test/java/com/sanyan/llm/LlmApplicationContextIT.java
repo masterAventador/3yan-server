@@ -1,6 +1,8 @@
 package com.sanyan.llm;
 
 import com.sanyan.llm.api.LlmApiImpl;
+import com.sanyan.llm.internal.DeepSeekAdapter;
+import com.sanyan.llm.internal.DoubaoAdapter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -41,10 +43,26 @@ class LlmApplicationContextIT {
     @Autowired
     private LlmApi llmApi;
 
+    @Autowired
+    private DoubaoAdapter doubaoAdapter;
+
+    @Autowired
+    private DeepSeekAdapter deepSeekAdapter;
+
     @Test
     void contextLoads_llmApiBeanInjected() {
         assertThat(llmApi).isNotNull();
         assertThat(llmApi).isInstanceOf(LlmApiImpl.class);
+    }
+
+    @Test
+    void defaults_shouldRouteAllTasksToDeepSeek() {
+        // 默认配置（doubao.task-types 空 / deepseek.task-types USER_FACING,BACKGROUND）
+        // 必须满足：doubao 全 false，deepseek 全 true
+        assertThat(doubaoAdapter.supports(LlmTaskType.USER_FACING)).isFalse();
+        assertThat(doubaoAdapter.supports(LlmTaskType.BACKGROUND)).isFalse();
+        assertThat(deepSeekAdapter.supports(LlmTaskType.USER_FACING)).isTrue();
+        assertThat(deepSeekAdapter.supports(LlmTaskType.BACKGROUND)).isTrue();
     }
 
     /**

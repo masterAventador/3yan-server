@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,28 +53,22 @@ class DeepSeekAdapterTest {
 
     @Test
     void supports_shouldReturnFalseForAllWhenTaskTypesIsEmpty() {
-        ReflectionTestUtils.setField(adapter, "taskTypes", "");
+        ReflectionTestUtils.setField(adapter, "parsedTaskTypes", Set.of());
         assertThat(adapter.supports(LlmTaskType.USER_FACING)).isFalse();
         assertThat(adapter.supports(LlmTaskType.BACKGROUND)).isFalse();
     }
 
     @Test
     void supports_shouldReturnTrueOnlyForConfiguredTaskType() {
-        ReflectionTestUtils.setField(adapter, "taskTypes", "USER_FACING");
+        ReflectionTestUtils.setField(adapter, "parsedTaskTypes", Set.of(LlmTaskType.USER_FACING));
         assertThat(adapter.supports(LlmTaskType.USER_FACING)).isTrue();
         assertThat(adapter.supports(LlmTaskType.BACKGROUND)).isFalse();
     }
 
     @Test
     void supports_shouldReturnTrueForAllConfiguredTaskTypes() {
-        ReflectionTestUtils.setField(adapter, "taskTypes", "USER_FACING,BACKGROUND");
-        assertThat(adapter.supports(LlmTaskType.USER_FACING)).isTrue();
-        assertThat(adapter.supports(LlmTaskType.BACKGROUND)).isTrue();
-    }
-
-    @Test
-    void supports_shouldTolerateWhitespaceAndCaseInTaskTypesConfig() {
-        ReflectionTestUtils.setField(adapter, "taskTypes", " user_facing ,  BACKGROUND ");
+        ReflectionTestUtils.setField(adapter, "parsedTaskTypes",
+                Set.of(LlmTaskType.USER_FACING, LlmTaskType.BACKGROUND));
         assertThat(adapter.supports(LlmTaskType.USER_FACING)).isTrue();
         assertThat(adapter.supports(LlmTaskType.BACKGROUND)).isTrue();
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sanyan.common.error.BusinessException;
 import com.sanyan.common.web.client.HttpClientFactory;
 import com.sanyan.llm.LlmTaskType;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -12,14 +13,15 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
- * 豆包（火山引擎 ARK）适配器（USER_FACING 任务专用）。
+ * 豆包（火山引擎 ARK）适配器。
+ *
+ * <p>支持的 task type 由 {@code sanyan.doubao.task-types} 配置决定，默认空（不接任何任务）。
+ * 2026-05-25 切到 DeepSeek 后豆包默认禁用，但代码保留待用。
  *
  * <p>豆包走 OpenAI 兼容协议：POST {@code <base-url>/chat/completions}，
  * body 为标准 OpenAI Chat Completion 格式，Authorization 用 Bearer 模式。
@@ -56,9 +58,13 @@ public class DoubaoAdapter implements LLMProvider {
      *   <li>不动现有构造器签名（最小侵入）</li>
      *   <li>非 final，便于 ReflectionTestUtils.setField 在测试里动态切值</li>
      * </ul>
+     * <p>原始字符串只在 @PostConstruct 时解析一次，解析结果缓存到 {@link #parsedTaskTypes}。
      */
-    @Value("${sanyan.llm.doubao.task-types:}")
+    @Value("${sanyan.doubao.task-types:}")
     private String taskTypes;
+
+    /** {@link #taskTypes} 解析后的缓存（@PostConstruct 初始化，supports() 一次性查询）。 */
+    private Set<LlmTaskType> parsedTaskTypes = Set.of();
 
     /**
      * Spring 注入用构造器。配置 key 见 {@code application-dev.yml}：
@@ -83,6 +89,12 @@ public class DoubaoAdapter implements LLMProvider {
         this.apiKey = apiKey;
         this.model = model;
         this.restClient = HttpClientFactory.newClient(baseUrl, connectTimeout, readTimeout);
+    }
+
+    @PostConstruct
+    void initTaskTypes() {
+        this.parsedTaskTypes = LlmTaskTypeMatcher.parse(taskTypes);
+        log.info("DoubaoAdapter task types = {} (raw config: '{}')", parsedTaskTypes, taskTypes);
     }
 
     @Override
@@ -125,14 +137,7 @@ public class DoubaoAdapter implements LLMProvider {
 
     @Override
     public boolean supports(LlmTaskType taskType) {
-        if (taskTypes == null || taskTypes.isBlank()) {
-            return false;
-        }
-        Set<String> configured = Arrays.stream(taskTypes.split(","))
-                .map(s -> s.trim().toUpperCase())
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toSet());
-        return configured.contains(taskType.name());
+        return parsedTaskTypes.contains(taskType);
     }
 
     @Override
