@@ -62,13 +62,17 @@ sanyan:
   #   - 线上 prod：从 /opt/3yan/3yan-server/.env 注入（见 deploy.sh），且 application-prod.yml
   #     覆盖为无 fallback 的严格写法，启动时缺 key 直接 fail-fast
   doubao:
-    # USER_FACING 任务（用户对话）走豆包 doubao-seed-character
+    # 2026-05-25 起豆包默认禁用（task-types 空），保留 adapter + 配置以便未来一键 yml 切回。
+    # 历史 USER_FACING 路由曾走 doubao-seed-character；dogfood 发现多 system 块密集
+    # prompt 下豆包 character 模型会把 system 元数据当 assistant 回复输出。
+    task-types: ""
     api-key: ${DOUBAO_API_KEY:}
     base-url: https://ark.cn-beijing.volces.com/api/v3
     model: ep-20260408102845-f86mb
   llm:
     deepseek:
-      # BACKGROUND 任务（摘要 / 档案抽取）走 DeepSeek V4-Flash
+      # 2026-05-25 起 DeepSeek V4-Flash 接所有任务（USER_FACING + BACKGROUND），统一 provider。
+      task-types: USER_FACING,BACKGROUND
       api-key: ${DEEPSEEK_API_KEY:}
       base-url: https://api.deepseek.com
       model: deepseek-v4-flash
