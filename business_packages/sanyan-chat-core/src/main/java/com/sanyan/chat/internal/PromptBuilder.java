@@ -5,8 +5,11 @@ import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.dto.MemoryContext;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -44,6 +47,23 @@ public class PromptBuilder {
 
     /** 记忆段的固定前缀。统一前缀让 LLM prompt 风格稳定，也方便人工 review 时辨认。 */
     static final String MEMORY_PREFIX = "她对你的记忆：\n";
+
+    /** 消息时间标签的前缀（全角冒号，跟现有 [当前时间] 风格一致）。 */
+    static final String MESSAGE_TIME_PREFIX = "[消息时间：";
+
+    /** 消息时间标签的后缀。 */
+    static final String MESSAGE_TIME_SUFFIX = "]";
+
+    /**
+     * 消息时间格式：M月d日 HH:mm（无年份、无星期）。
+     * <p>短期窗口最多覆盖几天到几周（32 条消息），年份冗余；星期 token 密度低，砍掉。
+     */
+    private static final DateTimeFormatter MESSAGE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.CHINESE);
+
+    private static String formatMessageTime(LocalDateTime time) {
+        return MESSAGE_TIME_PREFIX + time.format(MESSAGE_TIME_FORMATTER) + MESSAGE_TIME_SUFFIX;
+    }
 
     /**
      * 拼接 OpenAI Chat Completion 兼容的消息数组。
@@ -85,6 +105,9 @@ public class PromptBuilder {
 
         List<MessageEntity> limited = limitToWindow(recentMessages);
         for (MessageEntity msg : limited) {
+            if (msg.getCreatedAt() != null) {
+                messages.add(Map.of("role", "system", "content", formatMessageTime(msg.getCreatedAt())));
+            }
             String role = SenderType.USER.equals(msg.getSenderType()) ? "user" : "assistant";
             String content = msg.getContent() == null ? "" : msg.getContent();
             messages.add(Map.of("role", role, "content", content));

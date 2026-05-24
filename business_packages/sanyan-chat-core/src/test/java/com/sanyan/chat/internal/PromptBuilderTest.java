@@ -5,6 +5,7 @@ import com.sanyan.memory.MemoryConstants;
 import com.sanyan.memory.dto.MemoryContext;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -235,6 +236,73 @@ class PromptBuilderTest {
 
         var result2 = builder.build("你是小婉", "   ", MemoryContext.EMPTY, List.of());
         assertThat(result2).hasSize(1);
+    }
+
+    // ---------- 2026-05-24 时间感知：每条消息前插 system role 时间标签 ----------
+
+    @Test
+    void build_shouldInsertTimeLabelBeforeEachMessage() {
+        MessageEntity m1 = userMessageAt("早上好", LocalDateTime.of(2026, 5, 22, 14, 30));
+        MessageEntity m2 = aiMessageAt("早呀", LocalDateTime.of(2026, 5, 22, 14, 32));
+
+        List<Map<String, String>> result =
+                builder.build("sys", null, null, List.of(m1, m2));
+
+        // 1 system + (1 time-label + 1 user) + (1 time-label + 1 assistant) = 5
+        // 注意：标签字符串里的冒号是全角"："，与下面 PromptBuilder 实现里的 MESSAGE_TIME_PREFIX 对齐
+        assertThat(result).hasSize(5);
+        assertThat(result.get(0)).containsEntry("role", "system").containsEntry("content", "sys");
+        assertThat(result.get(1))
+                .containsEntry("role", "system")
+                .containsEntry("content", "[消息时间：5月22日 14:30]");
+        assertThat(result.get(2)).containsEntry("role", "user").containsEntry("content", "早上好");
+        assertThat(result.get(3))
+                .containsEntry("role", "system")
+                .containsEntry("content", "[消息时间：5月22日 14:32]");
+        assertThat(result.get(4)).containsEntry("role", "assistant").containsEntry("content", "早呀");
+    }
+
+    @Test
+    void build_shouldSkipTimeLabelWhenCreatedAtIsNull() {
+        MessageEntity withTime = userMessageAt("有时间", LocalDateTime.of(2026, 5, 22, 14, 30));
+        MessageEntity noTime = userMessage("没时间");  // helper 不设 createdAt → null
+
+        List<Map<String, String>> result =
+                builder.build("sys", null, null, List.of(withTime, noTime));
+
+        // 1 system + (1 time-label + 1 user) + (1 user, 无 label) = 4
+        assertThat(result).hasSize(4);
+        assertThat(result.get(0)).containsEntry("role", "system").containsEntry("content", "sys");
+        assertThat(result.get(1))
+                .containsEntry("role", "system")
+                .containsEntry("content", "[消息时间：5月22日 14:30]");
+        assertThat(result.get(2)).containsEntry("role", "user").containsEntry("content", "有时间");
+        assertThat(result.get(3)).containsEntry("role", "user").containsEntry("content", "没时间");
+    }
+
+    @Test
+    void build_timeLabelShouldUseCorrectFormat() {
+        // 验证格式：M月d日 HH:mm（无年份、无星期、无前导 0 的月份和日期）
+        MessageEntity msg = userMessageAt("x", LocalDateTime.of(2026, 5, 22, 14, 30));
+
+        List<Map<String, String>> result =
+                builder.build("sys", null, null, List.of(msg));
+
+        assertThat(result.get(1))
+                .containsEntry("role", "system")
+                .containsEntry("content", "[消息时间：5月22日 14:30]");
+    }
+
+    private static MessageEntity userMessageAt(String content, LocalDateTime createdAt) {
+        MessageEntity m = userMessage(content);
+        m.setCreatedAt(createdAt);
+        return m;
+    }
+
+    private static MessageEntity aiMessageAt(String content, LocalDateTime createdAt) {
+        MessageEntity m = aiMessage(content);
+        m.setCreatedAt(createdAt);
+        return m;
     }
 
     private static MessageEntity userMessage(String content) {
