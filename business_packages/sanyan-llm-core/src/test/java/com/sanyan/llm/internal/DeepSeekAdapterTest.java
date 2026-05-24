@@ -8,6 +8,7 @@ import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -50,9 +51,31 @@ class DeepSeekAdapterTest {
     }
 
     @Test
-    void supports_shouldReturnTrueForBackgroundOnly() {
-        assertThat(adapter.supports(LlmTaskType.BACKGROUND)).isTrue();
+    void supports_shouldReturnFalseForAllWhenTaskTypesIsEmpty() {
+        ReflectionTestUtils.setField(adapter, "taskTypes", "");
         assertThat(adapter.supports(LlmTaskType.USER_FACING)).isFalse();
+        assertThat(adapter.supports(LlmTaskType.BACKGROUND)).isFalse();
+    }
+
+    @Test
+    void supports_shouldReturnTrueOnlyForConfiguredTaskType() {
+        ReflectionTestUtils.setField(adapter, "taskTypes", "USER_FACING");
+        assertThat(adapter.supports(LlmTaskType.USER_FACING)).isTrue();
+        assertThat(adapter.supports(LlmTaskType.BACKGROUND)).isFalse();
+    }
+
+    @Test
+    void supports_shouldReturnTrueForAllConfiguredTaskTypes() {
+        ReflectionTestUtils.setField(adapter, "taskTypes", "USER_FACING,BACKGROUND");
+        assertThat(adapter.supports(LlmTaskType.USER_FACING)).isTrue();
+        assertThat(adapter.supports(LlmTaskType.BACKGROUND)).isTrue();
+    }
+
+    @Test
+    void supports_shouldTolerateWhitespaceAndCaseInTaskTypesConfig() {
+        ReflectionTestUtils.setField(adapter, "taskTypes", " user_facing ,  BACKGROUND ");
+        assertThat(adapter.supports(LlmTaskType.USER_FACING)).isTrue();
+        assertThat(adapter.supports(LlmTaskType.BACKGROUND)).isTrue();
     }
 
     @Test

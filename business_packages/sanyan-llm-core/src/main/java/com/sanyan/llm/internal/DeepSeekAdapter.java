@@ -12,8 +12,11 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * DeepSeek V4-Flash 适配器（BACKGROUND 任务专用）。
@@ -36,6 +39,18 @@ public class DeepSeekAdapter implements LLMProvider {
     private final String apiKey;
     private final String model;
     private final RestClient restClient;
+
+    /**
+     * 配置驱动的 task type 列表（comma-separated，case-insensitive，trim 空格）。
+     * 默认 USER_FACING,BACKGROUND = supports() 对所有 task 返回 true（2026-05-25 切 DeepSeek 后的默认行为）。
+     * <p>Field-level @Value 而非构造器参数：
+     * <ul>
+     *   <li>不动现有构造器签名（最小侵入）</li>
+     *   <li>非 final，便于 ReflectionTestUtils.setField 在测试里动态切值</li>
+     * </ul>
+     */
+    @Value("${sanyan.llm.deepseek.task-types:USER_FACING,BACKGROUND}")
+    private String taskTypes;
 
     /**
      * Spring 注入用构造器。配置 key 形如：
@@ -100,7 +115,14 @@ public class DeepSeekAdapter implements LLMProvider {
 
     @Override
     public boolean supports(LlmTaskType taskType) {
-        return taskType == LlmTaskType.BACKGROUND;
+        if (taskTypes == null || taskTypes.isBlank()) {
+            return false;
+        }
+        Set<String> configured = Arrays.stream(taskTypes.split(","))
+                .map(s -> s.trim().toUpperCase())
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toSet());
+        return configured.contains(taskType.name());
     }
 
     @Override
