@@ -86,6 +86,19 @@ public class AiService {
 
     private String systemPromptTemplate;
 
+    /**
+     * 时间感知引导段，拼在 system prompt 的「[当前时间]」之后。
+     * <p>2026-05-24 v3 时间感知方案：PromptBuilder 在每条历史消息前插一条 system role 的
+     * 「[消息时间：M月d日 HH:mm]」标签；本引导段告诉 LLM 标签是元数据、不要复述、
+     * 并基于「当前时间」与「消息时间」的差距使用准确时间词。
+     */
+    private static final String TIME_AWARENESS_GUIDE = """
+            [时间感知]
+            对话历史中，每条消息前会有一条 system 角色的"[消息时间：M月d日 HH:mm]"标签，\
+            表明该条消息的发送时刻。这是系统元数据，**不要复述到你的回复里**，也不要模仿这个格式。
+            回复时请基于「当前时间」与「消息时间」的差距，使用准确的时间词（刚才/今天上午/昨天/前天/上周等），\
+            不要把几天前的对话说成"刚才聊的"。""";
+
     @PostConstruct
     void loadSystemPrompt() {
         try (InputStream is = systemPromptResource.getInputStream()) {
@@ -141,7 +154,7 @@ public class AiService {
     }
 
     public String assembleSystemPrompt(String characterPrompt, String time) {
-        return characterPrompt + "\n\n[当前时间] " + time;
+        return characterPrompt + "\n\n[当前时间] " + time + "\n\n" + TIME_AWARENESS_GUIDE;
     }
 
     private String formatCurrentTime() {

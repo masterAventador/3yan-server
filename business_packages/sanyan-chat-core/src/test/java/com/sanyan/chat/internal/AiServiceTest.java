@@ -362,6 +362,32 @@ class AiServiceTest {
         return new AiCharacterDto(1L, "小婉", null);
     }
 
+    // ---------- 2026-05-24 时间感知：assembleSystemPrompt 引导词 ----------
+
+    @Test
+    void assembleSystemPrompt_shouldIncludeTimeAwarenessGuide() {
+        String result = service.assembleSystemPrompt("你是小婉", "2026年5月24日 周日 10:00");
+
+        // 当前时间段保持原样
+        assertThat(result)
+                .contains("你是小婉")
+                .contains("[当前时间] 2026年5月24日 周日 10:00");
+
+        // 新加的时间感知引导段
+        assertThat(result)
+                .as("必须含 [时间感知] 段标题")
+                .contains("[时间感知]");
+        assertThat(result)
+                .as("必须显式禁止 LLM 复述时间标签格式")
+                .contains("不要复述");
+        assertThat(result)
+                .as("必须给出至少一个准确时间词示例，避免 LLM 用生硬表达")
+                .containsAnyOf("刚才", "今天", "昨天", "前天", "上周");
+        assertThat(result)
+                .as("必须告诉 LLM 标签格式以便识别为系统元数据")
+                .contains("[消息时间：");
+    }
+
     @Test
     void productionSystemPromptResource_containsRelationshipBoundaries() throws IOException {
         String prompt = Files.readString(
