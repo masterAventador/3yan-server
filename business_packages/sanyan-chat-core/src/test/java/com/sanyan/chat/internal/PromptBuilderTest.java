@@ -281,7 +281,7 @@ class PromptBuilderTest {
     }
 
     @Test
-    void build_timeLabelShouldUseCorrectFormat() {
+    void build_shouldUseCorrectTimeLabelFormat() {
         // 验证格式：M月d日 HH:mm（无年份、无星期、无前导 0 的月份和日期）
         MessageEntity msg = userMessageAt("x", LocalDateTime.of(2026, 5, 22, 14, 30));
 

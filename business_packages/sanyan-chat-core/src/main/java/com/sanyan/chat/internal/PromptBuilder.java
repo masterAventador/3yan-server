@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Plan 2 Task Q3：把 LLM 调用前的「OpenAI 兼容消息数组」拼装逻辑统一收口。
@@ -29,7 +30,9 @@ import java.util.Map;
  *   <li>system: {@code characterPrompt}（人设 + 当前时间等基底）</li>
  *   <li>system: {@code stagePromptSegment}（"当前关系阶段：xxx。称呼：yyy。语调：zzz。"），非 blank 时</li>
  *   <li>system: 「她对你的记忆：\n」+ {@code memoryContext.text()}（仅当 memoryContext 非空且非 blank）</li>
- *   <li>历史消息按入参顺序追加，最多保留尾部 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条</li>
+ *   <li>历史消息按入参顺序追加，最多保留尾部 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条；
+ *       每条历史消息前插入一条 {@code system: [消息时间：M月d日 HH:mm]} 标签（{@code createdAt} 为
+ *       null 时跳过该条标签，消息本身正常加）</li>
  * </ol>
  *
  * <p>SenderType 映射：
@@ -51,9 +54,6 @@ public class PromptBuilder {
     /** 消息时间标签的前缀（全角冒号，跟现有 [当前时间] 风格一致）。 */
     static final String MESSAGE_TIME_PREFIX = "[消息时间：";
 
-    /** 消息时间标签的后缀。 */
-    static final String MESSAGE_TIME_SUFFIX = "]";
-
     /**
      * 消息时间格式：M月d日 HH:mm（无年份、无星期）。
      * <p>短期窗口最多覆盖几天到几周（32 条消息），年份冗余；星期 token 密度低，砍掉。
@@ -62,7 +62,8 @@ public class PromptBuilder {
             DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.CHINESE);
 
     private static String formatMessageTime(LocalDateTime time) {
-        return MESSAGE_TIME_PREFIX + time.format(MESSAGE_TIME_FORMATTER) + MESSAGE_TIME_SUFFIX;
+        Objects.requireNonNull(time, "time must not be null");
+        return MESSAGE_TIME_PREFIX + time.format(MESSAGE_TIME_FORMATTER) + "]";
     }
 
     /**
@@ -73,7 +74,9 @@ public class PromptBuilder {
      *   <li>system: {@code characterPrompt}（人设 + 当前时间等基底）</li>
      *   <li>system: {@code stagePromptSegment}（"当前关系阶段：xxx。称呼：yyy。语调：zzz。"），非 blank 时</li>
      *   <li>system: 「她对你的记忆：\n」+ {@code memoryContext.text()}（仅当 memoryContext 非空且非 blank）</li>
-     *   <li>历史消息按入参顺序追加，最多保留尾部 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条</li>
+     *   <li>历史消息按入参顺序追加，最多保留尾部 {@link MemoryConstants#SHORT_TERM_WINDOW_SIZE} 条；
+     *       每条历史消息前插入一条 {@code system: [消息时间：M月d日 HH:mm]} 标签（{@code createdAt} 为
+     *       null 时跳过该条标签，消息本身正常加）</li>
      * </ol>
      *
      * @param characterPrompt    人设 / 角色 system prompt 文本（可为 null 或 blank，但通常非空）
