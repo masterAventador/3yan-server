@@ -26,5 +26,6 @@ class ProactiveErrCodeTest {
     void should_expose_expected_codes() {
         assertThat(ProactiveErrCode.PROACTIVE_GENERATE_FAILED.getCode()).isEqualTo(7001);
         assertThat(ProactiveErrCode.PROACTIVE_EVENT_TYPE_INVALID.getCode()).isEqualTo(7002);
+        assertThat(ProactiveErrCode.PROACTIVE_EVENT_NOT_FOUND.getCode()).isEqualTo(7003);
     }
 }
