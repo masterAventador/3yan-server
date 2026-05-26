@@ -40,10 +40,9 @@
         <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
 
         <!-- 测试 -->
+        <!-- testcontainers-postgresql / junit-jupiter 由 sanyan-common-test 传递，无需显式声明（对齐 character-core 写法） -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
-        <dependency><groupId>org.testcontainers</groupId><artifactId>postgresql</artifactId><scope>test</scope></dependency>
-        <dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
     </dependencies>
 
     <build>
