@@ -78,6 +78,7 @@
 |---|---|---|
 | 5001 | `PROFILE_REFRESH_CONFLICT` | Profile 刷新失败（乐观锁冲突） |
 | 5002 | `EMBEDDING_SERVICE_UNAVAILABLE` | Embedding 服务不可用（业务层视角，调用方按此降级 RAG） |
+| 5003 | `MEMORY_ITEM_NOT_FOUND` | 结构化记忆条目不存在 |
 
 ### EmbeddingErrCode（6000-6999）
 
@@ -109,3 +110,4 @@
 | 2026-05-17 | S3 Phase 7：sanyan-business 单体拆完，ErrCode 位置全部更新到新 -core 模块路径 |
 | 2026-05-18 | Plan 3 A5：character 域新增 3002 RELATIONSHIP_NOT_FOUND / 3003 INTIMACY_CONCURRENT_UPDATE |
 | 2026-05-25 | Final review I4：LLM 域新增 4006 LLM_PROVIDER_CONFLICT（多 provider 同 task type → fail-fast） |
+| 2026-05-27 | Plan 4：memory 域新增 5003 MEMORY_ITEM_NOT_FOUND |

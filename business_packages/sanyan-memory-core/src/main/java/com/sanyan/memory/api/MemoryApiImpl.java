@@ -1,29 +1,61 @@
 package com.sanyan.memory.api;
 
+import com.sanyan.common.error.BusinessException;
 import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.dto.MemoryContext;
+import com.sanyan.memory.dto.MemoryItemDto;
+import com.sanyan.memory.internal.MemoryErrCode;
+import com.sanyan.memory.internal.item.MemoryItemEntity;
+import com.sanyan.memory.internal.item.MemoryItemRepository;
+import com.sanyan.memory.internal.item.MemoryItemStatus;
 import com.sanyan.memory.internal.orchestrator.MemoryContextBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Plan 2 Task Q2：{@link MemoryApi} 在 -core 模块的薄壳实现。
+ * {@link MemoryApi} 在 -core 的实现。
  *
- * <p>本类**只做委托**，把入参原样传给 {@link MemoryContextBuilder#build}，把返回值原样返回。
- * 三层组合的编排逻辑、空数据降级、文本拼接全部在 builder 里完成（Q1 已覆盖单测），
- * 这里不重复任何业务规则——保持 -api 实现层"薄"的 java-backend §3.4 约束。
- *
- * <p>放在 {@code api/} 子包是 java-backend rule §3.1 强制的目录结构：
- * 对内 Java 接口入口的实现必须在 {@code <domain>-core/api/} 下，与 {@code internal/} 隔离。
+ * <p>getRelevantContext 委托 {@link MemoryContextBuilder}（Plan 2）；
+ * Plan 4 新增 getMemoryItem / markMemoryItemDone 直接操作 {@link MemoryItemRepository}
+ * （简单 CRUD，无复杂编排，按 java-backend §3.3 直接在方法里处理）。
  */
 @Service
 @RequiredArgsConstructor
 public class MemoryApiImpl implements MemoryApi {
 
     private final MemoryContextBuilder builder;
+    private final MemoryItemRepository itemRepository;
 
     @Override
     public MemoryContext getRelevantContext(Long userId, Long characterId, String currentUserMessage) {
         return builder.build(userId, characterId, currentUserMessage);
+    }
+
+    @Override
+    public MemoryItemDto getMemoryItem(Long itemId) {
+        MemoryItemEntity e = itemRepository.findById(itemId)
+                .orElseThrow(() -> new BusinessException(MemoryErrCode.MEMORY_ITEM_NOT_FOUND));
+        return toDto(e);
+    }
+
+    @Override
+    @Transactional
+    public void markMemoryItemDone(Long itemId) {
+        MemoryItemEntity e = itemRepository.findById(itemId)
+                .orElseThrow(() -> new BusinessException(MemoryErrCode.MEMORY_ITEM_NOT_FOUND));
+        e.setStatus(MemoryItemStatus.DONE);
+        itemRepository.save(e);
+    }
+
+    private static MemoryItemDto toDto(MemoryItemEntity e) {
+        return new MemoryItemDto(
+                e.getId(),
+                e.getUserId(),
+                e.getCharacterId(),
+                e.getKind().name(),
+                e.getContent(),
+                e.getSalientAt(),
+                e.getStatus().name());
     }
 }

@@ -1,69 +1,88 @@
 package com.sanyan.memory.api;
 
-import com.sanyan.memory.MemoryApi;
-import com.sanyan.memory.dto.MemoryContext;
+import com.sanyan.common.error.BusinessException;
+import com.sanyan.memory.dto.MemoryItemDto;
+import com.sanyan.memory.internal.MemoryErrCode;
+import com.sanyan.memory.internal.item.MemoryItemEntity;
+import com.sanyan.memory.internal.item.MemoryItemKind;
+import com.sanyan.memory.internal.item.MemoryItemRepository;
+import com.sanyan.memory.internal.item.MemoryItemStatus;
+import com.sanyan.memory.internal.item.fixtures.MemoryItemTestFixtures;
 import com.sanyan.memory.internal.orchestrator.MemoryContextBuilder;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Plan 2 Task Q2：MemoryApiImpl 单元测试。
- *
- * <p>{@link MemoryApiImpl} 是 -api 模块 {@link MemoryApi} 契约在 -core 侧的薄壳实现，
- * 只做一件事：把入参完整透传给 {@link MemoryContextBuilder#build}，把返回值原样返回。
- *
- * <p>本测试用 Mockito 把 builder 整个 mock 掉，验证两点：
- * <ol>
- *   <li>builder 返回 {@code null} 时 ApiImpl 也返回 {@code null}（不要私自包成 EMPTY）</li>
- *   <li>builder 返回非空 MemoryContext 时 ApiImpl 原样透传，且参数顺序正确</li>
- * </ol>
- *
- * <p>三层组合细节由 {@code MemoryContextBuilderTest}（Q1）覆盖，这里只验"薄壳委托"语义。
- */
 @ExtendWith(MockitoExtension.class)
 class MemoryApiImplTest {
 
-    private static final Long USER_ID = 42L;
-    private static final Long CHARACTER_ID = 7L;
-    private static final String CURRENT_USER_MESSAGE = "今天我去吃了火锅";
-
-    @Mock
-    MemoryContextBuilder builder;
-
-    @InjectMocks
-    MemoryApiImpl api;
+    @Mock MemoryContextBuilder builder;
+    @Mock MemoryItemRepository itemRepository;
+    @InjectMocks MemoryApiImpl api;
 
     @Test
-    @DisplayName("builder 返回 null → ApiImpl 透传 null（让 chat-core 跳过 system 消息注入）")
-    void getRelevantContext_returnsNullWhenBuilderReturnsNull() {
-        when(builder.build(USER_ID, CHARACTER_ID, CURRENT_USER_MESSAGE)).thenReturn(null);
+    void getMemoryItem_should_map_entity_to_dto() {
+        MemoryItemEntity entity = MemoryItemTestFixtures.planEvent(
+                7L, 1L, "周三面试", Instant.parse("2026-06-03T09:00:00Z"));
+        entity.setId(99L);
+        when(itemRepository.findById(99L)).thenReturn(Optional.of(entity));
 
-        MemoryContext result = api.getRelevantContext(USER_ID, CHARACTER_ID, CURRENT_USER_MESSAGE);
+        MemoryItemDto dto = api.getMemoryItem(99L);
 
-        assertThat(result).isNull();
-        verify(builder).build(USER_ID, CHARACTER_ID, CURRENT_USER_MESSAGE);
-        verifyNoMoreInteractions(builder);
+        assertThat(dto.id()).isEqualTo(99L);
+        assertThat(dto.userId()).isEqualTo(7L);
+        assertThat(dto.characterId()).isEqualTo(1L);
+        assertThat(dto.kind()).isEqualTo(MemoryItemKind.PLAN_EVENT.name());
+        assertThat(dto.content()).isEqualTo("周三面试");
+        assertThat(dto.salientAt()).isEqualTo(Instant.parse("2026-06-03T09:00:00Z"));
+        assertThat(dto.status()).isEqualTo(MemoryItemStatus.PENDING.name());
     }
 
     @Test
-    @DisplayName("builder 返回非空 MemoryContext → ApiImpl 原样透传")
-    void getRelevantContext_passesThroughNonNullContext() {
-        MemoryContext expected = new MemoryContext("【最近的对话纪要】\n聊了猫和工作");
-        when(builder.build(USER_ID, CHARACTER_ID, CURRENT_USER_MESSAGE)).thenReturn(expected);
+    void getMemoryItem_should_throw_when_not_found() {
+        when(itemRepository.findById(404L)).thenReturn(Optional.empty());
 
-        MemoryContext result = api.getRelevantContext(USER_ID, CHARACTER_ID, CURRENT_USER_MESSAGE);
+        assertThatThrownBy(() -> api.getMemoryItem(404L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrCode())
+                        .isEqualTo(MemoryErrCode.MEMORY_ITEM_NOT_FOUND));
 
-        assertThat(result).isSameAs(expected);
-        verify(builder).build(USER_ID, CHARACTER_ID, CURRENT_USER_MESSAGE);
-        verifyNoMoreInteractions(builder);
+        verify(itemRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void markMemoryItemDone_should_set_status_done_and_save() {
+        MemoryItemEntity entity = MemoryItemTestFixtures.emotion(
+                7L, 1L, "最近压力大", Instant.now());
+        entity.setId(55L);
+        when(itemRepository.findById(55L)).thenReturn(Optional.of(entity));
+
+        api.markMemoryItemDone(55L);
+
+        ArgumentCaptor<MemoryItemEntity> captor = ArgumentCaptor.forClass(MemoryItemEntity.class);
+        verify(itemRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(MemoryItemStatus.DONE);
+    }
+
+    @Test
+    void markMemoryItemDone_should_throw_when_not_found() {
+        when(itemRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> api.markMemoryItemDone(404L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrCode())
+                        .isEqualTo(MemoryErrCode.MEMORY_ITEM_NOT_FOUND));
     }
 }

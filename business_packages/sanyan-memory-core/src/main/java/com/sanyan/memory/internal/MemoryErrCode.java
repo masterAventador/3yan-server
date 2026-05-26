@@ -26,6 +26,7 @@ public enum MemoryErrCode implements ErrCode {
 
     PROFILE_REFRESH_CONFLICT(5001, "Profile 刷新失败（乐观锁冲突）"),
     EMBEDDING_SERVICE_UNAVAILABLE(5002, "Embedding 服务不可用"),
+    MEMORY_ITEM_NOT_FOUND(5003, "结构化记忆条目不存在"),
     ;
 
     private final int code;
