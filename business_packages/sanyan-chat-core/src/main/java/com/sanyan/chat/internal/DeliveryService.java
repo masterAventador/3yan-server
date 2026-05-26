@@ -5,6 +5,7 @@ import com.sanyan.chat.ws.WsNewMessage;
 import com.sanyan.common.ws.SessionManager;
 import com.sanyan.push.PushApi;
 import com.sanyan.push.dto.PushPayload;
+import com.sanyan.push.dto.PushResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,6 +63,9 @@ public class DeliveryService {
 
     /** 主动消息推送通知标题，单角色 MVP 硬编码。 */
     private static final String PUSH_TITLE = "小婉";
+
+    /** {@link PushResult#failed} 的失败状态值（与 PushResult.failed() 产出保持一致）。 */
+    private static final String PUSH_STATUS_FAILED = "FAILED";
 
     /**
      * 主动消息投递入口：逐条落库 + 4 层投递，返回落库 messageId 列表。
@@ -123,7 +127,13 @@ public class DeliveryService {
 
     private void pushOffline(Long userId, Long messageId, String segment) {
         try {
-            pushApi.pushToUser(userId, new PushPayload(PUSH_TITLE, segment, messageId));
+            PushResult result = pushApi.pushToUser(userId, new PushPayload(PUSH_TITLE, segment, messageId));
+            // spec §7.1：推送失败（抛异常 / PushResult.status=FAILED）记 ERROR 日志。
+            // 正常返回但 status=FAILED 也是失败，需显式检查，否则静默丢失失败信息。
+            if (result != null && PUSH_STATUS_FAILED.equals(result.status())) {
+                log.error("离线推送失败（不影响流程，靠 sync 兜底）: userId={}, msgId={}, detail={}",
+                        userId, messageId, result.detail());
+            }
         } catch (Exception e) {
             // 投递层失败不回滚已生成内容（已落 message），靠 L4 sync 兜底（spec §5.1）
             log.error("离线推送失败（不影响流程，靠 sync 兜底）: userId={}, msgId={}", userId, messageId, e);

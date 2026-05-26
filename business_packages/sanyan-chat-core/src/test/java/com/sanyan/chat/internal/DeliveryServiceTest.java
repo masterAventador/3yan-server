@@ -1,5 +1,9 @@
 package com.sanyan.chat.internal;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.chat.web.MessageData;
 import com.sanyan.common.ws.SessionManager;
@@ -11,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -125,5 +130,29 @@ class DeliveryServiceTest {
         List<Long> ids = deliveryService.deliver(1L, 99L, List.of("hi"));
 
         assertThat(ids).containsExactly(10L);
+    }
+
+    @Test
+    void deliver_push_returns_failed_should_log_error_not_throw() {
+        when(messageService.saveAiMessage(eq(1L), any())).thenReturn(entityWithId(10L, "hi"));
+        when(sessionManager.getSession(1L)).thenReturn(Optional.empty());
+        // pushApi 正常返回 FAILED（非抛异常路径）→ 应记 ERROR 但不抛、正常返回 id
+        when(pushApi.pushToUser(anyLong(), any())).thenReturn(PushResult.failed("APNs 凭证缺失"));
+
+        Logger logger = (Logger) LoggerFactory.getLogger(DeliveryService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            List<Long> ids = deliveryService.deliver(1L, 99L, List.of("hi"));
+
+            assertThat(ids).containsExactly(10L);
+            verify(pushApi).pushToUser(eq(1L), any(PushPayload.class));
+            // spec §7.1：PushResult.status=FAILED 也要记 ERROR 日志（不只是抛异常路径）
+            assertThat(appender.list)
+                    .anyMatch(e -> e.getLevel() == Level.ERROR && e.getFormattedMessage().contains("APNs 凭证缺失"));
+        } finally {
+            logger.detachAppender(appender);
+        }
     }
 }
