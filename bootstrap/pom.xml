@@ -59,6 +59,8 @@
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
+        <!-- ProactiveFlowE2EIT 等 @Async 链路 IT 需要轮询等待 worker 线程完成（test scope 不传递，bootstrap 单列） -->
+        <dependency><groupId>org.awaitility</groupId><artifactId>awaitility</artifactId><scope>test</scope></dependency>
         <!--
             sanyan-memory-core compile scope：MemoryApiImpl (Q2) 是 MemoryApi 的唯一实现，
             AiService (Q4) 通过 @Autowired MemoryApi 注入，生产 fat jar 必须包含 memory-core
