@@ -17,6 +17,7 @@ import org.springframework.test.context.TestPropertySource;
 import com.sanyan.character.CharacterApi;
 import com.sanyan.llm.LlmApi;
 import com.sanyan.memory.MemoryApi;
+import com.sanyan.push.PushApi;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,6 +61,9 @@ class ChatApplicationContextIT {
     private LlmApi llmApi;
     @MockBean
     private MemoryApi memoryApi;
+    // DeliveryService 依赖 PushApi（sanyan-push-api），push-core 不在 chat-core 测试上下文，mock 掉
+    @MockBean
+    private PushApi pushApi;
 
     @Autowired
     private ChatApi chatApi;

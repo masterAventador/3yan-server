@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.character.event.IntimacyChangedEvent;
 import com.sanyan.character.event.StageEntryStoryEvent;
 import com.sanyan.character.event.StageTransitionEvent;
+import com.sanyan.chat.internal.DeliveryService;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageService;
 import com.sanyan.chat.web.MessageData;
@@ -34,6 +35,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final MessageService messageService;
     private final LastActiveTracker lastActiveTracker;
+    private final DeliveryService deliveryService;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -55,6 +57,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             }
             case WsEventType.SEND_MESSAGE -> handleSendMessage(userId, wsMsg, session);
             case WsEventType.SYNC -> handleSync(userId, wsMsg, session);
+            case WsEventType.ACK -> handleAck(wsMsg);
             default -> log.warn("未知消息类型: {}", wsMsg.getType());
         }
     }
@@ -127,6 +130,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         List<MessageData> data = messages.stream().map(messageService::toData).toList();
         sendObject(session, new WsSyncResult(data));
         log.info("消息同步完成: userId={}, 总消息数={}", userId, data.size());
+    }
+
+    /** 客户端确认已收到主动消息（入站 ack 帧）→ complete 对应投递 future。 */
+    void handleAck(WsMessage wsMsg) {
+        deliveryService.confirmAck(wsMsg.getAckMsgId());
     }
 
     // ----- 事件监听：亲密度/阶段变化主动推送 -----

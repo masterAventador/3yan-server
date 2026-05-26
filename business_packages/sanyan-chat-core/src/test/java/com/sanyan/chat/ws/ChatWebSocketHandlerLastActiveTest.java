@@ -1,6 +1,7 @@
 package com.sanyan.chat.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sanyan.chat.internal.DeliveryService;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageService;
 import com.sanyan.common.ws.LastActiveTracker;
@@ -29,6 +30,7 @@ class ChatWebSocketHandlerLastActiveTest {
     @Mock SessionManager sessionManager;
     @Mock MessageService messageService;
     @Mock LastActiveTracker lastActiveTracker;
+    @Mock DeliveryService deliveryService;
     @Mock WebSocketSession session;
 
     ObjectMapper objectMapper = new ObjectMapper();
@@ -40,8 +42,8 @@ class ChatWebSocketHandlerLastActiveTest {
         attrs.put("userId", 7L);
         lenient().when(session.getAttributes()).thenReturn(attrs);
         lenient().when(session.isOpen()).thenReturn(true);
-        // 构造器参数顺序：sessionManager, objectMapper, messageService, lastActiveTracker
-        handler = new ChatWebSocketHandler(sessionManager, objectMapper, messageService, lastActiveTracker);
+        // 构造器参数顺序：sessionManager, objectMapper, messageService, lastActiveTracker, deliveryService
+        handler = new ChatWebSocketHandler(sessionManager, objectMapper, messageService, lastActiveTracker, deliveryService);
     }
 
     @Test
