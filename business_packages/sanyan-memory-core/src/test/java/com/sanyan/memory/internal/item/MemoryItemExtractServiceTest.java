@@ -42,7 +42,7 @@ class MemoryItemExtractServiceTest {
 
     @Test
     void extract_should_use_background_task_type_and_feed_existing_pending_items() {
-        when(repository.findByUserIdAndCharacterIdAndStatus(7L, 1L, MemoryItemStatus.PENDING))
+        when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(7L, 1L, MemoryItemStatus.PENDING))
                 .thenReturn(List.of(withId(MemoryItemTestFixtures.emotion(7L, 1L, "最近压力大", Instant.now()), 55L)));
         when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList()))
                 .thenReturn("{\"items\":[]}");
@@ -59,7 +59,7 @@ class MemoryItemExtractServiceTest {
 
     @Test
     void extract_NEW_plan_event_should_save_pending_and_publish_event() {
-        when(repository.findByUserIdAndCharacterIdAndStatus(any(), any(), any()))
+        when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(any(), any(), any()))
                 .thenReturn(List.of());
         when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn("""
                 {"items":[{"action":"NEW","kind":"PLAN_EVENT","content":"周三下午有面试","dateHint":"2026-06-03","targetId":null}]}
@@ -87,7 +87,7 @@ class MemoryItemExtractServiceTest {
 
     @Test
     void extract_NEW_emotion_should_set_salient_next_day_9am_and_publish() {
-        when(repository.findByUserIdAndCharacterIdAndStatus(any(), any(), any()))
+        when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(any(), any(), any()))
                 .thenReturn(List.of());
         when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn("""
                 {"items":[{"action":"NEW","kind":"EMOTION","content":"最近压力很大","dateHint":null,"targetId":null}]}
@@ -106,9 +106,8 @@ class MemoryItemExtractServiceTest {
     @Test
     void extract_UPDATE_should_modify_existing_content_and_not_publish_event() {
         MemoryItemEntity existing = withId(MemoryItemTestFixtures.emotion(7L, 1L, "压力大", Instant.now()), 55L);
-        when(repository.findByUserIdAndCharacterIdAndStatus(7L, 1L, MemoryItemStatus.PENDING))
+        when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(7L, 1L, MemoryItemStatus.PENDING))
                 .thenReturn(List.of(existing));
-        when(repository.findById(55L)).thenReturn(java.util.Optional.of(existing));
         when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn("""
                 {"items":[{"action":"UPDATE","kind":"EMOTION","content":"面试相关的焦虑、压力大","dateHint":null,"targetId":55}]}
                 """);
@@ -124,8 +123,27 @@ class MemoryItemExtractServiceTest {
     }
 
     @Test
+    void extract_UPDATE_targetId_not_in_user_pending_list_should_be_ignored() {
+        // C1：LLM 幻觉出一个不属于本 user PENDING 列表的 targetId（如别人的条目 / DONE 条目）。
+        // 必须按已加载的 existing 列表归属校验，命不中就忽略——杜绝跨用户篡改记忆。
+        when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(7L, 1L, MemoryItemStatus.PENDING))
+                .thenReturn(List.of(withId(MemoryItemTestFixtures.emotion(7L, 1L, "压力大", Instant.now()), 55L)));
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn("""
+                {"items":[{"action":"UPDATE","kind":"EMOTION","content":"偷改别人记忆","dateHint":null,"targetId":99999}]}
+                """);
+
+        service().extract(7L, 1L, "随便说一句", 1006L);
+
+        // 不归属本用户的 targetId 一律不落库
+        verify(repository, never()).save(any());
+        verify(events, never()).publishEvent(any());
+        // 绝不用 findById 越过归属边界查任意条目
+        verify(repository, never()).findById(any());
+    }
+
+    @Test
     void extract_SKIP_should_not_save_nor_publish() {
-        when(repository.findByUserIdAndCharacterIdAndStatus(any(), any(), any()))
+        when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(any(), any(), any()))
                 .thenReturn(List.of(withId(MemoryItemTestFixtures.planEvent(7L, 1L, "周三面试", Instant.now()), 99L)));
         when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn("""
                 {"items":[{"action":"SKIP","kind":"PLAN_EVENT","content":"","dateHint":null,"targetId":99}]}
@@ -139,7 +157,7 @@ class MemoryItemExtractServiceTest {
 
     @Test
     void extract_NEW_promise_should_save_but_not_publish_event() {
-        when(repository.findByUserIdAndCharacterIdAndStatus(any(), any(), any()))
+        when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(any(), any(), any()))
                 .thenReturn(List.of());
         when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn("""
                 {"items":[{"action":"NEW","kind":"PROMISE","content":"答应周末陪你看电影","dateHint":null,"targetId":null}]}
@@ -150,6 +168,25 @@ class MemoryItemExtractServiceTest {
 
         verify(repository, times(1)).save(any());
         // PROMISE 本期仅留存，不发排期事件（spec §12）
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void extract_NEW_with_blank_content_should_be_skipped() {
+        // m1：LLM 对 NEW 返回空 content；memory_item.content 是 NOT NULL，落库会抛约束异常。
+        // 抽取链路必须在落库前丢弃空 content 条目。
+        when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(any(), any(), any()))
+                .thenReturn(List.of());
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn("""
+                {"items":[
+                  {"action":"NEW","kind":"PLAN_EVENT","content":null,"dateHint":"2026-06-03","targetId":null},
+                  {"action":"NEW","kind":"EMOTION","content":"   ","dateHint":null,"targetId":null}
+                ]}
+                """);
+
+        service().extract(7L, 1L, "嗯", 1007L);
+
+        verify(repository, never()).save(any());
         verify(events, never()).publishEvent(any());
     }
 

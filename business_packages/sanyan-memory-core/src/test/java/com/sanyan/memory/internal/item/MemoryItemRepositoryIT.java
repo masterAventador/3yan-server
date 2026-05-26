@@ -59,7 +59,7 @@ class MemoryItemRepositoryIT extends PostgresTestcontainerSupport {
     }
 
     @Test
-    void findByUserIdAndCharacterIdAndStatus_should_filter_by_status() {
+    void findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc_should_filter_by_status() {
         repo.save(MemoryItemTestFixtures.planEvent(8L, 1L, "周五体检", Instant.now()));
         repo.save(MemoryItemTestFixtures.emotion(8L, 1L, "最近压力大", Instant.now()));
         MemoryItemEntity done = MemoryItemTestFixtures.planEvent(8L, 1L, "已追问过的事", Instant.now());
@@ -69,9 +69,25 @@ class MemoryItemRepositoryIT extends PostgresTestcontainerSupport {
         em.clear();
 
         List<MemoryItemEntity> pending =
-                repo.findByUserIdAndCharacterIdAndStatus(8L, 1L, MemoryItemStatus.PENDING);
+                repo.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(8L, 1L, MemoryItemStatus.PENDING);
 
         assertThat(pending).hasSize(2);
         assertThat(pending).extracting(MemoryItemEntity::getStatus).containsOnly(MemoryItemStatus.PENDING);
+    }
+
+    @Test
+    void findTop20_should_cap_at_20_most_recent_pending_ordered_by_id_desc() {
+        for (int i = 0; i < 25; i++) {
+            repo.save(MemoryItemTestFixtures.emotion(9L, 1L, "条目" + i, Instant.now()));
+        }
+        em.flush();
+        em.clear();
+
+        List<MemoryItemEntity> pending =
+                repo.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(9L, 1L, MemoryItemStatus.PENDING);
+
+        // 上限 20 条，且按 id 倒序（最近的在前）
+        assertThat(pending).hasSize(20);
+        assertThat(pending.get(0).getId()).isGreaterThan(pending.get(19).getId());
     }
 }

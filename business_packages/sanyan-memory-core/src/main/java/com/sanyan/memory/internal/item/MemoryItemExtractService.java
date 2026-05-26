@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -42,6 +41,11 @@ import java.util.List;
  *   <li>EMOTION：观察日（now）次日 09:00</li>
  * </ul>
  * 时区用系统默认（单实例 dogfood 够用）；{@link Clock} 注入便于测试固定时间。
+ *
+ * <p><b>不加 {@code @Transactional}</b>：{@code extract} 内含数秒级的 {@code llmApi.chat}，
+ * 若包在事务里会在 LLM 调用全程持有 DB 连接，高并发下耗尽连接池。参照同模块
+ * {@code MemoryProfileRefreshService} 的做法——多条 {@code repository.save} 各自走默认事务，
+ * 对独立的插入 / 更新语义可接受（抽取是后台异步任务，单条失败不影响其余条）。
  */
 @Service
 @RequiredArgsConstructor
@@ -76,10 +80,11 @@ public class MemoryItemExtractService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
-    @Transactional
     public void extract(Long userId, Long characterId, String latestUserMessage, Long sourceMessageId) {
+        // 拉最近 20 条 PENDING 做去重上下文（已是该 user 数据，UPDATE 归属校验也复用它）
         List<MemoryItemEntity> existing =
-                repository.findByUserIdAndCharacterIdAndStatus(userId, characterId, MemoryItemStatus.PENDING);
+                repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(
+                        userId, characterId, MemoryItemStatus.PENDING);
 
         String userPrompt = buildUserPrompt(latestUserMessage, existing);
         List<ChatMessage> messages = new ArrayList<>();
@@ -90,16 +95,16 @@ public class MemoryItemExtractService {
         MemoryItemExtractResult result = MemoryItemExtractResult.parse(raw);
 
         for (MemoryItemExtractResult.Item item : result.items()) {
-            apply(userId, characterId, sourceMessageId, item);
+            apply(userId, characterId, sourceMessageId, existing, item);
         }
     }
 
     private void apply(Long userId, Long characterId, Long sourceMessageId,
-                       MemoryItemExtractResult.Item item) {
+                       List<MemoryItemEntity> existing, MemoryItemExtractResult.Item item) {
         String action = item.action() == null ? "" : item.action().toUpperCase();
         switch (action) {
             case "NEW" -> handleNew(userId, characterId, sourceMessageId, item);
-            case "UPDATE" -> handleUpdate(item);
+            case "UPDATE" -> handleUpdate(existing, item);
             default -> { /* SKIP 或未知 action：不动 */ }
         }
     }
@@ -108,6 +113,10 @@ public class MemoryItemExtractService {
                            MemoryItemExtractResult.Item item) {
         MemoryItemKind kind = parseKind(item.kind());
         if (kind == null) {
+            return;
+        }
+        // content 是 memory_item.NOT NULL 列；LLM 可能对 NEW 返回 null/空，落库会抛约束异常 → 丢弃
+        if (item.content() == null || item.content().isBlank()) {
             return;
         }
         Instant salientAt = computeSalientAt(kind, item.dateHint());
@@ -129,14 +138,20 @@ public class MemoryItemExtractService {
         }
     }
 
-    private void handleUpdate(MemoryItemExtractResult.Item item) {
+    private void handleUpdate(List<MemoryItemEntity> existing, MemoryItemExtractResult.Item item) {
         if (item.targetId() == null) {
             return;
         }
-        repository.findById(item.targetId()).ifPresent(existing -> {
-            existing.setContent(item.content());
-            repository.save(existing);
-        });
+        // 仅在已加载的本 user PENDING 列表里按 id 匹配，不用 repository.findById：
+        // LLM 可能幻觉出不属于当前 user 的 targetId，findById 会越过归属边界改到别人的记忆
+        // （数据隔离漏洞）。从 existing 匹配同时避免改到 DONE/EXPIRED 条目 + 省一次 DB 查询。
+        existing.stream()
+                .filter(e -> e.getId().equals(item.targetId()))
+                .findFirst()
+                .ifPresent(e -> {
+                    e.setContent(item.content());
+                    repository.save(e);
+                });
     }
 
     private Instant computeSalientAt(MemoryItemKind kind, String dateHint) {

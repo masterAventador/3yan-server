@@ -6,7 +6,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MemoryItemExtractResultParserTest {
+class MemoryItemExtractResultTest {
 
     @Test
     void parse_should_read_items_with_all_fields() {
