@@ -14,7 +14,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -62,8 +61,9 @@ class PushRouterTest {
 
         PushResult result = router().pushToUser(7L, payload);
 
-        // 无通道能处理 android token → 整体 pending（本期 android 通道未实现）
+        // 有 active token 但无通道能处理 android → pending，detail 区分于"无设备"
         assertThat(result.status()).isEqualTo("PENDING");
+        assertThat(result.detail()).isEqualTo(PushRouter.NO_CHANNEL_DETAIL);
         verify(apnsChannel, never()).sendToDevice(any(), any());
     }
 

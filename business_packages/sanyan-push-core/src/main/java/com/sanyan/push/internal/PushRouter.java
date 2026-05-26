@@ -32,6 +32,7 @@ import java.util.List;
 public class PushRouter {
 
     static final String NO_DEVICE_DETAIL = "无可推送设备";
+    static final String NO_CHANNEL_DETAIL = "无可处理该平台的推送通道";
 
     private final List<PushChannel> channels;
     private final DeviceTokenRepository repository;
@@ -68,7 +69,8 @@ public class PushRouter {
         if (firstFailure != null) {
             return PushResult.failed(firstFailure);
         }
-        return PushResult.pending(NO_DEVICE_DETAIL);
+        // 有 active token 但没有任何 channel 能处理对应平台
+        return PushResult.pending(NO_CHANNEL_DETAIL);
     }
 
     private PushChannel findChannel(String platform) {

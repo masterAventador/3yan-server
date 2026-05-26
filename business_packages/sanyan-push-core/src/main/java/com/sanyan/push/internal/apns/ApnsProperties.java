@@ -2,7 +2,6 @@ package com.sanyan.push.internal.apns;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 /**
  * APNs 接入配置（spec §8）：基于 token-based auth（.p8 AuthKey）。
@@ -19,7 +18,6 @@ import org.springframework.stereotype.Component;
  * </pre>
  */
 @Data
-@Component
 @ConfigurationProperties(prefix = "sanyan.push.apns")
 public class ApnsProperties {
     private String p8;

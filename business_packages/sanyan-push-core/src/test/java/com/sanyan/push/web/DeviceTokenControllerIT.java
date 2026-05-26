@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.common.auth.JwtUtil;
 import com.sanyan.common.auth.LoginUserArgumentResolver;
 import com.sanyan.common.auth.WebMvcConfig;
+import com.sanyan.common.error.CommonErrCode;
 import com.sanyan.common.test.TestApplication;
 import com.sanyan.common.web.GlobalExceptionHandler;
 import com.sanyan.push.PushApi;
@@ -68,6 +69,7 @@ class DeviceTokenControllerIT {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(CommonErrCode.PARAM_INVALID.getCode()));
     }
 }
