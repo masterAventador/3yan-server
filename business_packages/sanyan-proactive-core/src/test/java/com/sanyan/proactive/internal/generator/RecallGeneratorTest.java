@@ -63,4 +63,18 @@ class RecallGeneratorTest {
         assertThat(coquetry).contains("撒娇");
         assertThat(possessive).contains("占有");
     }
+
+    @Test
+    void generate_should_fallback_to_level0_when_escalation_level_out_of_range() {
+        // escalationLevel=99 越界 → 回落 level-0 关心语调，正常生成消息（warn 日志不 assert，避免引入额外测试库）
+        when(llmApi.chat(eq(LlmTaskType.USER_FACING), any())).thenReturn("最近好吗");
+        ArgumentCaptor<List<ChatMessage>> cap = ArgumentCaptor.forClass(List.class);
+
+        List<String> out = generator().generate(ctx(99));
+
+        assertThat(out).containsExactly("最近好吗");
+        verify(llmApi).chat(eq(LlmTaskType.USER_FACING), cap.capture());
+        String prompt = cap.getValue().get(cap.getValue().size() - 1).content();
+        assertThat(prompt).contains("关心");    // 回落 level-0：使用关心语调
+    }
 }

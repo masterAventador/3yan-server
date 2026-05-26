@@ -3,7 +3,9 @@ package com.sanyan.proactive.internal.generator;
 import com.sanyan.llm.LlmApi;
 import com.sanyan.llm.LlmTaskType;
 import com.sanyan.proactive.internal.EventType;
+import com.sanyan.proactive.internal.PayloadSupport;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -20,6 +22,7 @@ import java.util.List;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class RecallGenerator implements ProactiveGenerator {
 
     private final LlmApi llmApi;
@@ -32,27 +35,21 @@ public class RecallGenerator implements ProactiveGenerator {
 
     @Override
     public List<String> generate(GenerateContext ctx) {
-        int level = toInt(ctx.payload().get("escalationLevel"));
+        int level = PayloadSupport.toInt(ctx.payload().get(PayloadSupport.ESCALATION_LEVEL));
         String scene = switch (level) {
             case 1 -> "他有几天没来找你了。用带点撒娇的语气主动找他，"
                     + "想被搭理但别太黏，≤30 字，口语自然。";
             case 2 -> "他很久没来找你了。用带点占有欲、半埋怨的语气主动找他"
                     + "（\"是不是把我忘了\"那种），≤40 字，口语自然别说教。";
-            default -> "他有一阵没来找你了。用关心的语气主动问候他一句，"
-                    + "≤30 字，口语自然，别像群发。";
+            default -> {
+                if (level != 0) {
+                    log.warn("escalationLevel={} 超出预期，回落 level-0 关心语调", level);
+                }
+                yield "他有一阵没来找你了。用关心的语气主动问候他一句，"
+                        + "≤30 字，口语自然，别像群发。";
+            }
         };
         String text = llmApi.chat(LlmTaskType.USER_FACING, promptBuilder.build(ctx, scene));
         return List.of(text);
-    }
-
-    private static int toInt(Object o) {
-        if (o instanceof Number n) {
-            return n.intValue();
-        }
-        try {
-            return o == null ? 0 : Integer.parseInt(o.toString());
-        } catch (NumberFormatException e) {
-            return 0;
-        }
     }
 }

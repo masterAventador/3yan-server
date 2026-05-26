@@ -3,6 +3,7 @@ package com.sanyan.proactive.internal.generator;
 import com.sanyan.llm.LlmApi;
 import com.sanyan.llm.LlmTaskType;
 import com.sanyan.proactive.internal.EventType;
+import com.sanyan.proactive.internal.PayloadSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -31,7 +32,7 @@ public class GreetingGenerator implements ProactiveGenerator {
 
     @Override
     public List<String> generate(GenerateContext ctx) {
-        String timeOfDay = Objects.toString(ctx.payload().get("timeOfDay"), TIME_MORNING);
+        String timeOfDay = Objects.toString(ctx.payload().get(PayloadSupport.TIME_OF_DAY), TIME_MORNING);
         boolean morning = TIME_MORNING.equals(timeOfDay);
         String scene = morning
                 ? "现在是早上，主动给他发一句早安问候。要自然口语、≤30 字，"

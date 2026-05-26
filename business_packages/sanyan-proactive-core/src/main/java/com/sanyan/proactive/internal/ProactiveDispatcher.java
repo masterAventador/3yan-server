@@ -10,6 +10,7 @@ import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.dto.MemoryContext;
 import com.sanyan.proactive.internal.generator.GenerateContext;
 import com.sanyan.proactive.internal.generator.ProactiveGenerator;
+import com.sanyan.proactive.internal.PayloadSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -37,8 +38,6 @@ import java.util.Map;
 @Slf4j
 @Service
 public class ProactiveDispatcher {
-
-    private static final String PAYLOAD_MEMORY_ITEM_ID = "memoryItemId";
 
     /** 失败重试上限：超过则标 FAILED。 */
     static final int MAX_FAIL = 3;
@@ -128,10 +127,10 @@ public class ProactiveDispatcher {
         }
 
         if (type == EventType.C_EVENT_FOLLOWUP || type == EventType.D_EMOTION_CARE) {
-            Object itemId = payload.get(PAYLOAD_MEMORY_ITEM_ID);
+            Object itemId = payload.get(PayloadSupport.MEMORY_ITEM_ID);
             if (itemId != null) {
                 try {
-                    memoryApi.markMemoryItemDone(((Number) itemId).longValue());
+                    memoryApi.markMemoryItemDone(PayloadSupport.toLong(itemId));
                 } catch (Exception e) {
                     log.warn("主动消息已投出，markMemoryItemDone 失败（best-effort 忽略）: itemId={}, err={}",
                             itemId, e.getMessage());

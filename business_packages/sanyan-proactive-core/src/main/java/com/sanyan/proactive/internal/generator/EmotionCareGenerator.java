@@ -1,10 +1,12 @@
 package com.sanyan.proactive.internal.generator;
 
+import com.sanyan.common.error.BusinessException;
 import com.sanyan.llm.LlmApi;
 import com.sanyan.llm.LlmTaskType;
 import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.dto.MemoryItemDto;
 import com.sanyan.proactive.internal.EventType;
+import com.sanyan.proactive.internal.PayloadSupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -34,11 +36,11 @@ public class EmotionCareGenerator implements ProactiveGenerator {
 
     @Override
     public List<String> generate(GenerateContext ctx) {
-        long itemId = toLong(ctx.payload().get("memoryItemId"));
+        long itemId = PayloadSupport.toLong(ctx.payload().get(PayloadSupport.MEMORY_ITEM_ID));
         MemoryItemDto item;
         try {
             item = memoryApi.getMemoryItem(itemId);
-        } catch (Exception e) {
+        } catch (BusinessException e) {
             log.warn("情绪关怀：memory_item {} 取不到，跳过本次主动消息: {}", itemId, e.getMessage());
             return List.of();
         }
@@ -49,12 +51,5 @@ public class EmotionCareGenerator implements ProactiveGenerator {
                 + "用关心生活的小事（吃饭/睡觉/天气）侧面传达\"我在意你\"，≤30 字，口语。";
         String text = llmApi.chat(LlmTaskType.USER_FACING, promptBuilder.build(ctx, scene));
         return List.of(text);
-    }
-
-    private static long toLong(Object o) {
-        if (o instanceof Number n) {
-            return n.longValue();
-        }
-        return o == null ? 0L : Long.parseLong(o.toString());
     }
 }
