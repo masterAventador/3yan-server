@@ -116,14 +116,26 @@ public class ProactiveDispatcher {
 
         chatApi.deliverProactiveMessage(userId, characterId, segments);
 
+        // 消息已确定投出 —— SENT 是终态，下面的 recordSent / markMemoryItemDone 都是 best-effort
+        // 副作用，各自包 try-catch：失败只 log.warn，绝不能把已确定的 SENT 覆盖回 SCHEDULED 触发重投。
         event.setStatus(EventStatus.SENT);
         event.setSentAt(Instant.now());
-        frequencyGate.recordSent(userId);
+
+        try {
+            frequencyGate.recordSent(userId);
+        } catch (Exception e) {
+            log.warn("主动消息已投出，recordSent 失败（best-effort 忽略）: userId={}, err={}", userId, e.getMessage());
+        }
 
         if (type == EventType.C_EVENT_FOLLOWUP || type == EventType.D_EMOTION_CARE) {
             Object itemId = payload.get(PAYLOAD_MEMORY_ITEM_ID);
             if (itemId != null) {
-                memoryApi.markMemoryItemDone(((Number) itemId).longValue());
+                try {
+                    memoryApi.markMemoryItemDone(((Number) itemId).longValue());
+                } catch (Exception e) {
+                    log.warn("主动消息已投出，markMemoryItemDone 失败（best-effort 忽略）: itemId={}, err={}",
+                            itemId, e.getMessage());
+                }
             }
         }
     }

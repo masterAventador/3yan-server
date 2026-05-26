@@ -1,52 +1,38 @@
 package com.sanyan.proactive.internal;
 
-import com.sanyan.proactive.internal.fixtures.EventPendingTestFixtures;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Instant;
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ProactiveSchedulerTest {
 
-    @Mock EventPendingRepository repo;
-    @Mock ProactiveDispatcher dispatcher;
+    @Mock ProactiveClaimTransaction claimTransaction;
 
     private ProactiveScheduler scheduler() {
-        return new ProactiveScheduler(repo, dispatcher);
+        return new ProactiveScheduler(claimTransaction);
     }
 
     @Test
-    void poll_should_mark_processing_save_and_dispatch() {
-        EventPendingEntity event = EventPendingTestFixtures.scheduled(
-                1L, 99L, EventType.A_GREETING, Instant.now());
-        when(repo.findDueForUpdate(any(), anyInt())).thenReturn(List.of(event));
-        doNothing().when(dispatcher).dispatch(event);
+    void poll_should_delegate_to_claim_transaction() {
+        doNothing().when(claimTransaction).claimAndDispatch();
 
         scheduler().poll();
 
-        // 领取后标 PROCESSING + save，再 fire-and-forget 调 dispatch（@Async）。
-        // 终态 save / 失败退避全部移入 dispatch，主循环不再做。
-        assertThat(event.getStatus()).isEqualTo(EventStatus.PROCESSING);
-        verify(repo).save(event);
-        verify(dispatcher).dispatch(event);
+        // poll 只做兜底 try-catch + 委托；领取/标 PROCESSING/dispatch 全在事务内层 bean。
+        verify(claimTransaction).claimAndDispatch();
     }
 
     @Test
-    void poll_should_swallow_repo_exception() {
-        when(repo.findDueForUpdate(any(), anyInt())).thenThrow(new RuntimeException("db down"));
+    void poll_should_swallow_transaction_exception() {
+        // 事务内层抛出（含 commit 时的 UnexpectedRollbackException）由 poll 的 try-catch 兜住，不外泄给调度器
+        doThrow(new RuntimeException("db down")).when(claimTransaction).claimAndDispatch();
 
-        // 不应抛出（整体 try-catch 兜底，照 RagIndexWorker）
         scheduler().poll();
     }
 }

@@ -5,6 +5,16 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
     default-property-inclusion: non_null
+  # @Async 默认线程池（ThreadPoolTaskExecutor）。Spring Boot 默认 max-size 无界，主动消息
+  # 投递（ProactiveDispatcher.dispatch @Async，每 segment 同步等 ACK）积压时会线程爆——
+  # 故设上限 + 有界队列：超 max-size 且队满走默认 AbortPolicy，由 dispatch fire-and-forget
+  # 调用方（ProactiveScheduler）下一轮 fixedDelay 重新领取重试。
+  task:
+    execution:
+      pool:
+        max-size: 20
+        queue-capacity: 100
+      thread-name-prefix: proactive-
   # ===== 所有 profile 共享的基础设施配置（dev / prod 在自己的 yml 里按需 override）=====
   datasource:
     # dev 本机 PG / 线上 PG 都在 localhost，user/password 走环境变量注入
