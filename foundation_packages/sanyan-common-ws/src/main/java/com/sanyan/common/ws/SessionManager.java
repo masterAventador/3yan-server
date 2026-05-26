@@ -34,15 +34,20 @@ public class SessionManager {
     private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private static final String ONLINE_PREFIX = "ws:online:";
     private static final String ONLINE_VALUE = "1";
+    // 在线 TTL：客户端心跳间隔必须 < 90s，否则会误判离线
     private static final Duration ONLINE_TTL = Duration.ofSeconds(90);
 
     public void register(Long userId, WebSocketSession session) {
         sessions.put(userId, session);
-        redisTemplate.opsForValue().set(ONLINE_PREFIX + userId, ONLINE_VALUE, ONLINE_TTL);
+        writeOnlineKey(userId);
     }
 
     /** 心跳续期：客户端 PING 时刷新在线 TTL（覆盖写同 key 即续期）。 */
     public void refreshOnline(Long userId) {
+        writeOnlineKey(userId);
+    }
+
+    private void writeOnlineKey(Long userId) {
         redisTemplate.opsForValue().set(ONLINE_PREFIX + userId, ONLINE_VALUE, ONLINE_TTL);
     }
 

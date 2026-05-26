@@ -55,7 +55,7 @@ class SessionManagerTest {
     }
 
     @Test
-    void refreshOnline_resetsTtlOnExistingKey() {
+    void refreshOnline_writesKeyWithTtl() {
         sessionManager.refreshOnline(7L);
         verify(valueOps).set("ws:online:7", "1", java.time.Duration.ofSeconds(90));
     }
