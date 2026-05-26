@@ -23,10 +23,11 @@
         <!-- 本域 -api 契约 -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-api</artifactId></dependency>
 
-        <!-- 跨域 -api：memory / character / chat -->
+        <!-- 跨域 -api：memory / character / chat / llm -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-api</artifactId></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-api</artifactId></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-api</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-api</artifactId></dependency>
 
         <!-- foundation -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-error</artifactId></dependency>
