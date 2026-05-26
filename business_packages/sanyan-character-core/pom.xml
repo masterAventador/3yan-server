@@ -34,6 +34,7 @@
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-error</artifactId></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-web</artifactId></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-auth</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-ws</artifactId></dependency>
 
         <!-- Spring Boot 必备 -->
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
