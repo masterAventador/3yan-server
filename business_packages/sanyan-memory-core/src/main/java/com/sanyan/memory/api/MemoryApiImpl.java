@@ -45,7 +45,7 @@ public class MemoryApiImpl implements MemoryApi {
         MemoryItemEntity e = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(MemoryErrCode.MEMORY_ITEM_NOT_FOUND));
         e.setStatus(MemoryItemStatus.DONE);
-        itemRepository.save(e);
+        // managed entity 的字段变更由 JPA dirty checking 在事务提交时自动 flush UPDATE，无需显式 save
     }
 
     private static MemoryItemDto toDto(MemoryItemEntity e) {

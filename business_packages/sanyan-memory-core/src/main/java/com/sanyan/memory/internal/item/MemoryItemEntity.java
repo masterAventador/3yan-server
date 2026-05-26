@@ -34,7 +34,7 @@ public class MemoryItemEntity {
     private Long characterId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(name = "kind", nullable = false, length = 20)
     private MemoryItemKind kind;
 
     @Column(nullable = false, columnDefinition = "text")
@@ -45,7 +45,7 @@ public class MemoryItemEntity {
     private Instant salientAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 20)
     private MemoryItemStatus status = MemoryItemStatus.PENDING;
 
     @Column(name = "source_message_id")
