@@ -36,6 +36,7 @@ class ProactivePropertiesBindingTest {
                 "sanyan.proactive.greeting.night-cron=0 30 22 * * *",
                 "sanyan.proactive.scenes-by-stage.0.morning=false",
                 "sanyan.proactive.scenes-by-stage.0.recall=true",
+                "sanyan.proactive.scenes-by-stage.0.event-followup=true",
                 "sanyan.proactive.scenes-by-stage.2.morning=true",
                 "sanyan.proactive.scenes-by-stage.2.emotion-care=true"
         ).run(ctx -> {
@@ -44,6 +45,8 @@ class ProactivePropertiesBindingTest {
             assertThat(props.getGreeting().getNightCron()).isEqualTo("0 30 22 * * *");
             assertThat(props.getScenesByStage().get(0).isMorning()).isFalse();
             assertThat(props.getScenesByStage().get(0).isRecall()).isTrue();
+            // relaxed-binding：event-followup → eventFollowup
+            assertThat(props.getScenesByStage().get(0).isEventFollowup()).isTrue();
             assertThat(props.getScenesByStage().get(2).isMorning()).isTrue();
             assertThat(props.getScenesByStage().get(2).isEmotionCare()).isTrue();
         });
