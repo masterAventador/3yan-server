@@ -66,6 +66,11 @@
             没有禁止 memory-core，所以 compile scope 合规。
         -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-core</artifactId></dependency>
+        <!--
+            Plan 4 A2：proactive 域脚手架接入 bootstrap。
+            ProactiveApiImpl 等 Bean 在 Phase I/J 创建；现在先注册依赖确保 fat jar 能装配。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-core</artifactId></dependency>
     </dependencies>
 
     <build>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-proactive-core</artifactId>
+    <name>sanyan-proactive-core</name>
+    <packaging>jar</packaging>
+
+    <!--
+        Plan 4 A2：proactive 域实现模块（脚手架）。
+        - internal/ EventPendingEntity / Scheduler / Dispatcher 等（Phase I/J/K/L 创建）
+        - api/      ProactiveApiImpl（实现 sanyan-proactive-api 的 ProactiveApi）
+        投递通道：通过 chat-api 投递消息，不直接依赖 push-api。
+    -->
+    <dependencies>
+        <!-- 本域 -api 契约 -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-api</artifactId></dependency>
+
+        <!-- 跨域 -api：memory / character / chat -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-api</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-api</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-api</artifactId></dependency>
+
+        <!-- foundation -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-error</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-web</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-cache</artifactId></dependency>
+
+        <!-- Spring Boot 必备 -->
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-redis</artifactId></dependency>
+        <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
+
+        <!-- 测试 -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.testcontainers</groupId><artifactId>postgresql</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 激活 failsafe（surefire 默认激活）；Testcontainers 配置由父 pom pluginManagement 提供 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
