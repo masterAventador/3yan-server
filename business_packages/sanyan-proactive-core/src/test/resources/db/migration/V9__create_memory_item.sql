@@ -14,6 +14,6 @@ CREATE TABLE memory_item (
 );
 
 CREATE INDEX idx_memory_item_salient
-    ON memory_item (status, salient_at) WHERE status = 'PENDING';
+    ON memory_item (salient_at) WHERE status = 'PENDING';
 CREATE INDEX idx_memory_item_user
     ON memory_item (user_id, character_id, status);
