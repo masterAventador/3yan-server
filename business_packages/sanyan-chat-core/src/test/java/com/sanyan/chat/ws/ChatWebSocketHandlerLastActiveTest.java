@@ -20,7 +20,6 @@ import java.util.Map;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,6 +60,6 @@ class ChatWebSocketHandlerLastActiveTest {
         handler.handleTextMessage(session,
                 new TextMessage("{\"type\":\"send_message\",\"content\":\"hi\",\"clientMsgId\":\"c1\"}"));
 
-        verify(lastActiveTracker, timeout(1000)).touch(7L);
+        verify(lastActiveTracker).touch(7L);
     }
 }

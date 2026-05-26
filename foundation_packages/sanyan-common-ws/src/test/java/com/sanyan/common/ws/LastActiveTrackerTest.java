@@ -51,4 +51,20 @@ class LastActiveTrackerTest {
 
         assertThat(tracker.lastActiveAt(42L)).isEmpty();
     }
+
+    @Test
+    void lastActiveAt_returnsEmptyWhenValueMalformed() {
+        when(kvCache.get("user:last_active:42")).thenReturn("not-a-date");
+        LastActiveTracker tracker = new LastActiveTracker(kvCache);
+
+        assertThat(tracker.lastActiveAt(42L)).isEmpty();
+    }
+
+    @Test
+    void lastActiveAt_returnsEmptyWhenValueBlank() {
+        when(kvCache.get("user:last_active:42")).thenReturn("  ");
+        LastActiveTracker tracker = new LastActiveTracker(kvCache);
+
+        assertThat(tracker.lastActiveAt(42L)).isEmpty();
+    }
 }
