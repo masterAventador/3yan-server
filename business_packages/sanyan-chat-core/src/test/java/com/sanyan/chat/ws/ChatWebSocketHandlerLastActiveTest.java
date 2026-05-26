@@ -62,4 +62,16 @@ class ChatWebSocketHandlerLastActiveTest {
 
         verify(lastActiveTracker).touch(7L);
     }
+
+    @Test
+    void handlePing_refreshesOnlineAndRepliesPong() throws Exception {
+        handler.handleTextMessage(session, new TextMessage("{\"type\":\"ping\"}"));
+
+        verify(sessionManager).refreshOnline(7L);
+        // 仍回 PONG
+        org.mockito.ArgumentCaptor<org.springframework.web.socket.TextMessage> cap =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.web.socket.TextMessage.class);
+        verify(session).sendMessage(cap.capture());
+        org.assertj.core.api.Assertions.assertThat(cap.getValue().getPayload()).contains("pong");
+    }
 }

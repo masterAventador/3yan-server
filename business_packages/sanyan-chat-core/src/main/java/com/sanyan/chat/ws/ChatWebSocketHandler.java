@@ -49,7 +49,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         WsMessage wsMsg = objectMapper.readValue(message.getPayload(), WsMessage.class);
 
         switch (wsMsg.getType()) {
-            case WsEventType.PING -> sendToSession(session, "{\"type\":\"" + WsEventType.PONG + "\"}");
+            case WsEventType.PING -> {
+                sessionManager.refreshOnline(userId);   // 心跳续期在线 TTL
+                sendToSession(session, "{\"type\":\"" + WsEventType.PONG + "\"}");
+            }
             case WsEventType.SEND_MESSAGE -> handleSendMessage(userId, wsMsg, session);
             case WsEventType.SYNC -> handleSync(userId, wsMsg, session);
             default -> log.warn("未知消息类型: {}", wsMsg.getType());
