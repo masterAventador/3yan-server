@@ -42,7 +42,20 @@ class DeviceTokensSchemaIT extends PostgresTestcontainerSupport {
         String checks = checkConstraintsOf("device_tokens");
         assertThat(checks).contains("ios", "android");
 
-        assertThat(uniqueConstraintExists("device_tokens")).isTrue();
+        // UNIQUE (user_id, platform, vendor, token) —— PG 自动建同名唯一索引，
+        // 索引名内含四列名 + 顺序，验证它存在即等于验证 UNIQUE 恰好覆盖这四列组合
+        // （漏写任一列索引名就会变化，断言随之失败，避免"任意 UNIQUE 都算过"的弱断言）。
+        assertThat(indexExists("device_tokens",
+                "device_tokens_user_id_platform_vendor_token_key")).isTrue();
+    }
+
+    private boolean indexExists(String table, String index) throws Exception {
+        try (Connection conn = newConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT COUNT(*) FROM pg_indexes WHERE tablename=? AND indexname=?")) {
+            ps.setString(1, table); ps.setString(2, index);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getInt(1) == 1; }
+        }
     }
 
     private String checkConstraintsOf(String table) throws Exception {
@@ -55,15 +68,5 @@ class DeviceTokensSchemaIT extends PostgresTestcontainerSupport {
             try (ResultSet rs = ps.executeQuery()) { while (rs.next()) sb.append(rs.getString("def")).append('\n'); }
         }
         return sb.toString();
-    }
-
-    private boolean uniqueConstraintExists(String table) throws Exception {
-        try (Connection conn = newConnection();
-             PreparedStatement ps = conn.prepareStatement(
-                     "SELECT COUNT(*) FROM pg_constraint c JOIN pg_class t ON c.conrelid = t.oid "
-                             + "WHERE t.relname = ? AND c.contype = 'u'")) {
-            ps.setString(1, table);
-            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getInt(1) >= 1; }
-        }
     }
 }
