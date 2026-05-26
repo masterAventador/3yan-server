@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.RelationshipDto;
 import com.sanyan.chat.ChatApi;
-import com.sanyan.common.error.BusinessException;
 import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.dto.MemoryContext;
 import com.sanyan.proactive.internal.fixtures.EventPendingTestFixtures;
@@ -19,7 +18,6 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -36,6 +34,7 @@ class ProactiveDispatcherTest {
     @Mock ChatApi chatApi;
     @Mock FrequencyGate frequencyGate;
     @Mock ProactiveGenerator greetingGenerator;
+    @Mock EventPendingRepository repo;
 
     private RelationshipDto relAtStage(int stage) {
         return new RelationshipDto(1L, 99L, 350, stage, "暧昧", 600, 0.16);
@@ -44,11 +43,11 @@ class ProactiveDispatcherTest {
     private ProactiveDispatcher newDispatcher() {
         return new ProactiveDispatcher(
                 characterApi, memoryApi, chatApi, frequencyGate,
-                List.of(greetingGenerator), new ObjectMapper());
+                List.of(greetingGenerator), new ObjectMapper(), repo);
     }
 
     @Test
-    void dispatch_blocked_by_gate_should_mark_cancelled_and_not_generate() {
+    void dispatch_blocked_by_gate_should_mark_cancelled_save_and_not_generate() {
         when(characterApi.findOrCreateRelationship(1L, 99L)).thenReturn(relAtStage(2));
         when(frequencyGate.allow(1L, 99L, EventType.A_GREETING, 2)).thenReturn(false);
 
@@ -58,12 +57,13 @@ class ProactiveDispatcherTest {
         newDispatcher().dispatch(event);
 
         assertThat(event.getStatus()).isEqualTo(EventStatus.CANCELLED);
+        verify(repo).save(event);
         verify(greetingGenerator, never()).generate(any());
         verify(chatApi, never()).deliverProactiveMessage(anyLong(), anyLong(), any());
     }
 
     @Test
-    void dispatch_allowed_should_generate_deliver_and_mark_sent_and_record() {
+    void dispatch_allowed_should_generate_deliver_mark_sent_save_and_record() {
         when(characterApi.findOrCreateRelationship(1L, 99L)).thenReturn(relAtStage(2));
         when(frequencyGate.allow(1L, 99L, EventType.A_GREETING, 2)).thenReturn(true);
         when(characterApi.getStagePromptSegment(1L, 99L)).thenReturn("当前关系阶段：暧昧。");
@@ -78,6 +78,7 @@ class ProactiveDispatcherTest {
 
         assertThat(event.getStatus()).isEqualTo(EventStatus.SENT);
         assertThat(event.getSentAt()).isNotNull();
+        verify(repo).save(event);
         verify(chatApi).deliverProactiveMessage(1L, 99L, List.of("早安宝", "今天也要开心"));
         verify(frequencyGate).recordSent(1L);
         // a 类不标记 memory item done
@@ -95,7 +96,7 @@ class ProactiveDispatcherTest {
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), anyString())).thenReturn(null);
 
         ProactiveDispatcher dispatcher = new ProactiveDispatcher(
-                characterApi, memoryApi, chatApi, frequencyGate, List.of(followup), new ObjectMapper());
+                characterApi, memoryApi, chatApi, frequencyGate, List.of(followup), new ObjectMapper(), repo);
 
         EventPendingEntity event = EventPendingTestFixtures.withPayload(
                 1L, 99L, EventType.C_EVENT_FOLLOWUP, Instant.now(), "{\"memoryItemId\": 555}");
@@ -103,21 +104,44 @@ class ProactiveDispatcherTest {
         dispatcher.dispatch(event);
 
         assertThat(event.getStatus()).isEqualTo(EventStatus.SENT);
+        verify(repo).save(event);
         verify(memoryApi).markMemoryItemDone(555L);
     }
 
     @Test
-    void dispatch_should_throw_when_no_generator_supports_type() {
+    void dispatch_failure_under_max_should_backoff_to_scheduled_and_save() {
         when(characterApi.findOrCreateRelationship(1L, 99L)).thenReturn(relAtStage(2));
         when(frequencyGate.allow(1L, 99L, EventType.B_RECALL, 2)).thenReturn(true);
-        when(greetingGenerator.supportsType()).thenReturn(EventType.A_GREETING); // 只有 greeting，无 recall 生成器
+        when(greetingGenerator.supportsType()).thenReturn(EventType.A_GREETING); // 只有 greeting，无 recall 生成器 → 抛 BusinessException
 
         EventPendingEntity event = EventPendingTestFixtures.scheduled(
                 1L, 99L, EventType.B_RECALL, Instant.now());
+        event.setFailCount(0);
 
-        assertThatThrownBy(() -> newDispatcher().dispatch(event))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(ex -> assertThat(((BusinessException) ex).getErrCode())
-                        .isEqualTo(ProactiveErrCode.PROACTIVE_GENERATE_FAILED));
+        // 异常在 worker 内 catch 不外泄
+        newDispatcher().dispatch(event);
+
+        assertThat(event.getStatus()).isEqualTo(EventStatus.SCHEDULED);
+        assertThat(event.getFailCount()).isEqualTo(1);
+        assertThat(event.getLastError()).isNotBlank();
+        assertThat(event.getScheduledAt()).isAfter(Instant.now());
+        verify(repo).save(event);
+    }
+
+    @Test
+    void dispatch_failure_over_max_should_mark_failed_and_save() {
+        when(characterApi.findOrCreateRelationship(1L, 99L)).thenReturn(relAtStage(2));
+        when(frequencyGate.allow(1L, 99L, EventType.B_RECALL, 2)).thenReturn(true);
+        when(greetingGenerator.supportsType()).thenReturn(EventType.A_GREETING); // 无 recall 生成器 → 抛 BusinessException
+
+        EventPendingEntity event = EventPendingTestFixtures.scheduled(
+                1L, 99L, EventType.B_RECALL, Instant.now());
+        event.setFailCount(3); // 已失败 3 次，再失败 → 超限
+
+        newDispatcher().dispatch(event);
+
+        assertThat(event.getStatus()).isEqualTo(EventStatus.FAILED);
+        assertThat(event.getFailCount()).isEqualTo(4);
+        verify(repo).save(event);
     }
 }

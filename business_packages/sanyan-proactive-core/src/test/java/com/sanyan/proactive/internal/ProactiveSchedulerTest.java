@@ -13,7 +13,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,7 +27,7 @@ class ProactiveSchedulerTest {
     }
 
     @Test
-    void poll_should_mark_processing_dispatch_and_save() {
+    void poll_should_mark_processing_save_and_dispatch() {
         EventPendingEntity event = EventPendingTestFixtures.scheduled(
                 1L, 99L, EventType.A_GREETING, Instant.now());
         when(repo.findDueForUpdate(any(), anyInt())).thenReturn(List.of(event));
@@ -36,39 +35,11 @@ class ProactiveSchedulerTest {
 
         scheduler().poll();
 
-        // 标 PROCESSING（领取时）+ 最终 dispatch 后 save
+        // 领取后标 PROCESSING + save，再 fire-and-forget 调 dispatch（@Async）。
+        // 终态 save / 失败退避全部移入 dispatch，主循环不再做。
+        assertThat(event.getStatus()).isEqualTo(EventStatus.PROCESSING);
+        verify(repo).save(event);
         verify(dispatcher).dispatch(event);
-        verify(repo, org.mockito.Mockito.atLeastOnce()).save(event);
-    }
-
-    @Test
-    void poll_dispatch_failure_under_max_should_backoff_to_scheduled() {
-        EventPendingEntity event = EventPendingTestFixtures.scheduled(
-                1L, 99L, EventType.A_GREETING, Instant.now());
-        event.setFailCount(0);
-        when(repo.findDueForUpdate(any(), anyInt())).thenReturn(List.of(event));
-        doThrow(new RuntimeException("generate boom")).when(dispatcher).dispatch(event);
-
-        scheduler().poll();
-
-        assertThat(event.getStatus()).isEqualTo(EventStatus.SCHEDULED);
-        assertThat(event.getFailCount()).isEqualTo(1);
-        assertThat(event.getLastError()).contains("generate boom");
-        verify(repo, org.mockito.Mockito.atLeastOnce()).save(event);
-    }
-
-    @Test
-    void poll_dispatch_failure_over_max_should_mark_failed() {
-        EventPendingEntity event = EventPendingTestFixtures.scheduled(
-                1L, 99L, EventType.A_GREETING, Instant.now());
-        event.setFailCount(3); // 已失败 3 次，再失败 → 超限
-        when(repo.findDueForUpdate(any(), anyInt())).thenReturn(List.of(event));
-        doThrow(new RuntimeException("boom")).when(dispatcher).dispatch(event);
-
-        scheduler().poll();
-
-        assertThat(event.getStatus()).isEqualTo(EventStatus.FAILED);
-        assertThat(event.getFailCount()).isEqualTo(4);
     }
 
     @Test

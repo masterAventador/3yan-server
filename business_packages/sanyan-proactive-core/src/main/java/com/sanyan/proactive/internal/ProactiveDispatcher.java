@@ -11,6 +11,7 @@ import com.sanyan.memory.dto.MemoryContext;
 import com.sanyan.proactive.internal.generator.GenerateContext;
 import com.sanyan.proactive.internal.generator.ProactiveGenerator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -20,11 +21,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 分发层（spec §5.1 ③④⑤）：取 event → 频率门控 → 选生成器 → 组上下文 → 生成 → 委托投递 → 标状态。
+ * 分发层（spec §5.1 ③④⑤ + 失败段）：取 event → 频率门控 → 选生成器 → 组上下文 → 生成 → 委托投递 → 标状态 → save。
  *
- * <p>不放行 → 标 {@link EventStatus#CANCELLED}（a/b 类丢弃；c/d 顺延逻辑由触发器/后续 task 处理）。
- * <p>本类只设置传入 entity 的状态字段 + 调外部 -api，**不调 repo 持久化**——持久化由
- * {@link ProactiveScheduler} 在其事务内 save（单一职责）。
+ * <p><b>{@code @Async} 隔离投递阻塞（H2 约束）：</b>{@link #dispatch} 标 {@code @Async}，由
+ * {@link ProactiveScheduler}（不同 Bean）调用 → 跨 Bean 代理生效 → 在异步 worker 线程跑。
+ * {@link ChatApi#deliverProactiveMessage} 内部每 segment 同步等 ACK（最多 5s，多条累加），
+ * 若在 {@code @Scheduled(30s)} 单线程主循环里同步等会导致调度饥饿。fire-and-forget 后
+ * 主循环立即返回，不被投递阻塞（DeliveryService Javadoc 明确要求 Dispatcher 异步隔离）。
+ *
+ * <p><b>一个 event 的完整生命周期内聚于此</b>：放行→生成→投递→标 SENT；门控拒→标 CANCELLED；
+ * 任何异常→failCount++、超 {@link #MAX_FAIL} 标 FAILED 否则退避重排 SCHEDULED。
+ * 无论成败 {@code finally} 里 {@link EventPendingRepository#save} 持久化终态。异常在 worker 内
+ * catch 不外泄（@Async 抛出的异常调用方拿不到，必须自己消化）。
  */
 @Slf4j
 @Service
@@ -32,22 +40,27 @@ public class ProactiveDispatcher {
 
     private static final String PAYLOAD_MEMORY_ITEM_ID = "memoryItemId";
 
+    /** 失败重试上限：超过则标 FAILED。 */
+    static final int MAX_FAIL = 3;
+
     private final CharacterApi characterApi;
     private final MemoryApi memoryApi;
     private final ChatApi chatApi;
     private final FrequencyGate frequencyGate;
     private final ObjectMapper objectMapper;
+    private final EventPendingRepository repo;
     /** 按 EventType 索引的生成器（Spring 注入所有 ProactiveGenerator Bean，启动时建索引）。 */
     private final Map<EventType, ProactiveGenerator> generators;
 
     public ProactiveDispatcher(CharacterApi characterApi, MemoryApi memoryApi, ChatApi chatApi,
                                FrequencyGate frequencyGate, List<ProactiveGenerator> generatorList,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper, EventPendingRepository repo) {
         this.characterApi = characterApi;
         this.memoryApi = memoryApi;
         this.chatApi = chatApi;
         this.frequencyGate = frequencyGate;
         this.objectMapper = objectMapper;
+        this.repo = repo;
         Map<EventType, ProactiveGenerator> map = new EnumMap<>(EventType.class);
         for (ProactiveGenerator g : generatorList) {
             EventType type = g.supportsType();
@@ -58,7 +71,22 @@ public class ProactiveDispatcher {
         this.generators = map;
     }
 
+    /**
+     * 异步分发一个 event 的完整生命周期。fire-and-forget：返回 void，异常在内部 catch 不外泄。
+     * 由 {@link ProactiveScheduler} 跨 Bean 调用，@Async 代理生效在 worker 线程跑。
+     */
+    @Async
     public void dispatch(EventPendingEntity event) {
+        try {
+            deliver(event);              // 设置 SENT / CANCELLED
+        } catch (Exception err) {
+            handleFailure(event, err);   // 设置 FAILED / 退避 SCHEDULED
+        } finally {
+            repo.save(event);            // 无论成败持久化终态
+        }
+    }
+
+    private void deliver(EventPendingEntity event) {
         Long userId = event.getUserId();
         Long characterId = event.getCharacterId();
         EventType type = event.getEventType();
@@ -97,6 +125,23 @@ public class ProactiveDispatcher {
             if (itemId != null) {
                 memoryApi.markMemoryItemDone(((Number) itemId).longValue());
             }
+        }
+    }
+
+    private void handleFailure(EventPendingEntity event, Exception err) {
+        int newFailCount = event.getFailCount() + 1;
+        event.setFailCount(newFailCount);
+        event.setLastError(err.getMessage());
+        if (newFailCount > MAX_FAIL) {
+            event.setStatus(EventStatus.FAILED);
+            log.error("主动消息分发超 {} 次，标 FAILED: eventId={}, userId={}, err={}",
+                    MAX_FAIL, event.getId(), event.getUserId(), err.getMessage());
+        } else {
+            // 退避重排：线性退避，failCount 越大排越靠后
+            event.setStatus(EventStatus.SCHEDULED);
+            event.setScheduledAt(Instant.now().plusSeconds(60L * newFailCount));
+            log.warn("主动消息分发失败第 {} 次，退避重排: eventId={}, userId={}, err={}",
+                    newFailCount, event.getId(), event.getUserId(), err.getMessage());
         }
     }
 
