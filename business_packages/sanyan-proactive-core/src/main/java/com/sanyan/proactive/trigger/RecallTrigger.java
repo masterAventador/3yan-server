@@ -1,6 +1,5 @@
 package com.sanyan.proactive.trigger;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.RelationshipDto;
 import com.sanyan.common.cache.KvCache;
@@ -34,11 +33,8 @@ import java.util.Optional;
 @Slf4j
 public class RecallTrigger {
 
-    static final Long CHARACTER_ID = 1L;
     static final Duration DEDUP_TTL = Duration.ofDays(8);
     static final String DEDUP_KEY_PREFIX = "proactive:recall:";
-
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final CharacterApi characterApi;
     private final EventPendingRepository eventRepo;
@@ -50,7 +46,7 @@ public class RecallTrigger {
     public void scanAndEnqueue() {
         List<Long> userIds;
         try {
-            userIds = characterApi.listActiveRelationshipUserIds(CHARACTER_ID);
+            userIds = characterApi.listActiveRelationshipUserIds(PayloadSupport.CHARACTER_ID);
         } catch (Exception e) {
             log.warn("失联召回：拉取活跃用户失败，跳过本轮: {}", e.getMessage());
             return;
@@ -76,7 +72,7 @@ public class RecallTrigger {
         }
 
         // stage 场景开关
-        RelationshipDto rel = characterApi.findOrCreateRelationship(userId, CHARACTER_ID);
+        RelationshipDto rel = characterApi.findOrCreateRelationship(userId, PayloadSupport.CHARACTER_ID);
         ProactiveProperties.SceneFlags scenes = props.getScenesByStage().get(rel.currentStage());
         if (scenes == null || !scenes.isRecall()) {
             return;
@@ -90,10 +86,11 @@ public class RecallTrigger {
 
         EventPendingEntity e = new EventPendingEntity();
         e.setUserId(userId);
-        e.setCharacterId(CHARACTER_ID);
+        e.setCharacterId(PayloadSupport.CHARACTER_ID);
         e.setEventType(EventType.B_RECALL);
+        // scheduledAt = now：召回事件立即可被调度，无需像早晚安那样分散（失联召回要尽快触达）
         e.setScheduledAt(Instant.now());
-        e.setPayload(writePayload(Map.of(PayloadSupport.ESCALATION_LEVEL, level)));
+        e.setPayload(PayloadSupport.toJson(Map.of(PayloadSupport.ESCALATION_LEVEL, level)));
         eventRepo.save(e);
     }
 
@@ -107,13 +104,5 @@ public class RecallTrigger {
             }
         }
         return level;
-    }
-
-    private static String writePayload(Map<String, Object> payload) {
-        try {
-            return MAPPER.writeValueAsString(payload);
-        } catch (Exception e) {
-            return "{}";
-        }
     }
 }

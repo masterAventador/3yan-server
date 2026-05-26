@@ -14,7 +14,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -54,5 +56,15 @@ class MemoryItemScheduledListenerTest {
                 new MemoryItemScheduledEvent(11L, 1L, 1L, "PROMISE", Instant.now()));
 
         verify(eventRepo, never()).save(any());
+    }
+
+    @Test
+    void save_failure_should_not_propagate_exception() {
+        // Minor 5：@Async 后台线程，save 失败应静默降级，不冒泡给调用方
+        doThrow(new RuntimeException("DB error")).when(eventRepo).save(any());
+
+        assertThatCode(() -> listener.onMemoryItemScheduled(
+                new MemoryItemScheduledEvent(13L, 1L, 1L, "PLAN_EVENT", Instant.now())))
+                .doesNotThrowAnyException();
     }
 }

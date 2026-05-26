@@ -1,6 +1,5 @@
 package com.sanyan.proactive.trigger;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.RelationshipDto;
 import com.sanyan.proactive.internal.EventPendingEntity;
@@ -27,18 +26,15 @@ import java.util.concurrent.ThreadLocalRandom;
  * 每个 user 的 scheduledAt = now + random(0..scatterWindowMinutes)，分散并发负载（spec §5.3）。
  *
  * <p>@Scheduled 安静降级风格参照 memory-core RagIndexWorker：单 user 处理异常不阻断其余。
- * 本期单角色 characterId 固定 {@link #CHARACTER_ID}。
+ * 本期单角色 characterId 固定 {@link PayloadSupport#CHARACTER_ID}。
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class GreetingDailyTrigger {
 
-    static final Long CHARACTER_ID = 1L;
     static final String TIME_MORNING = "morning";
     static final String TIME_NIGHT = "night";
-
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final CharacterApi characterApi;
     private final EventPendingRepository eventRepo;
@@ -57,7 +53,7 @@ public class GreetingDailyTrigger {
     void enqueueAll(String timeOfDay) {
         List<Long> userIds;
         try {
-            userIds = characterApi.listActiveRelationshipUserIds(CHARACTER_ID);
+            userIds = characterApi.listActiveRelationshipUserIds(PayloadSupport.CHARACTER_ID);
         } catch (Exception e) {
             log.warn("早晚安触发：拉取活跃用户失败，跳过本轮: {}", e.getMessage());
             return;
@@ -72,7 +68,7 @@ public class GreetingDailyTrigger {
     }
 
     private void enqueueOne(Long userId, String timeOfDay) {
-        RelationshipDto rel = characterApi.findOrCreateRelationship(userId, CHARACTER_ID);
+        RelationshipDto rel = characterApi.findOrCreateRelationship(userId, PayloadSupport.CHARACTER_ID);
         ProactiveProperties.SceneFlags scenes = props.getScenesByStage().get(rel.currentStage());
 
         // null guard：未配置的 stage 视为全部场景关闭（spec §6.3 注释）
@@ -85,24 +81,19 @@ public class GreetingDailyTrigger {
             return;
         }
 
-        int scatterMin = ThreadLocalRandom.current()
-                .nextInt(Math.max(1, props.getScatterWindowMinutes()));
+        int window = props.getScatterWindowMinutes();
+        if (window <= 0) {
+            log.warn("scatterWindowMinutes 配置异常: {}, 回退为不分散", window);
+        }
+        int scatterMin = ThreadLocalRandom.current().nextInt(Math.max(1, window));
         Instant scheduledAt = Instant.now().plus(scatterMin, ChronoUnit.MINUTES);
 
         EventPendingEntity e = new EventPendingEntity();
         e.setUserId(userId);
-        e.setCharacterId(CHARACTER_ID);
+        e.setCharacterId(PayloadSupport.CHARACTER_ID);
         e.setEventType(EventType.A_GREETING);
         e.setScheduledAt(scheduledAt);
-        e.setPayload(writePayload(Map.of(PayloadSupport.TIME_OF_DAY, timeOfDay)));
+        e.setPayload(PayloadSupport.toJson(Map.of(PayloadSupport.TIME_OF_DAY, timeOfDay)));
         eventRepo.save(e);
-    }
-
-    private static String writePayload(Map<String, Object> payload) {
-        try {
-            return MAPPER.writeValueAsString(payload);
-        } catch (Exception e) {
-            return "{}";
-        }
     }
 }

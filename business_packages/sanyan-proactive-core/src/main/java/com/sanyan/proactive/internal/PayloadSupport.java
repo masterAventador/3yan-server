@@ -1,12 +1,27 @@
 package com.sanyan.proactive.internal;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.Map;
+
 /**
- * payload 解析工具 + payload key 常量（单点定义，所有 Generator 和 Dispatcher 统一引用）。
+ * payload 解析工具 + payload key 常量 + proactive 内部共享常量（单点定义，所有 Generator、Dispatcher 和触发器统一引用）。
  *
  * <p>key 常量消除各处硬编码字面量散落；
- * 静态工具方法 {@link #toLong} / {@link #toInt} 统一处理 Number / String / null 三种 JSON 反序列化情形。
+ * 静态工具方法 {@link #toLong} / {@link #toInt} 统一处理 Number / String / null 三种 JSON 反序列化情形；
+ * {@link #toJson} 统一负责将 payload Map 序列化为 JSON 字符串（三个触发器共用，单点实现）。
  */
 public final class PayloadSupport {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    // ── proactive 内部共享常量 ─────────────────────────────────────────────
+
+    /**
+     * 本期单角色 characterId（proactive 内部触发器共用，跨模块的 characterId=1L 散落是更大的
+     * tech-debt，不在本次范围，只统一 proactive 内这些使用点）。
+     */
+    public static final Long CHARACTER_ID = 1L;
 
     // ── payload key 常量 ───────────────────────────────────────────────────
 
@@ -22,6 +37,20 @@ public final class PayloadSupport {
     // ── 工具方法 ───────────────────────────────────────────────────────────
 
     private PayloadSupport() {}
+
+    /**
+     * 将 payload Map 序列化为 JSON 字符串。
+     * 三个触发器（GreetingDailyTrigger / RecallTrigger / MemoryItemScheduledListener）统一调用此方法，
+     * 消除各自重复的私有 writePayload + ObjectMapper。
+     * 序列化失败时返回 {@code "{}"}（静默降级，不阻断触发器主流程）。
+     */
+    public static String toJson(Map<String, Object> payload) {
+        try {
+            return MAPPER.writeValueAsString(payload);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
 
     /**
      * 将 payload value 转为 {@code long}，兼容三种情形：

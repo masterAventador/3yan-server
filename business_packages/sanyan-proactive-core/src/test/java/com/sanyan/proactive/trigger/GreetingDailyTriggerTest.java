@@ -5,6 +5,7 @@ import com.sanyan.character.dto.RelationshipDto;
 import com.sanyan.proactive.internal.EventPendingEntity;
 import com.sanyan.proactive.internal.EventPendingRepository;
 import com.sanyan.proactive.internal.EventType;
+import com.sanyan.proactive.internal.PayloadSupport;
 import com.sanyan.proactive.internal.ProactiveProperties;
 import com.sanyan.proactive.internal.fixtures.ProactivePropertiesFixtures;
 import org.junit.jupiter.api.BeforeEach;
@@ -144,5 +145,35 @@ class GreetingDailyTriggerTest {
         java.time.Instant scheduledAt = cap.getValue().getScheduledAt();
         assertThat(scheduledAt).isAfterOrEqualTo(before);
         assertThat(scheduledAt).isBeforeOrEqualTo(after);
+    }
+
+    // ── scatter=0 回退：scatterWindowMinutes<=0 时仍能正常排期（回退为不分散）─────
+
+    @Test
+    void scatter_window_zero_should_still_enqueue_without_throwing() {
+        props.setScatterWindowMinutes(0);
+        trigger = new GreetingDailyTrigger(characterApi, eventRepo, props);
+        when(characterApi.listActiveRelationshipUserIds(PayloadSupport.CHARACTER_ID)).thenReturn(List.of(100L));
+        stubStage(100L, 2);
+
+        // scatterWindowMinutes=0 时静默回退 1，不抛异常，仍能排期
+        trigger.scheduleMorning();
+
+        ArgumentCaptor<EventPendingEntity> cap = ArgumentCaptor.forClass(EventPendingEntity.class);
+        verify(eventRepo).save(cap.capture());
+        assertThat(cap.getValue().getEventType()).isEqualTo(EventType.A_GREETING);
+    }
+
+    // ── CHARACTER_ID 来自 PayloadSupport 共享常量 ─────────────────────────────
+
+    @Test
+    void character_id_on_enqueued_entity_should_equal_payload_support_character_id() {
+        stubStage(100L, 2);
+
+        trigger.scheduleMorning();
+
+        ArgumentCaptor<EventPendingEntity> cap = ArgumentCaptor.forClass(EventPendingEntity.class);
+        verify(eventRepo).save(cap.capture());
+        assertThat(cap.getValue().getCharacterId()).isEqualTo(PayloadSupport.CHARACTER_ID);
     }
 }

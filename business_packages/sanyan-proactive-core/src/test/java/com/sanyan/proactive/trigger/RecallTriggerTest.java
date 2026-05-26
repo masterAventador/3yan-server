@@ -7,6 +7,7 @@ import com.sanyan.common.ws.LastActiveTracker;
 import com.sanyan.proactive.internal.EventPendingEntity;
 import com.sanyan.proactive.internal.EventPendingRepository;
 import com.sanyan.proactive.internal.EventType;
+import com.sanyan.proactive.internal.PayloadSupport;
 import com.sanyan.proactive.internal.ProactiveProperties;
 import com.sanyan.proactive.internal.fixtures.ProactivePropertiesFixtures;
 import org.junit.jupiter.api.BeforeEach;
@@ -109,5 +110,16 @@ class RecallTriggerTest {
         trigger.scanAndEnqueue();
 
         verify(eventRepo, never()).save(any());
+    }
+
+    @Test
+    void character_id_on_enqueued_entity_should_equal_payload_support_character_id() {
+        offlineHours(25);
+
+        trigger.scanAndEnqueue();
+
+        ArgumentCaptor<EventPendingEntity> cap = ArgumentCaptor.forClass(EventPendingEntity.class);
+        verify(eventRepo).save(cap.capture());
+        assertThat(cap.getValue().getCharacterId()).isEqualTo(PayloadSupport.CHARACTER_ID);
     }
 }
