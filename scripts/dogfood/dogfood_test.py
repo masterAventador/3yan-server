@@ -86,6 +86,25 @@ REASON_AI_QUALITY = "AI_QUALITY"
 STREAK_KEY_PREFIX = "streak:user:"
 BEHAVIOR_KEY_PREFIX = "behavior:user:"
 
+# ---- 用户数据清空（purge）相关 ----
+
+# 库里所有挂着单个用户数据的业务表（information_schema 实查得到）。清空一个用户 =
+# 对这 7 张表 DELETE WHERE user_id，保留 users 账号行本身。
+# ⚠️ 单点定义：以后新增任何带 user_id 的业务表，只改这里，purge_user.py 与 dogfood --purge 同步生效。
+USER_DATA_TABLES = (
+    "message",
+    "memory_summaries",
+    "memory_profiles",
+    "chat_embeddings",
+    "relationships",
+    "intimacy_logs",
+    "relationship_milestones",
+)
+
+# dogfood 隔离测试区下界：< 900 视为真实用户，dogfood 拒绝触碰。
+# 要清空真实账号请用独立的 purge_user.py（它不受此限制）。
+DOGFOOD_MIN_USER_ID = 900
+
 # REST 服务地址（本机 localhost）
 REST_HOST = "localhost"
 REST_PORT = 8080
@@ -336,6 +355,43 @@ async def chat(token: str, contents: list[str], log: Logger,
 
 # ----------------------------- 清理 -----------------------------
 
+def _del_redis_keys_by_pattern(pattern: str) -> None:
+    """scan 出匹配 pattern 的所有 key 并逐个 DEL。"""
+    keys = redis_cmd("--scan", "--pattern", pattern)
+    for k in keys.splitlines():
+        if k.strip():
+            redis_cmd("DEL", k.strip())
+
+
+def validate_dogfood_user_id(user_id: int) -> None:
+    """dogfood 防呆：拒绝对 < DOGFOOD_MIN_USER_ID 的真实用户跑测试/清理。
+
+    隔离测试区是 901-919（≥900）。要清空真实账号请用独立的 purge_user.py。
+    """
+    if user_id < DOGFOOD_MIN_USER_ID:
+        raise ValueError(
+            f"拒绝：--user-id={user_id} < {DOGFOOD_MIN_USER_ID}，疑似真实用户。"
+            f" dogfood 隔离测试区是 ≥{DOGFOOD_MIN_USER_ID}（901-919）。"
+            f" 要清空真实账号请用 purge_user.py。"
+        )
+
+
+def purge_all_user_data(db: DbHandle, user_id: int, log: Logger) -> None:
+    """清空单个用户在所有业务表（USER_DATA_TABLES）的数据 + 该用户的 Redis key。
+
+    保留 users 账号行本身——账号还在，只是相关数据全没。
+    刻意不动全局 RAG 索引队列（删它会波及其他用户）。
+    """
+    log.info(f"==> [purge] 清空 user_id={user_id} 的全部业务数据（保留 users 行）")
+    for table in USER_DATA_TABLES:
+        db.execute(f"DELETE FROM {table} WHERE user_id = {user_id}")
+    # 该用户的 Redis key：profile 节流 + streak + 每日行为计数
+    _del_redis_keys_by_pattern(f"{THROTTLE_KEY_PREFIX}{user_id}:*")
+    redis_cmd("DEL", f"{STREAK_KEY_PREFIX}{user_id}")
+    _del_redis_keys_by_pattern(f"{BEHAVIOR_KEY_PREFIX}{user_id}:*")
+    log.debug(f"[purge] user_id={user_id} 完成")
+
+
 def clean_test_data(db: DbHandle, user_id: int, log: Logger) -> None:
     """
     把 user_id 的 message / memory_summaries / memory_profiles / chat_embeddings 全清掉，
@@ -348,10 +404,7 @@ def clean_test_data(db: DbHandle, user_id: int, log: Logger) -> None:
     db.execute(f"DELETE FROM message WHERE user_id = {user_id}")
 
     # Redis：删该用户的 profile 节流 key（character 范围全清）
-    keys = redis_cmd("--scan", "--pattern", f"{THROTTLE_KEY_PREFIX}{user_id}:*")
-    for k in keys.splitlines():
-        if k.strip():
-            redis_cmd("DEL", k.strip())
+    _del_redis_keys_by_pattern(f"{THROTTLE_KEY_PREFIX}{user_id}:*")
     # RAG 索引队列整队列删（影响所有用户，但这是 dev 环境，可接受）
     redis_cmd("DEL", RAG_INDEX_QUEUE_KEY)
     log.debug("[clean] 完成")
@@ -1095,10 +1148,7 @@ def clean_plan3_data(db: DbHandle, user_id: int, character_id: int, log: Logger)
     redis_cmd("DEL", streak_key)
 
     # Redis behavior(daily cap) keys（按日期命名，scan 匹配）
-    beh_keys = redis_cmd("--scan", "--pattern", f"{BEHAVIOR_KEY_PREFIX}{user_id}:*")
-    for k in beh_keys.splitlines():
-        if k.strip():
-            redis_cmd("DEL", k.strip())
+    _del_redis_keys_by_pattern(f"{BEHAVIOR_KEY_PREFIX}{user_id}:*")
 
     log.debug("[clean-p3] 完成")
 
@@ -2142,6 +2192,15 @@ async def _run_one_scenario(
 async def main_async(args: argparse.Namespace) -> int:
     log = Logger(verbose=args.verbose)
 
+    # ① 防呆：显式 --user-id 落到真实用户区间（< DOGFOOD_MIN_USER_ID）直接拒绝，
+    # 避免误把真实账号当测试号清空。要清真实账号请用 purge_user.py。
+    if args.user_id is not None:
+        try:
+            validate_dogfood_user_id(args.user_id)
+        except ValueError as e:
+            log.warn(str(e))
+            return 2
+
     # 加载 env / 建 DB handle
     env = read_env()
     jwt_secret = env.get("JWT_SECRET")
@@ -2176,6 +2235,15 @@ async def main_async(args: argparse.Namespace) -> int:
     # ⭐ V10 加 FK 约束后，必须先 ensure dogfood fake user 在 users 表里存在，
     # 否则 saveUserMessage INSERT message 会撞 FK 报错。幂等。
     unique_uids = sorted(set(scenario_uids.values()))
+
+    # ② --purge：把这些测试号的全部业务数据一次清干净（USER_DATA_TABLES 全部 + Redis），
+    # 保留 users 账号行，然后直接退出（不跑场景）。方便定期重置测试号脏累积数据。
+    if args.purge:
+        log.info(f"==> [purge] 清空测试号 {unique_uids} 的全部业务数据后退出（保留 users 行）")
+        for uid in unique_uids:
+            purge_all_user_data(db, uid, log)
+        return 0
+
     log.info(f"==> [setup] ensure fake users {unique_uids} 存在（FK 兜底）")
     ensure_dogfood_users(db, unique_uids, log)
 
@@ -2261,6 +2329,11 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument(
         "--no-clean", dest="clean", action="store_false",
         help="跳过清理，接着现有数据继续测"
+    )
+    p.add_argument(
+        "--purge", action="store_true", default=False,
+        help="把所选场景对应测试号的全部业务数据一次清干净（USER_DATA_TABLES 全 7 张表 + Redis），"
+             "保留 users 账号行，然后退出（不跑场景）。配合 --scenario 选范围；清真实账号请用 purge_user.py。"
     )
     p.add_argument(
         "--user-id", type=int, default=None,
