@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketSession;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,10 +33,17 @@ public class SessionManager {
     private final StringRedisTemplate redisTemplate;
     private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private static final String ONLINE_PREFIX = "ws:online:";
+    private static final String ONLINE_VALUE = "1";
+    private static final Duration ONLINE_TTL = Duration.ofSeconds(90);
 
     public void register(Long userId, WebSocketSession session) {
         sessions.put(userId, session);
-        redisTemplate.opsForValue().set(ONLINE_PREFIX + userId, "1");
+        redisTemplate.opsForValue().set(ONLINE_PREFIX + userId, ONLINE_VALUE, ONLINE_TTL);
+    }
+
+    /** 心跳续期：客户端 PING 时刷新在线 TTL（覆盖写同 key 即续期）。 */
+    public void refreshOnline(Long userId) {
+        redisTemplate.opsForValue().set(ONLINE_PREFIX + userId, ONLINE_VALUE, ONLINE_TTL);
     }
 
     public void remove(Long userId) {

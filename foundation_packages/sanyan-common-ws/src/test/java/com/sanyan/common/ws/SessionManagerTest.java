@@ -33,7 +33,7 @@ class SessionManagerTest {
         sessionManager.register(1L, wsSession);
 
         assertThat(sessionManager.getSession(1L)).isPresent();
-        verify(valueOps).set("ws:online:1", "1");
+        verify(valueOps).set("ws:online:1", "1", java.time.Duration.ofSeconds(90));
     }
 
     @Test
@@ -52,5 +52,11 @@ class SessionManagerTest {
 
         when(valueOps.get("ws:online:99")).thenReturn(null);
         assertThat(sessionManager.isOnline(99L)).isFalse();
+    }
+
+    @Test
+    void refreshOnline_resetsTtlOnExistingKey() {
+        sessionManager.refreshOnline(7L);
+        verify(valueOps).set("ws:online:7", "1", java.time.Duration.ofSeconds(90));
     }
 }
