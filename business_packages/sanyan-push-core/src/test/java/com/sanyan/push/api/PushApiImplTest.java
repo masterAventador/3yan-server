@@ -1,8 +1,11 @@
 package com.sanyan.push.api;
 
 import com.sanyan.push.dto.DeviceTokenDto;
+import com.sanyan.push.dto.PushPayload;
+import com.sanyan.push.dto.PushResult;
 import com.sanyan.push.internal.DeviceTokenEntity;
 import com.sanyan.push.internal.DeviceTokenRepository;
+import com.sanyan.push.internal.PushRouter;
 import com.sanyan.push.internal.fixtures.DeviceTokenTestFixtures;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +27,7 @@ import static org.mockito.Mockito.when;
 class PushApiImplTest {
 
     @Mock DeviceTokenRepository repository;
+    @Mock PushRouter pushRouter;
     @InjectMocks PushApiImpl api;
 
     @Test
@@ -81,5 +85,17 @@ class PushApiImplTest {
         when(repository.findByUserIdAndActiveTrue(7L)).thenReturn(List.of());
         assertThat(api.listActiveTokens(7L)).isEmpty();
         verify(repository, never()).save(any());
+    }
+
+    @Test
+    void pushToUser_should_delegate_to_router() {
+        PushPayload payload = new PushPayload("小婉", "在想你", 100L);
+        PushResult expected = PushResult.sent();
+        when(pushRouter.pushToUser(7L, payload)).thenReturn(expected);
+
+        PushResult result = api.pushToUser(7L, payload);
+
+        assertThat(result).isEqualTo(expected);
+        verify(pushRouter).pushToUser(7L, payload);
     }
 }

@@ -6,6 +6,7 @@ import com.sanyan.push.dto.PushPayload;
 import com.sanyan.push.dto.PushResult;
 import com.sanyan.push.internal.DeviceTokenEntity;
 import com.sanyan.push.internal.DeviceTokenRepository;
+import com.sanyan.push.internal.PushRouter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,8 +17,7 @@ import java.util.List;
 /**
  * {@link PushApi} 在 push-core 的实现。
  *
- * <p>本期（spec §8）只实现设备注册 + 列举 active token；{@code pushToUser} 在 G7 委托
- * {@link com.sanyan.push.internal.PushRouter}（本 task 先占位）。
+ * <p>本期（spec §8）实现设备注册 + 列举 active token + pushToUser 委托 {@link PushRouter}。
  *
  * <p>registerDevice 幂等：按唯一键 (user, platform, vendor, token) 找已有行——存在则置
  * active=true + 刷新 last_seen（设备重装/重登复用同一行），不存在则新建。
@@ -27,6 +27,7 @@ import java.util.List;
 public class PushApiImpl implements PushApi {
 
     private final DeviceTokenRepository repository;
+    private final PushRouter pushRouter;
 
     @Override
     @Transactional
@@ -48,8 +49,7 @@ public class PushApiImpl implements PushApi {
 
     @Override
     public PushResult pushToUser(Long userId, PushPayload payload) {
-        // G7 替换为委托 PushRouter
-        throw new UnsupportedOperationException("pushToUser 由 G7 接入 PushRouter");
+        return pushRouter.pushToUser(userId, payload);
     }
 
     @Override
