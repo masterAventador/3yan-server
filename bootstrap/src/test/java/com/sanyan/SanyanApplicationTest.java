@@ -1,5 +1,6 @@
 package com.sanyan;
 
+import com.sanyan.proactive.internal.ProactiveScheduler;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,6 +21,10 @@ class SanyanApplicationTest {
 
     @MockBean
     private StringRedisTemplate stringRedisTemplate;
+
+    // mock 掉主动消息调度器：健康检查冒烟测试不需要真实 @Scheduled poll()，避免其在测试 DB 上跑 SKIP LOCKED 原生查询报错刷屏
+    @MockBean
+    private ProactiveScheduler proactiveScheduler;
 
     @Test
     void healthCheck() throws Exception {
