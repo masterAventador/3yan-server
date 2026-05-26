@@ -35,6 +35,7 @@
         <module>business_packages/sanyan-chat-core</module>
         <module>business_packages/sanyan-memory-api</module>
         <module>business_packages/sanyan-memory-core</module>
+        <module>business_packages/sanyan-proactive-api</module>
         <module>bootstrap</module>
     </modules>
 
@@ -68,6 +69,7 @@
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-core</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-api</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-api</artifactId><version>${project.version}</version></dependency>
 
             <!-- 第三方库锁版本 -->
             <dependency>
