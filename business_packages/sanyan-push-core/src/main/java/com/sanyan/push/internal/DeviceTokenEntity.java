@@ -51,7 +51,7 @@ public class DeviceTokenEntity {
     @Column(name = "registered_at", nullable = false, updatable = false)
     private Instant registeredAt;
 
-    @CreationTimestamp
+    /** 最后活跃时间。由写入方（注册/上报路径）手动 setLastSeen 维护，不用 @CreationTimestamp。 */
     @Column(name = "last_seen", nullable = false)
     private Instant lastSeen;
 }

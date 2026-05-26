@@ -14,6 +14,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,6 +62,29 @@ class DeviceTokenRepositoryIT extends PostgresTestcontainerSupport {
         assertThat(loaded.getToken()).isEqualTo("tok-abc");
         assertThat(loaded.getActive()).isTrue();
         assertThat(loaded.getRegisteredAt()).isNotNull();
+        assertThat(loaded.getLastSeen()).isNotNull();
+    }
+
+    @Test
+    void upsert_should_reactivate_and_refresh_last_seen() {
+        DeviceTokenEntity inactive = DeviceTokenTestFixtures.iosApns(11L, "tok-upsert");
+        inactive.setActive(false);
+        Instant oldLastSeen = Instant.now().minusSeconds(3600);
+        inactive.setLastSeen(oldLastSeen);
+        Long id = repo.save(inactive).getId();
+        em.flush();
+        em.clear();
+
+        DeviceTokenEntity existing = repo.findById(id).orElseThrow();
+        existing.setActive(true);
+        existing.setLastSeen(Instant.now());
+        repo.save(existing);
+        em.flush();
+        em.clear();
+
+        DeviceTokenEntity reloaded = repo.findById(id).orElseThrow();
+        assertThat(reloaded.getActive()).isTrue();
+        assertThat(reloaded.getLastSeen()).isAfterOrEqualTo(oldLastSeen);
     }
 
     @Test

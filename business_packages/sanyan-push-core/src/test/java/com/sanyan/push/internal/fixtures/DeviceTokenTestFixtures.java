@@ -2,6 +2,8 @@ package com.sanyan.push.internal.fixtures;
 
 import com.sanyan.push.internal.DeviceTokenEntity;
 
+import java.time.Instant;
+
 /**
  * DeviceTokenEntity Object Mother（java-backend-business-layer.md §5.2）。
  */
@@ -24,6 +26,7 @@ public final class DeviceTokenTestFixtures {
         e.setVendor(vendor);
         e.setToken(token);
         e.setActive(true);
+        e.setLastSeen(Instant.now());
         return e;
     }
 }
