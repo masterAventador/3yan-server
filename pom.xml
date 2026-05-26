@@ -38,6 +38,7 @@
         <module>business_packages/sanyan-proactive-api</module>
         <module>business_packages/sanyan-proactive-core</module>
         <module>business_packages/sanyan-push-api</module>
+        <module>business_packages/sanyan-push-core</module>
         <module>bootstrap</module>
     </modules>
 
@@ -74,6 +75,7 @@
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-api</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-core</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-push-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-push-core</artifactId><version>${project.version}</version></dependency>
 
             <!-- 第三方库锁版本 -->
             <dependency>

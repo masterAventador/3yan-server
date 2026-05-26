@@ -71,6 +71,12 @@
             ProactiveApiImpl 等 Bean 在 Phase I/J 创建；现在先注册依赖确保 fat jar 能装配。
         -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-core</artifactId></dependency>
+        <!--
+            Plan 4 A4：push 域脚手架接入 bootstrap。
+            DeviceTokenController / PushApiImpl / ApnsPushChannel 等 Bean 在 Phase G 创建；
+            现在先注册依赖确保 fat jar 能装配。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-push-core</artifactId></dependency>
     </dependencies>
 
     <build>
