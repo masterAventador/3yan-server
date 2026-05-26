@@ -89,6 +89,11 @@
                 <artifactId>flyway-database-postgresql</artifactId>
                 <version>10.10.0</version>
             </dependency>
+            <dependency>
+                <groupId>com.eatthepath</groupId>
+                <artifactId>pushy</artifactId>
+                <version>0.15.4</version>
+            </dependency>
 
             <!-- Testcontainers BOM 锁版本（>=1.20 才兼容 Docker API 1.44+） -->
             <dependency>
