@@ -18,7 +18,7 @@
 | **4000-4999** | llm | `LlmErrCode` | `business_packages/sanyan-llm-core/src/main/java/com/sanyan/llm/internal/` |
 | **5000-5999** | memory | `MemoryErrCode` | `business_packages/sanyan-memory-core/src/main/java/com/sanyan/memory/internal/` |
 | **6000-6999** | embedding | `EmbeddingErrCode` | `business_packages/sanyan-embedding-core/src/main/java/com/sanyan/embedding/internal/` |
-| **7000-7999** | _（保留）_ | — | 留给未来新模块 |
+| **7000-7999** | proactive | `ProactiveErrCode` | `business_packages/sanyan-proactive-core/src/main/java/com/sanyan/proactive/internal/` |
 | **8000-8999** | push | `PushErrCode` | `business_packages/sanyan-push-core/src/main/java/com/sanyan/push/internal/` |
 | **9000-9999** | _（保留）_ | — | 留给未来新模块 |
 
@@ -90,6 +90,13 @@
 
 **关于 6001 与 5002 同名**：分层语义有意保留——6001 是 HTTP 客户端层（`SiliconFlowEmbeddingProvider`）抛的协议级失败，5002 是 Memory 业务层视角的不可用。`MemoryRagSearchService` 同时捕获两个 code 走相同的"返回空 list + 降级"逻辑。
 
+### ProactiveErrCode（7000-7999）
+
+| Code | 常量 | 文案 |
+|---|---|---|
+| 7001 | `PROACTIVE_GENERATE_FAILED` | 主动消息生成失败 |
+| 7002 | `PROACTIVE_EVENT_NOT_FOUND` | 主动事件不存在 |
+
 ### PushErrCode（8000-8999）
 
 | Code | 常量 | 文案 |
@@ -121,3 +128,4 @@
 | 2026-05-25 | Final review I4：LLM 域新增 4006 LLM_PROVIDER_CONFLICT（多 provider 同 task type → fail-fast） |
 | 2026-05-27 | Plan 4：memory 域新增 5003 MEMORY_ITEM_NOT_FOUND |
 | 2026-05-27 | Plan 4：push 域新增 8001 DEVICE_TOKEN_INVALID / 8002 PUSH_SEND_FAILED；8000-8999 区间分配给 push |
+| 2026-05-27 | Plan 4 I2：7000-7999 从保留段正式分配给 proactive 域；新增 ProactiveErrCode 7001 PROACTIVE_GENERATE_FAILED / 7002 PROACTIVE_EVENT_NOT_FOUND |
