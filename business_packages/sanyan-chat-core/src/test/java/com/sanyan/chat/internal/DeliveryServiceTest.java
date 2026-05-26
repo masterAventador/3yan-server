@@ -91,6 +91,8 @@ class DeliveryServiceTest {
         deliveryService.confirmAck(10L);
         t.join(2000);
 
+        // 确认投递线程已在 2s 内真正结束（否则 ACK 没生效卡在 join 也会误判通过）
+        assertThat(t.isAlive()).isFalse();
         verify(pushApi, never()).pushToUser(anyLong(), any());
     }
 

@@ -64,11 +64,14 @@ public class DeliveryService {
     /** 主动消息推送通知标题，单角色 MVP 硬编码。 */
     private static final String PUSH_TITLE = "小婉";
 
-    /** {@link PushResult#failed} 的失败状态值（与 PushResult.failed() 产出保持一致）。 */
-    private static final String PUSH_STATUS_FAILED = "FAILED";
-
     /**
      * 主动消息投递入口：逐条落库 + 4 层投递，返回落库 messageId 列表。
+     *
+     * <p><b>⚠️ 本方法同步阻塞：</b>每条在线 segment 最多阻塞 {@code ackTimeoutMs}（默认 5s）
+     * 等待客户端 ACK，多条 segment 累加（n 条最坏阻塞 n × ackTimeoutMs）。
+     * 调用方<b>必须在独立线程 / 异步上下文执行</b>，禁止在 {@code @Scheduled} 主循环
+     * 或 WS IO 线程直接同步调用，否则会阻塞调度器 / IO 线程，导致调度饥饿或连接处理停滞。
+     * Phase J 的 Dispatcher 会用 {@code @Async} 隔离投递。
      *
      * @param userId      目标用户 ID
      * @param characterId 角色 ID（本期备用，落库暂不用）
@@ -130,7 +133,7 @@ public class DeliveryService {
             PushResult result = pushApi.pushToUser(userId, new PushPayload(PUSH_TITLE, segment, messageId));
             // spec §7.1：推送失败（抛异常 / PushResult.status=FAILED）记 ERROR 日志。
             // 正常返回但 status=FAILED 也是失败，需显式检查，否则静默丢失失败信息。
-            if (result != null && PUSH_STATUS_FAILED.equals(result.status())) {
+            if (result != null && result.isFailed()) {
                 log.error("离线推送失败（不影响流程，靠 sync 兜底）: userId={}, msgId={}, detail={}",
                         userId, messageId, result.detail());
             }
