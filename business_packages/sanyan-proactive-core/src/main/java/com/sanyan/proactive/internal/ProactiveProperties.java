@@ -14,6 +14,15 @@ import java.util.Map;
  * <p>
  * 注册方式：由 ProactiveConfig（@Configuration + @EnableConfigurationProperties）激活，
  * 本类不加 @Component。
+ * <p>
+ * <b>注意 {@code scenesByStage} 的 null 语义：</b>
+ * {@code scenesByStage} 是一个稀疏 Map，对于 application.yml 中未配置的 stage，
+ * {@code scenesByStage.get(stage)} 返回 {@code null}（而非空 {@link SceneFlags}）。
+ * 调用方（如 J1 FrequencyGate）在读取前必须做 null guard，例如：
+ * <pre>{@code
+ * SceneFlags flags = props.getScenesByStage().get(stage);
+ * if (flags == null) return false;  // 未配置 stage 视为全部场景关闭
+ * }</pre>
  */
 @ConfigurationProperties("sanyan.proactive")
 @Data

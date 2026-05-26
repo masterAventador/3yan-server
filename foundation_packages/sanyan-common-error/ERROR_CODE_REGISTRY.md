@@ -95,7 +95,7 @@
 | Code | 常量 | 文案 |
 |---|---|---|
 | 7001 | `PROACTIVE_GENERATE_FAILED` | 主动消息生成失败 |
-| 7002 | `PROACTIVE_EVENT_NOT_FOUND` | 主动事件不存在 |
+| 7002 | `PROACTIVE_EVENT_TYPE_INVALID` | 主动事件类型不合法 |
 
 ### PushErrCode（8000-8999）
 
@@ -128,4 +128,5 @@
 | 2026-05-25 | Final review I4：LLM 域新增 4006 LLM_PROVIDER_CONFLICT（多 provider 同 task type → fail-fast） |
 | 2026-05-27 | Plan 4：memory 域新增 5003 MEMORY_ITEM_NOT_FOUND |
 | 2026-05-27 | Plan 4：push 域新增 8001 DEVICE_TOKEN_INVALID / 8002 PUSH_SEND_FAILED；8000-8999 区间分配给 push |
-| 2026-05-27 | Plan 4 I2：7000-7999 从保留段正式分配给 proactive 域；新增 ProactiveErrCode 7001 PROACTIVE_GENERATE_FAILED / 7002 PROACTIVE_EVENT_NOT_FOUND |
+| 2026-05-27 | Plan 4 I2：7000-7999 从保留段正式分配给 proactive 域；新增 ProactiveErrCode 7001 PROACTIVE_GENERATE_FAILED / 7002 PROACTIVE_EVENT_TYPE_INVALID |
+| 2026-05-27 | Plan 4 Phase I final review：7002 由 PROACTIVE_EVENT_NOT_FOUND（语义偏差）改名为 PROACTIVE_EVENT_TYPE_INVALID，文案改"主动事件类型不合法"，码值不变 |

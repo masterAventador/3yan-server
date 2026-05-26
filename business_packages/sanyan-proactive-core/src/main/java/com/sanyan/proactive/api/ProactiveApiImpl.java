@@ -42,7 +42,7 @@ public class ProactiveApiImpl implements ProactiveApi {
         try {
             return EventType.valueOf(raw.trim().toUpperCase());
         } catch (IllegalArgumentException | NullPointerException e) {
-            throw new BusinessException(ProactiveErrCode.PROACTIVE_EVENT_NOT_FOUND,
+            throw new BusinessException(ProactiveErrCode.PROACTIVE_EVENT_TYPE_INVALID,
                     "未知的主动事件类型: " + raw);
         }
     }

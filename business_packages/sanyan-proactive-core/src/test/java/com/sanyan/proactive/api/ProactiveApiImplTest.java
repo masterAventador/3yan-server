@@ -56,6 +56,6 @@ class ProactiveApiImplTest {
         assertThatThrownBy(() -> api.triggerNow(1L, 99L, "x_unknown"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getErrCode())
-                        .isEqualTo(ProactiveErrCode.PROACTIVE_EVENT_NOT_FOUND));
+                        .isEqualTo(ProactiveErrCode.PROACTIVE_EVENT_TYPE_INVALID));
     }
 }
