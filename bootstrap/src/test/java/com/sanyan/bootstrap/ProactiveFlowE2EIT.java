@@ -108,6 +108,11 @@ class ProactiveFlowE2EIT extends PostgresTestcontainerSupport {
         // 关闭免打扰：start=end=0 → isQuietHours() 恒 false（不受测试运行的 wall-clock 影响）
         registry.add("sanyan.proactive.quiet-hours.start", () -> "0");
         registry.add("sanyan.proactive.quiet-hours.end", () -> "0");
+        // 本 IT 测 stage 0（findOrCreateRelationship 懒创建 → currentStage 默认 0）的 C_EVENT_FOLLOWUP
+        // 门控放行。ProactiveProperties.scenesByStage 默认空 Map，FrequencyGate 读 null 拒所有场景，
+        // 故 IT 自注入 stage 0 的 event-followup=true（main application.yml 生产配置不依赖此处）。
+        // dailyCapByStage 用默认 [2,3,4,5,6]（stage 0 cap=2，mock 当日已发=0 不触顶），无需注入。
+        registry.add("sanyan.proactive.scenes-by-stage[0].event-followup", () -> "true");
     }
 
     /** 主动消息链路测试用 userId（高位避免与 V6 seed / 其他 IT 冲突）。 */

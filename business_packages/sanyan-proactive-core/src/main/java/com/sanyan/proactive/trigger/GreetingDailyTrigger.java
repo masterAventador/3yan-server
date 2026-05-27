@@ -40,12 +40,12 @@ public class GreetingDailyTrigger {
     private final EventPendingRepository eventRepo;
     private final ProactiveProperties props;
 
-    @Scheduled(cron = "${sanyan.proactive.greeting.morning-cron}")
+    @Scheduled(cron = "${sanyan.proactive.greeting.morning-cron:0 0 8 * * *}")
     public void scheduleMorning() {
         enqueueAll(TIME_MORNING);
     }
 
-    @Scheduled(cron = "${sanyan.proactive.greeting.night-cron}")
+    @Scheduled(cron = "${sanyan.proactive.greeting.night-cron:0 30 22 * * *}")
     public void scheduleNight() {
         enqueueAll(TIME_NIGHT);
     }
