@@ -1,6 +1,7 @@
 package com.sanyan.memory;
 
 import com.sanyan.memory.dto.MemoryContext;
+import com.sanyan.memory.dto.MemoryItemDto;
 
 /**
  * Plan 2 Task Q2：长期记忆模块对内契约。
@@ -44,4 +45,20 @@ public interface MemoryApi {
      * @return 整合后的 {@link MemoryContext}；三层皆空时返回 {@code null}
      */
     MemoryContext getRelevantContext(Long userId, Long characterId, String currentUserMessage);
+
+    /**
+     * 按 id 查结构化记忆条目（Plan 4）。供 proactive 生成器拿 content 拼文案。
+     *
+     * @param itemId 条目 id
+     * @return 条目 DTO
+     * @throws com.sanyan.common.error.BusinessException 条目不存在时抛 MEMORY_ITEM_NOT_FOUND
+     */
+    MemoryItemDto getMemoryItem(Long itemId);
+
+    /**
+     * 标记条目已被主动消息消费（status=DONE）。主动消息发送成功后由 proactive 调用。
+     *
+     * @param itemId 条目 id
+     */
+    void markMemoryItemDone(Long itemId);
 }

@@ -56,4 +56,14 @@ public interface ChatApi {
      * 一次性取走更直接。
      */
     List<MessageDto> listSinceMessageId(Long userId, Long sinceMessageId);
+
+    /**
+     * 投递一条主动消息（proactive 域委托入口）：把每条 segment 落库为 ai message，
+     * 经 DeliveryService 走 4 层投递（在线 WS / ACK 兜底 / 离线推送）。
+     *
+     * <p>跨域边界（spec §7.2）：proactive-core 不能依赖 chat-core，故投递能力经本契约暴露。
+     *
+     * @return 落库的 ai message id 列表（与 segments 一一对应、顺序一致）
+     */
+    List<Long> deliverProactiveMessage(Long userId, Long characterId, List<String> segments);
 }

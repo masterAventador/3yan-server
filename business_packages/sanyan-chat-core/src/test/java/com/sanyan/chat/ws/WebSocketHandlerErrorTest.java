@@ -1,8 +1,10 @@
 package com.sanyan.chat.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sanyan.chat.internal.DeliveryService;
 import com.sanyan.chat.internal.MessageService;
 import com.sanyan.chat.internal.MessageTestFixtures;
+import com.sanyan.common.ws.LastActiveTracker;
 import com.sanyan.common.ws.SessionManager;
 import com.sanyan.common.ws.WsEventType;
 import com.sanyan.common.ws.WsMessage;
@@ -28,6 +30,8 @@ class WebSocketHandlerErrorTest {
 
     @Mock SessionManager sessionManager;
     @Mock MessageService messageService;
+    @Mock LastActiveTracker lastActiveTracker;
+    @Mock DeliveryService deliveryService;
     @Mock WebSocketSession session;
 
     @Test
@@ -42,7 +46,7 @@ class WebSocketHandlerErrorTest {
         when(messageService.handleAiReply(any()))
                 .thenThrow(new RuntimeException("AI 服务炸了"));
 
-        ChatWebSocketHandler handler = new ChatWebSocketHandler(sessionManager, objectMapper, messageService);
+        ChatWebSocketHandler handler = new ChatWebSocketHandler(sessionManager, objectMapper, messageService, lastActiveTracker, deliveryService);
 
         WsMessage incoming = new WsMessage();
         incoming.setType(WsEventType.SEND_MESSAGE);

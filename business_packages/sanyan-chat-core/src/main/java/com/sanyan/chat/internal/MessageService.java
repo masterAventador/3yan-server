@@ -54,6 +54,25 @@ public class MessageService {
         return userMsg;
     }
 
+    /**
+     * 落单条 ai message（外部已生成好文案，如主动消息）→ 返回 server 端 id。
+     * 与 {@link #saveUserMessage} 同构，仅 senderType 为 AI；独立事务便于调用方逐条拿 id。
+     * <p>注意：不调 LLM、不拆气泡（那是 {@link #handleAiReply} 的职责）；
+     * 调用方（DeliveryService）已把文案拆好成一条条 segment。
+     */
+    @Transactional
+    public MessageEntity saveAiMessage(Long userId, String content) {
+        MessageEntity aiMsg = new MessageEntity();
+        aiMsg.setUserId(userId);
+        aiMsg.setSenderType(SenderType.AI);
+        aiMsg.setContent(content != null ? content : "");
+        messageRepository.save(aiMsg);
+        log.info("AI 消息已保存（单条）: userId={}, msgId={}", userId, aiMsg.getId());
+        eventPublisher.publishEvent(new MessagePersistedEvent(
+                aiMsg.getId(), userId, DEFAULT_CHARACTER_ID, SenderType.AI));
+        return aiMsg;
+    }
+
     /** AI 回复最多拆分多少条气泡（Plan-1 F7.3） */
     public static final int MAX_AI_BUBBLES = 4;
 

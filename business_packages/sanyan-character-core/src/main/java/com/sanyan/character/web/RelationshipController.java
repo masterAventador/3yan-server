@@ -4,6 +4,7 @@ import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.RelationshipDto;
 import com.sanyan.common.auth.LoginUser;
 import com.sanyan.common.web.BaseResp;
+import com.sanyan.common.ws.LastActiveTracker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,9 +24,11 @@ public class RelationshipController {
     private static final Long DEFAULT_CHARACTER_ID = 1L;
 
     private final CharacterApi characterApi;
+    private final LastActiveTracker lastActiveTracker;
 
     @GetMapping("/me")
     public BaseResp<RelationshipDto> fetchMyRelationship(@LoginUser Long userId) {
+        lastActiveTracker.touch(userId);
         return BaseResp.success(characterApi.fetchMyRelationship(userId, DEFAULT_CHARACTER_ID));
     }
 }

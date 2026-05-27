@@ -59,6 +59,8 @@
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
+        <!-- ProactiveFlowE2EIT 等 @Async 链路 IT 需要轮询等待 worker 线程完成（test scope 不传递，bootstrap 单列） -->
+        <dependency><groupId>org.awaitility</groupId><artifactId>awaitility</artifactId><scope>test</scope></dependency>
         <!--
             sanyan-memory-core compile scope：MemoryApiImpl (Q2) 是 MemoryApi 的唯一实现，
             AiService (Q4) 通过 @Autowired MemoryApi 注入，生产 fat jar 必须包含 memory-core
@@ -66,6 +68,18 @@
             没有禁止 memory-core，所以 compile scope 合规。
         -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-core</artifactId></dependency>
+        <!--
+            Plan 4 A2：proactive 域接入 bootstrap。
+            Phase I 建 EventPendingEntity/Repository，Phase J 建 ProactiveScheduler/Dispatcher/ProactiveApiImpl；
+            bootstrap 在此统一声明，Phase I/J 的 proactive Bean 届时无需改 pom 即可装配。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-core</artifactId></dependency>
+        <!--
+            Plan 4 A4：push 域脚手架接入 bootstrap。
+            DeviceTokenController / PushApiImpl / ApnsPushChannel 等 Bean 在 Phase G 创建；
+            现在先注册依赖确保 fat jar 能装配。
+        -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-push-core</artifactId></dependency>
     </dependencies>
 
     <build>

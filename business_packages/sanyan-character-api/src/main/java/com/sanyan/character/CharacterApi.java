@@ -3,6 +3,8 @@ package com.sanyan.character;
 import com.sanyan.character.dto.AiCharacterDto;
 import com.sanyan.character.dto.RelationshipDto;
 
+import java.util.List;
+
 /**
  * Character 域对内 API 契约。
  *
@@ -39,4 +41,12 @@ public interface CharacterApi {
      * 当 character 不存在 / persona_config 缺失 / stage 无 override 时返回空字符串。
      */
     String getStagePromptSegment(Long userId, Long characterId);
+
+    // ----- Plan 4 新增（proactive 触发器） -----
+
+    /**
+     * 列出与指定角色已建立关系（relationships 表存在该行）的所有 userId。
+     * <p>proactive 域早晚安 / 失联召回触发器遍历用户用；本期单角色 characterId 固定 1L。
+     */
+    List<Long> listActiveRelationshipUserIds(Long characterId);
 }

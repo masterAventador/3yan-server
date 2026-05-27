@@ -1,7 +1,9 @@
 package com.sanyan.character.internal;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -14,4 +16,8 @@ import java.util.Optional;
 public interface RelationshipRepository extends JpaRepository<RelationshipEntity, RelationshipId> {
 
     Optional<RelationshipEntity> findByUserIdAndCharacterId(Long userId, Long characterId);
+
+    /** 列出与指定角色已建立关系的所有 userId（本期单角色，proactive 触发器遍历用户用）。 */
+    @Query("SELECT r.userId FROM RelationshipEntity r WHERE r.characterId = :characterId")
+    List<Long> findUserIdsByCharacterId(Long characterId);
 }

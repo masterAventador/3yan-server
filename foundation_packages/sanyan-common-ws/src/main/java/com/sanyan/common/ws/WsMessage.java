@@ -12,4 +12,6 @@ public class WsMessage {
     private String clientMsgId;
     // sync
     private Long lastMsgId;
+    // ack（客户端确认已收到的 serverMsgId）
+    private Long ackMsgId;
 }

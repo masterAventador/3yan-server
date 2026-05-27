@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.sanyan</groupId>
+        <artifactId>sanyan-server-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>sanyan-push-core</artifactId>
+    <name>sanyan-push-core</name>
+    <packaging>jar</packaging>
+
+    <!--
+        Plan 4 A4：push 域实现模块（空壳脚手架）。
+        - internal/ DeviceTokenEntity / DeviceTokenRepository 等（Phase G 建）
+        - web/      DeviceTokenController（Phase G 建）
+        - api/      PushApiImpl（Phase G 建）
+        依赖：本域 -api + foundation 必需项 + Spring Boot starters + APNs pushy 库。
+        故意不引其他业务模块 —— push 域不依赖任何其他业务。
+    -->
+    <dependencies>
+        <!-- 本域 -api 契约 -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-push-api</artifactId></dependency>
+
+        <!-- foundation -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-error</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-web</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-auth</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-cache</artifactId></dependency>
+
+        <!-- Spring Boot 必备 -->
+        <!-- spring-boot-starter-web 由 sanyan-common-web 传递，无需显式声明 -->
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-validation</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
+        <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
+
+        <!-- APNs 推送库（Phase G ApnsPushChannel 使用；版本由根 pom dependencyManagement 锁定） -->
+        <dependency>
+            <groupId>com.eatthepath</groupId>
+            <artifactId>pushy</artifactId>
+        </dependency>
+
+        <!-- 测试（sanyan-common-test 已传递 testcontainers-postgresql / testcontainers-junit-jupiter） -->
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 激活 failsafe（surefire 默认激活）；Testcontainers 配置由父 pom pluginManagement 提供 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

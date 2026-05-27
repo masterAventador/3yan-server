@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.character.event.IntimacyChangedEvent;
 import com.sanyan.character.event.StageEntryStoryEvent;
 import com.sanyan.character.event.StageTransitionEvent;
+import com.sanyan.chat.internal.DeliveryService;
 import com.sanyan.chat.internal.MessageService;
+import com.sanyan.common.ws.LastActiveTracker;
 import com.sanyan.common.ws.SessionManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,8 @@ class ChatWebSocketHandlerEventListenerTest {
 
     @Mock SessionManager sessionManager;
     @Mock MessageService messageService;
+    @Mock LastActiveTracker lastActiveTracker;
+    @Mock DeliveryService deliveryService;
     @Mock WebSocketSession session;
 
     private ChatWebSocketHandler handler;
@@ -33,7 +37,7 @@ class ChatWebSocketHandlerEventListenerTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        handler = new ChatWebSocketHandler(sessionManager, objectMapper, messageService);
+        handler = new ChatWebSocketHandler(sessionManager, objectMapper, messageService, lastActiveTracker, deliveryService);
     }
 
     // ----- IntimacyChangedEvent -----

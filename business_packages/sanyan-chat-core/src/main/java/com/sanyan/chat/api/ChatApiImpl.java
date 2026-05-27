@@ -2,6 +2,7 @@ package com.sanyan.chat.api;
 
 import com.sanyan.chat.ChatApi;
 import com.sanyan.chat.dto.MessageDto;
+import com.sanyan.chat.internal.DeliveryService;
 import com.sanyan.chat.internal.MessageDtoMapper;
 import com.sanyan.chat.internal.MessageRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import java.util.List;
 public class ChatApiImpl implements ChatApi {
 
     private final MessageRepository repository;
+    private final DeliveryService deliveryService;
 
     @Override
     public List<MessageDto> findAllByIds(List<Long> messageIds) {
@@ -46,5 +48,10 @@ public class ChatApiImpl implements ChatApi {
     public List<MessageDto> listSinceMessageId(Long userId, Long sinceMessageId) {
         return MessageDtoMapper.toDtos(
                 repository.findByUserIdAndIdGreaterThanOrderByIdAsc(userId, sinceMessageId));
+    }
+
+    @Override
+    public List<Long> deliverProactiveMessage(Long userId, Long characterId, List<String> segments) {
+        return deliveryService.deliver(userId, characterId, segments);
     }
 }

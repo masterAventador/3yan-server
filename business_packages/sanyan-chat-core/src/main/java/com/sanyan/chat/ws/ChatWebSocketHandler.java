@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.character.event.IntimacyChangedEvent;
 import com.sanyan.character.event.StageEntryStoryEvent;
 import com.sanyan.character.event.StageTransitionEvent;
+import com.sanyan.chat.internal.DeliveryService;
 import com.sanyan.chat.internal.MessageEntity;
 import com.sanyan.chat.internal.MessageService;
 import com.sanyan.chat.web.MessageData;
 import com.sanyan.common.util.TypingDelayCalculator;
+import com.sanyan.common.ws.LastActiveTracker;
 import com.sanyan.common.ws.SessionManager;
 import com.sanyan.common.ws.WsEventType;
 import com.sanyan.common.ws.WsMessage;
@@ -32,11 +34,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final SessionManager sessionManager;
     private final ObjectMapper objectMapper;
     private final MessageService messageService;
+    private final LastActiveTracker lastActiveTracker;
+    private final DeliveryService deliveryService;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         Long userId = (Long) session.getAttributes().get("userId");
         sessionManager.register(userId, session);
+        lastActiveTracker.touch(userId);
         log.info("用户 {} WebSocket 已连接", userId);
     }
 
@@ -46,9 +51,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         WsMessage wsMsg = objectMapper.readValue(message.getPayload(), WsMessage.class);
 
         switch (wsMsg.getType()) {
-            case WsEventType.PING -> sendToSession(session, "{\"type\":\"" + WsEventType.PONG + "\"}");
+            case WsEventType.PING -> {
+                sessionManager.refreshOnline(userId);   // 心跳续期在线 TTL
+                sendToSession(session, "{\"type\":\"" + WsEventType.PONG + "\"}");
+            }
             case WsEventType.SEND_MESSAGE -> handleSendMessage(userId, wsMsg, session);
             case WsEventType.SYNC -> handleSync(userId, wsMsg, session);
+            case WsEventType.ACK -> handleAck(wsMsg);
             default -> log.warn("未知消息类型: {}", wsMsg.getType());
         }
     }
@@ -63,6 +72,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void handleSendMessage(Long userId, WsMessage wsMsg, WebSocketSession session) {
+        lastActiveTracker.touch(userId);
         String preview = wsMsg.getContent() != null && wsMsg.getContent().length() > 50
                 ? wsMsg.getContent().substring(0, 50) + "..." : wsMsg.getContent();
         log.info("收到用户消息: userId={}, clientMsgId={}, content={}", userId, wsMsg.getClientMsgId(), preview);
@@ -120,6 +130,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         List<MessageData> data = messages.stream().map(messageService::toData).toList();
         sendObject(session, new WsSyncResult(data));
         log.info("消息同步完成: userId={}, 总消息数={}", userId, data.size());
+    }
+
+    /** 客户端确认已收到主动消息（入站 ack 帧）→ complete 对应投递 future。 */
+    void handleAck(WsMessage wsMsg) {
+        deliveryService.confirmAck(wsMsg.getAckMsgId());
     }
 
     // ----- 事件监听：亲密度/阶段变化主动推送 -----

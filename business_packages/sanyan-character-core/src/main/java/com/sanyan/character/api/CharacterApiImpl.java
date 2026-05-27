@@ -9,11 +9,14 @@ import com.sanyan.character.internal.CharacterErrCode;
 import com.sanyan.character.internal.RelationshipEntity;
 import com.sanyan.character.internal.RelationshipFetchService;
 import com.sanyan.character.internal.RelationshipFindOrCreateService;
+import com.sanyan.character.internal.RelationshipRepository;
 import com.sanyan.character.internal.stage.StageDefinition;
 import com.sanyan.character.internal.stage.StageOverrideQueryService;
 import com.sanyan.common.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +27,7 @@ public class CharacterApiImpl implements CharacterApi {
     private final RelationshipFetchService fetchService;
     private final StageOverrideQueryService stageOverrideQuery;
     private final StageDefinition stageDef;
+    private final RelationshipRepository relationshipRepository;
 
     @Override
     public AiCharacterDto findById(Long characterId) {
@@ -54,6 +58,11 @@ public class CharacterApiImpl implements CharacterApi {
     public String getStagePromptSegment(Long userId, Long characterId) {
         RelationshipEntity rel = findOrCreateService.findOrCreate(userId, characterId);
         return stageOverrideQuery.buildSegment(characterId, rel.getCurrentStage());
+    }
+
+    @Override
+    public List<Long> listActiveRelationshipUserIds(Long characterId) {
+        return relationshipRepository.findUserIdsByCharacterId(characterId);
     }
 
     // 注：AiCharacterEntity 的字段是 avatar；DTO 上对应位置是 avatarUrl（命名解耦：

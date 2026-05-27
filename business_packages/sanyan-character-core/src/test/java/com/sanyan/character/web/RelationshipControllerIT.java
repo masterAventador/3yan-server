@@ -7,6 +7,7 @@ import com.sanyan.common.auth.LoginUserArgumentResolver;
 import com.sanyan.common.auth.WebMvcConfig;
 import com.sanyan.common.test.TestApplication;
 import com.sanyan.common.web.GlobalExceptionHandler;
+import com.sanyan.common.ws.LastActiveTracker;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -15,6 +16,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,6 +42,9 @@ class RelationshipControllerIT {
     @MockBean
     private JwtUtil jwtUtil;
 
+    @MockBean
+    private LastActiveTracker lastActiveTracker;
+
     @Test
     void get_me_should_return_relationship_dto() throws Exception {
         // Arrange
@@ -61,5 +66,20 @@ class RelationshipControllerIT {
                 .andExpect(jsonPath("$.data.currentStage").value(1))
                 .andExpect(jsonPath("$.data.currentStageName").value("朋友"))
                 .andExpect(jsonPath("$.data.nextStageThreshold").value(300));
+    }
+
+    @Test
+    void getMe_touchesLastActive() throws Exception {
+        long userId = 99L;
+        long characterId = 1L;
+        when(jwtUtil.parseUserId("test-token")).thenReturn(userId);
+        when(characterApi.fetchMyRelationship(userId, characterId))
+                .thenReturn(new RelationshipDto(userId, characterId, 50, 0, "陌生人", 100, 0.0));
+
+        mockMvc.perform(get("/api/relationships/me")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk());
+
+        verify(lastActiveTracker).touch(userId);
     }
 }

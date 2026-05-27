@@ -128,4 +128,57 @@ class KvCacheTest {
         assertThatThrownBy(() -> cache.setIfAbsent("k", "v", null))
             .isInstanceOf(NullPointerException.class);
     }
+
+    @Test
+    void increment_setsExpiryOnFirstHit() {
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.increment("cnt")).thenReturn(1L);   // 返回 1 ⇒ 新建
+        KvCache cache = new KvCache(redis);
+
+        long v = cache.increment("cnt", Duration.ofHours(36));
+
+        assertThat(v).isEqualTo(1L);
+        verify(ops).increment("cnt");
+        verify(redis).expire("cnt", Duration.ofHours(36));   // 仅新建时设 TTL
+    }
+
+    @Test
+    void increment_doesNotResetExpiryWhenKeyAlreadyExists() {
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.increment("cnt")).thenReturn(5L);   // 返回 >1 ⇒ 已存在
+        KvCache cache = new KvCache(redis);
+
+        long v = cache.increment("cnt", Duration.ofHours(36));
+
+        assertThat(v).isEqualTo(5L);
+        verify(ops).increment("cnt");
+        verify(redis, never()).expire(anyString(), any(Duration.class));   // 不重设 TTL
+    }
+
+    @Test
+    void increment_treatsNullReturnAsZero() {
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.increment("cnt")).thenReturn(null);   // 连接异常等
+        KvCache cache = new KvCache(redis);
+
+        long v = cache.increment("cnt", Duration.ofHours(36));
+
+        assertThat(v).isZero();
+        verify(redis, never()).expire(anyString(), any(Duration.class));
+    }
+
+    @Test
+    void increment_throwsWhenTtlIsZero() {
+        KvCache cache = new KvCache(redis);
+        assertThatThrownBy(() -> cache.increment("k", Duration.ZERO))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("ttl");
+    }
+
+    @Test
+    void increment_throwsWhenTtlIsNull() {
+        KvCache cache = new KvCache(redis);
+        assertThatThrownBy(() -> cache.increment("k", null))
+            .isInstanceOf(NullPointerException.class);
+    }
 }

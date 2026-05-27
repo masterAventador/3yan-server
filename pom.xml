@@ -35,6 +35,10 @@
         <module>business_packages/sanyan-chat-core</module>
         <module>business_packages/sanyan-memory-api</module>
         <module>business_packages/sanyan-memory-core</module>
+        <module>business_packages/sanyan-proactive-api</module>
+        <module>business_packages/sanyan-proactive-core</module>
+        <module>business_packages/sanyan-push-api</module>
+        <module>business_packages/sanyan-push-core</module>
         <module>bootstrap</module>
     </modules>
 
@@ -68,6 +72,10 @@
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-embedding-core</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-api</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-chat-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-proactive-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-push-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-push-core</artifactId><version>${project.version}</version></dependency>
 
             <!-- 第三方库锁版本 -->
             <dependency>
@@ -80,6 +88,11 @@
                 <groupId>org.flywaydb</groupId>
                 <artifactId>flyway-database-postgresql</artifactId>
                 <version>10.10.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.eatthepath</groupId>
+                <artifactId>pushy</artifactId>
+                <version>0.15.4</version>
             </dependency>
 
             <!-- Testcontainers BOM 锁版本（>=1.20 才兼容 Docker API 1.44+） -->

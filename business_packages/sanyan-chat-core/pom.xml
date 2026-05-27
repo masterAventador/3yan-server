@@ -39,6 +39,7 @@
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-character-api</artifactId></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-llm-api</artifactId></dependency>
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-memory-api</artifactId></dependency>
+        <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-push-api</artifactId></dependency>
 
         <!-- foundation -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-error</artifactId></dependency>
