@@ -482,7 +482,8 @@ async def wait_for_memory_item(
             f" WHERE user_id = {user_id}"
             f" AND kind = '{kind}'"
             f" AND status = '{MEMORY_ITEM_STATUS_PENDING}'"
-            # cleanup_plan4_user_data 保证同一 user 同一 kind 至多一行，ASC/DESC 等价；ASC 取最早出现的那条
+            # cleanup 后，c/d 这类一次性产生的 kind 至多一行；但 cron 触发型（如 A_GREETING night-cron 每 15s 一条）
+            # 在 scenario 生命周期内可能多行。ASC 取最早出现的那条。a/b scenario 终态用 count(*)≥1 而非追单 id，已规避此差异
             f" ORDER BY id ASC LIMIT 1"
         )
         if rows and rows[0] and rows[0][0]:
@@ -512,7 +513,9 @@ async def wait_for_events_pending(
             f" WHERE user_id = {user_id}"
             f" AND event_type = '{event_type}'"
             f" AND status = '{status}'"
-            # cleanup_plan4_user_data 保证同一 user 同一 event_type 至多一行，ASC/DESC 等价；ASC 取最早出现的那条
+            # cleanup 后，C_EVENT_FOLLOWUP/D_EMOTION_CARE 这类一次性产生的 event_type 至多一行；但 cron 触发型
+            # （如 A_GREETING night-cron 每 15s 一条）在 scenario 生命周期内可能多行。ASC 取最早出现的那条。
+            # a/b scenario 终态用 count(*)≥1 而非追单 id，已规避此差异
             f" ORDER BY id ASC LIMIT 1"
         )
         if rows and rows[0] and rows[0][0]:
@@ -534,7 +537,8 @@ def set_last_active_hours_ago(user_id: int, hours_ago: float) -> None:
     """往 Redis 写 user:last_active:{userId} = hours_ago 小时前的 UTC ISO-8601。
 
     格式必须与 LastActiveTracker 一致：Instant.toString() 即 UTC ISO-8601 带 'Z' 后缀，
-    服务端用 Instant.parse 读取。RecallTrigger 据此算离线时长命中 24/72/168h 阶梯。
+    服务端用 Instant.parse 读取。RecallTrigger 据此算离线时长命中阶梯：application.yml 默认阈值
+    是 24/72/168h，但 dogfood --plan4 下被 env override 成 1/2/3h，所以 set 到 4h 前会命中最高档（level 2）。
     """
     moment = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=hours_ago)
     # Instant.parse 接受 '...Z'；用 'Z' 而非 '+00:00' 与 Instant.toString() 完全对齐
@@ -2676,6 +2680,7 @@ async def main_async(args: argparse.Namespace) -> int:
 
     # 清理（默认 true，--no-clean 跳过）—— 每个场景的 user_id 各清一次
     # plan3 场景用 clean_plan3_data（清 relationships/intimacy_logs/milestones + Redis）；
+    # plan4 场景用 cleanup_plan4_user_data（清 events_pending/memory_item + proactive 相关 Redis key）；
     # plan2 场景保持原有 clean_test_data（清 message/memory/embeddings + Redis）
     if args.clean:
         log.info(f"==> [clean] 清理 user_ids={unique_uids} 的测试数据")
