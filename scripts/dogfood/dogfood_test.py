@@ -129,6 +129,10 @@ MEMORY_ITEM_STATUS_DONE = "DONE"
 LAST_ACTIVE_KEY_PREFIX = "user:last_active:"
 # RecallTrigger 失联召回去重 key 前缀（proactive:recall:{userId}:{level}），清理时按用户清掉
 RECALL_DEDUP_KEY_PREFIX = "proactive:recall:"
+# FrequencyGate 每日发送计数 key 前缀（proactive:sent:{userId}:{yyyy-MM-dd}，TTL 36h）。
+# 主动消息每发一条 recordSent 自增；门控按 daily-cap-by-stage 拦。cleanup 必须清掉，
+# 否则同一天反复跑（尤其 a_greeting cron 高频触发顶满 cap）后第二遍会被拦成 CANCELLED 永不 SENT。
+PROACTIVE_SENT_KEY_PREFIX = "proactive:sent:"
 
 
 # ----------------------------- 记忆召回测试常量 -----------------------------
@@ -591,13 +595,17 @@ def cleanup_plan4_user_data(db: DbHandle, user_id: int, log: Logger) -> None:
     purge_all_user_data 已清 USER_DATA_TABLES（message / memory_summaries /
     memory_profiles / chat_embeddings / relationships / intimacy_logs /
     relationship_milestones）+ profile 节流 / streak / behavior Redis key。
-    plan4 额外有 events_pending、memory_item 两张表 + 失联召回去重 key，这里补清。
+    plan4 额外有 events_pending、memory_item 两张表 + 失联召回去重 key
+    + FrequencyGate 每日发送计数 key，这里补清（保证 run-twice 隔离）。
     """
     purge_all_user_data(db, user_id, log)
     db.execute(f"DELETE FROM events_pending WHERE user_id = {user_id}")
     db.execute(f"DELETE FROM memory_item WHERE user_id = {user_id}")
     # 失联召回去重 key proactive:recall:{userId}:{level}，按用户全清
     _del_redis_keys_by_pattern(f"{RECALL_DEDUP_KEY_PREFIX}{user_id}:*")
+    # 每日发送计数 key proactive:sent:{userId}:{date}（TTL 36h），按用户清掉当天/所有天，
+    # 否则同一天反复跑顶满 daily-cap 后第二遍主动消息被门控拦成 CANCELLED 永不 SENT
+    _del_redis_keys_by_pattern(f"{PROACTIVE_SENT_KEY_PREFIX}{user_id}:*")
     # last_active key（plant 失联召回时写入），清掉避免污染下一场景
     redis_cmd("DEL", f"{LAST_ACTIVE_KEY_PREFIX}{user_id}")
     log.debug(f"[cleanup-plan4] user_id={user_id} 完成")
