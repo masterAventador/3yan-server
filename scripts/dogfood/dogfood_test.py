@@ -2532,6 +2532,14 @@ SCENARIO_ORDER_PLAN3 = [
     "plan3_stage_prompt",
 ]
 
+# Plan 4 场景顺序（--scenario=all-plan4 使用，c→d→a→b）
+SCENARIO_ORDER_PLAN4 = [
+    "plan4_c_event_followup",
+    "plan4_d_emotion_care",
+    "plan4_a_greeting",
+    "plan4_b_recall",
+]
+
 # 每个场景独立 user_id（≥ 900 避免跟真实用户撞），并行跑时数据按 user_id 隔离不冲突。
 # V10 migration 给 message / memory_* / chat_embeddings 加了 FK，所以这些 user_id 必须
 # 在 users 表里真实存在——ensure_dogfood_users() 启动时按需 INSERT 占位行。
@@ -2633,6 +2641,8 @@ async def main_async(args: argparse.Namespace) -> int:
         scenarios = SCENARIO_ORDER
     elif args.scenario == "all-plan3":
         scenarios = SCENARIO_ORDER_PLAN3
+    elif args.scenario == "all-plan4":
+        scenarios = SCENARIO_ORDER_PLAN4
     else:
         if args.scenario not in SCENARIO_REGISTRY:
             log.info(f"未知 scenario: {args.scenario}（可用: {list(SCENARIO_REGISTRY.keys())}）")
@@ -2674,13 +2684,16 @@ async def main_async(args: argparse.Namespace) -> int:
             if name.startswith("plan3_"):
                 clean_plan3_data(db, uid, character_id, log)
                 # plan3 场景的 message 也需要清（clean_plan3_data 已含，此处不重复）
+            elif name.startswith("plan4_"):
+                cleanup_plan4_user_data(db, uid, log)
             else:
                 clean_test_data(db, uid, log)
 
     # 执行：plan3 场景强制串行（有顺序依赖 + 各自隔离 user_id，并行无实质加速）；
     # plan2 场景保持原有并行/串行行为。
     is_all_plan3 = all(name.startswith("plan3_") for name in scenarios)
-    run_parallel = args.parallel and len(scenarios) > 1 and not is_all_plan3
+    is_all_plan4 = all(name.startswith("plan4_") for name in scenarios)
+    run_parallel = args.parallel and len(scenarios) > 1 and not is_all_plan3 and not is_all_plan4
 
     if run_parallel:
         log.info(f"==> 并行跑 {len(scenarios)} 个场景: {scenarios}")
@@ -2696,6 +2709,8 @@ async def main_async(args: argparse.Namespace) -> int:
     else:
         if is_all_plan3:
             log.info(f"==> 串行跑 plan3 {len(scenarios)} 个场景: {scenarios}")
+        elif is_all_plan4:
+            log.info(f"==> 串行跑 plan4 {len(scenarios)} 个场景: {scenarios}")
         else:
             log.info(f"==> 串行跑 {len(scenarios)} 个场景: {scenarios}")
         results = []
@@ -2725,9 +2740,9 @@ async def main_async(args: argparse.Namespace) -> int:
 
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Plan 2 + Plan 3 dogfood E2E 测试 harness (运行在 new 服务器本地)"
+        description="Plan 2 + Plan 3 + Plan 4 dogfood E2E 测试 harness (运行在 new 服务器本地)"
     )
-    all_scenario_names = ["all", "all-plan3", *SCENARIO_ORDER, *SCENARIO_ORDER_PLAN3]
+    all_scenario_names = ["all", "all-plan3", "all-plan4", *SCENARIO_ORDER, *SCENARIO_ORDER_PLAN3, *SCENARIO_ORDER_PLAN4]
     p.add_argument(
         "--scenario", default="all",
         choices=all_scenario_names,
@@ -2735,8 +2750,10 @@ def build_argparser() -> argparse.ArgumentParser:
             "要跑的场景。"
             "'all' = plan2 全部 4 个场景（默认）；"
             "'all-plan3' = plan3 全部 10 个场景（需配合 --plan3 启动，或由 run_dogfood.sh 自动处理）；"
+            "'all-plan4' = plan4 主动消息全部 4 个场景（需配合 run_dogfood.sh --plan4 启动 env override）；"
             f"plan2 单场景: {SCENARIO_ORDER}；"
-            f"plan3 单场景: {SCENARIO_ORDER_PLAN3}"
+            f"plan3 单场景: {SCENARIO_ORDER_PLAN3}；"
+            f"plan4 单场景: {SCENARIO_ORDER_PLAN4}"
         )
     )
     p.add_argument(
