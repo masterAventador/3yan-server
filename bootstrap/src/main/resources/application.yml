@@ -107,6 +107,7 @@ sanyan:
       morning-cron: "0 0 8 * * *"
       night-cron: "0 30 22 * * *"
     recall:
+      scan-interval-ms: 900000               # 15min；可被 SANYAN_PROACTIVE_RECALL_SCANINTERVALMS env 覆盖
       thresholds-hours: [24, 72, 168]        # 24h / 3天 / 7天
     quiet-hours:
       start: 23

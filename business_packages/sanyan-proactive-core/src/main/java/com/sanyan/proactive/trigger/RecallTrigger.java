@@ -42,7 +42,7 @@ public class RecallTrigger {
     private final KvCache kvCache;
     private final ProactiveProperties props;
 
-    @Scheduled(fixedDelay = 15 * 60 * 1000)   // 15min
+    @Scheduled(fixedDelayString = "${sanyan.proactive.recall.scan-interval-ms:900000}")
     public void scanAndEnqueue() {
         List<Long> userIds;
         try {
