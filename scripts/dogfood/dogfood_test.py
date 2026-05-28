@@ -117,6 +117,19 @@ WS_STAGE_STORY = "stage_story"
 # 等待亲密度异步落库的超时（秒）
 INTIMACY_WAIT_SECONDS = 10.0
 
+# ---- Plan 4 状态常量（与 DB CHECK 约束 / 服务端枚举大写值对齐，单点定义供 Task 4-7 复用）----
+# events_pending.status（V10__create_events_pending.sql CHECK + EventStatus.name() 大写）
+EVENTS_PENDING_STATUS_SCHEDULED = "SCHEDULED"
+EVENTS_PENDING_STATUS_SENT = "SENT"
+# memory_item.status（V9__create_memory_item.sql CHECK IN ('PENDING','DONE','EXPIRED')）
+MEMORY_ITEM_STATUS_PENDING = "PENDING"
+MEMORY_ITEM_STATUS_DONE = "DONE"
+
+# LastActiveTracker 的 Redis key 前缀（user:last_active:{userId} → Instant.toString() ISO-8601）
+LAST_ACTIVE_KEY_PREFIX = "user:last_active:"
+# RecallTrigger 失联召回去重 key 前缀（proactive:recall:{userId}:{level}），清理时按用户清掉
+RECALL_DEDUP_KEY_PREFIX = "proactive:recall:"
+
 
 # ----------------------------- 记忆召回测试常量 -----------------------------
 
@@ -441,6 +454,153 @@ async def _wait_summary_landed(db: DbHandle, user_id: int, log: Logger) -> bool:
 
 async def _wait_rag_chunk_landed(db: DbHandle, user_id: int, log: Logger) -> bool:
     return await _wait_table_has_row(db, "chat_embeddings", user_id, log)
+
+
+# ---- Plan 4 helpers ----
+# 给 Task 4-7 主动消息场景用的基础设施 helper：memory_item / events_pending 轮询、
+# scheduled_at 提前、last_active 注入、主动推送 WS 收取、relationship plant、清理。
+# 这些是端到端测试 harness 的 I/O 零件（DB/Redis/WS），靠 Task 10 实跑全套验证，
+# 不做隔离单测；本 task 验证 = ast.parse 语法检查 + commit。
+
+
+async def wait_for_memory_item(
+    db: DbHandle, user_id: int, kind: str, log: Logger,
+    timeout_s: float = 30.0, poll_interval_s: float = 0.5,
+) -> Optional[int]:
+    """轮询 memory_item，等指定 kind 的 PENDING 行出现，返回最早一行 id；超时返回 None。
+
+    kind ∈ {'PLAN_EVENT','EMOTION','PROMISE'}（V9 CHECK 约束）。
+    """
+    start = time.monotonic()
+    while True:
+        rows = db.query(
+            f"SELECT id FROM memory_item"
+            f" WHERE user_id = {user_id}"
+            f" AND kind = '{kind}'"
+            f" AND status = '{MEMORY_ITEM_STATUS_PENDING}'"
+            # cleanup_plan4_user_data 保证同一 user 同一 kind 至多一行，ASC/DESC 等价；ASC 取最早出现的那条
+            f" ORDER BY id ASC LIMIT 1"
+        )
+        if rows and rows[0] and rows[0][0]:
+            mid = int(rows[0][0])
+            log.debug(f"[wait] memory_item kind={kind} user_id={user_id} 出现 id={mid}")
+            return mid
+        if time.monotonic() - start >= timeout_s:
+            log.warn(f"[wait] memory_item kind={kind} user_id={user_id} 超时 {timeout_s}s")
+            return None
+        await asyncio.sleep(poll_interval_s)
+
+
+async def wait_for_events_pending(
+    db: DbHandle, user_id: int, event_type: str, log: Logger,
+    status: str = EVENTS_PENDING_STATUS_SCHEDULED,
+    timeout_s: float = 30.0, poll_interval_s: float = 0.5,
+) -> Optional[int]:
+    """轮询 events_pending，等指定 event_type + status 的行出现，返回最早一行 id；超时返回 None。
+
+    event_type ∈ {'A_GREETING','B_RECALL','C_EVENT_FOLLOWUP','D_EMOTION_CARE'}（V10 CHECK）。
+    status 默认大写 SCHEDULED（DB 存枚举 name() 大写，小写永远查不到）。
+    """
+    start = time.monotonic()
+    while True:
+        rows = db.query(
+            f"SELECT id FROM events_pending"
+            f" WHERE user_id = {user_id}"
+            f" AND event_type = '{event_type}'"
+            f" AND status = '{status}'"
+            # cleanup_plan4_user_data 保证同一 user 同一 event_type 至多一行，ASC/DESC 等价；ASC 取最早出现的那条
+            f" ORDER BY id ASC LIMIT 1"
+        )
+        if rows and rows[0] and rows[0][0]:
+            eid = int(rows[0][0])
+            log.debug(f"[wait] events_pending type={event_type} status={status} user_id={user_id} 出现 id={eid}")
+            return eid
+        if time.monotonic() - start >= timeout_s:
+            log.warn(f"[wait] events_pending type={event_type} status={status} user_id={user_id} 超时 {timeout_s}s")
+            return None
+        await asyncio.sleep(poll_interval_s)
+
+
+def nudge_event_scheduled_at_now(db: DbHandle, event_id: int) -> None:
+    """把某条 events_pending 的 scheduled_at 提前到 NOW()，让调度器本轮即可派发。"""
+    db.execute(f"UPDATE events_pending SET scheduled_at = NOW() WHERE id = {event_id}")
+
+
+def set_last_active_hours_ago(user_id: int, hours_ago: float) -> None:
+    """往 Redis 写 user:last_active:{userId} = hours_ago 小时前的 UTC ISO-8601。
+
+    格式必须与 LastActiveTracker 一致：Instant.toString() 即 UTC ISO-8601 带 'Z' 后缀，
+    服务端用 Instant.parse 读取。RecallTrigger 据此算离线时长命中 24/72/168h 阶梯。
+    """
+    moment = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=hours_ago)
+    # Instant.parse 接受 '...Z'；用 'Z' 而非 '+00:00' 与 Instant.toString() 完全对齐
+    iso = moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    redis_cmd("SET", f"{LAST_ACTIVE_KEY_PREFIX}{user_id}", iso)
+
+
+def plant_relationship_at_stage(
+    db: DbHandle, user_id: int, character_id: int, stage: int, intimacy: int,
+) -> None:
+    """植入/更新一条 relationships，把用户置于指定 stage + 亲密度。
+
+    relationships 表（V3）：PK (user_id, character_id)，亲密度列名是 intimacy_score，
+    stage 列是 current_stage（SMALLINT）。无 last_message_at 列。
+    """
+    db.execute(
+        f"INSERT INTO relationships (user_id, character_id, intimacy_score, current_stage)"
+        f" VALUES ({user_id}, {character_id}, {intimacy}, {stage})"
+        f" ON CONFLICT (user_id, character_id) DO UPDATE"
+        f" SET intimacy_score = EXCLUDED.intimacy_score,"
+        f" current_stage = EXCLUDED.current_stage,"
+        f" updated_at = NOW()"
+    )
+
+
+async def collect_proactive_ws_push(token: str, timeout_s: float = 60.0) -> Optional[dict]:
+    """开一条独立 WS 连接，等 timeout 内第一帧 AI 主动消息推送，返回 message dict；超时返回 None。
+
+    协议与 send_one 一致：服务端主动推送复用 new_message 帧
+    {"type":"new_message","message":{"id":...,"senderType":"AI","content":...}}。
+    只认 senderType == "AI" 的帧（过滤心跳 / 其它 type）。不发任何 user 消息，纯被动收取。
+    """
+    url = WS_URL_TEMPLATE.format(token=token)
+    start = time.monotonic()
+    async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
+        while True:
+            remaining = timeout_s - (time.monotonic() - start)
+            if remaining <= 0:
+                return None
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
+            except asyncio.TimeoutError:
+                return None
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                continue
+            if msg.get("type") != "new_message":
+                continue
+            message = msg.get("message", {})
+            if message.get("senderType") == "AI":
+                return message
+
+
+def cleanup_plan4_user_data(db: DbHandle, user_id: int, log: Logger) -> None:
+    """清空 plan4 场景用户数据：复用 purge_all_user_data + 补 plan4 特有的表/Redis key。
+
+    purge_all_user_data 已清 USER_DATA_TABLES（message / memory_summaries /
+    memory_profiles / chat_embeddings / relationships / intimacy_logs /
+    relationship_milestones）+ profile 节流 / streak / behavior Redis key。
+    plan4 额外有 events_pending、memory_item 两张表 + 失联召回去重 key，这里补清。
+    """
+    purge_all_user_data(db, user_id, log)
+    db.execute(f"DELETE FROM events_pending WHERE user_id = {user_id}")
+    db.execute(f"DELETE FROM memory_item WHERE user_id = {user_id}")
+    # 失联召回去重 key proactive:recall:{userId}:{level}，按用户全清
+    _del_redis_keys_by_pattern(f"{RECALL_DEDUP_KEY_PREFIX}{user_id}:*")
+    # last_active key（plant 失联召回时写入），清掉避免污染下一场景
+    redis_cmd("DEL", f"{LAST_ACTIVE_KEY_PREFIX}{user_id}")
+    log.debug(f"[cleanup-plan4] user_id={user_id} 完成")
 
 
 # ----------------------------- 记忆召回测试骨架 -----------------------------
