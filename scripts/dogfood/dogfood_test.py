@@ -2361,6 +2361,56 @@ async def run_plan4_d_emotion_care(token: str, db: DbHandle, user_id: int, chara
         f"WS 已收到推送但 10s 内 DB 终态未回写（event_id={event_id} status={ep_s}, item_id={item_id} status={mi_s}）")
 
 
+async def run_plan4_a_greeting(token: str, db: DbHandle, user_id: int, character_id: int,
+                               log: Logger) -> ScenarioResult:
+    """plan4 a 早晚安主动问候（走真实 cron 触发路径，不发用户消息）：
+    plant 关系（stage=1，night greeting 开着）→ 等 GreetingDailyTrigger 的 night-cron
+    （env override 后每 15s fire）产生 events_pending A_GREETING SCHEDULED →
+    scheduler 领取（scheduledAt≈NOW，scatter=0）→ 收 WS 主动问候 → 终态 A_GREETING=SENT。
+
+    与 c/d 不同：a 不发用户消息、无 memory_item、不 nudge——靠 cron 定时触发。
+    依赖 env override：morning-cron=*/10s、night-cron=*/15s、scatter=0、quiet-hours 关。
+    stage=1：scenes-by-stage[1] = {morning:false, night:true}，仅 night greeting 开。
+    night-cron 每 15s 必在 30s 内 fire 一次；FrequencyGate.sceneEnabled(A_GREETING)
+    = morning||night = true 放行；quiet-hours 关后任意时钟小时都不被免打扰拦。
+    """
+    log.info("==> [scenario] plan4_a_greeting (cron→events_pending→WS推送→终态)")
+
+    scenario_name = "plan4_a_greeting"
+    cleanup_plan4_user_data(db, user_id, log)
+    # stage=1：仅 night greeting 开（morning=false）；night-cron 每 15s 触发足以在 30s 内产生 A_GREETING。
+    plant_relationship_at_stage(db, user_id, character_id, stage=1, intimacy=25)
+
+    # 1. 等 cron 触发产生 A_GREETING（无需发消息 / nudge，scatter=0 时 scheduledAt≈NOW）
+    event_id = await wait_for_events_pending(db, user_id, "A_GREETING", log, timeout_s=30)
+    if event_id is None:
+        return ScenarioResult(scenario_name, "FAIL",
+            "30s 内 events_pending 未出现 A_GREETING 行——cron 未触发，或 GreetingDailyTrigger "
+            "因 stage 场景开关跳过（确认 plant 的 stage=1 night greeting 开 + env override 已生效）")
+
+    # 2. 等主动推送（独立 WS 连接，被动收取）
+    push = await collect_proactive_ws_push(token, timeout_s=60)
+    if push is None:
+        return ScenarioResult(scenario_name, "FAIL",
+            f"60s 内未收到主动问候推送，下游链路（调度→门控→生成→投递）有断点，events_pending.id={event_id}")
+
+    # 3. 终态：该 user 至少一条 A_GREETING 已 SENT（cron 每 15s 触发，用 count 比追踪单 id 更稳）
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        rows = db.query(
+            f"SELECT count(*) FROM events_pending"
+            f" WHERE user_id = {user_id} AND event_type = 'A_GREETING'"
+            f" AND status = '{EVENTS_PENDING_STATUS_SENT}'")
+        if rows and int(rows[0][0]) >= 1:
+            content = push.get("content", "")
+            return ScenarioResult(scenario_name, "PASS",
+                f"主动问候送达（event_id={event_id}）：'{content[:30]}'")
+        await asyncio.sleep(0.5)
+
+    return ScenarioResult(scenario_name, "FAIL",
+        f"WS 已收到推送但 10s 内未发现 A_GREETING/SENT 行（event_id={event_id}）")
+
+
 # ----------------------------- main runner -----------------------------
 
 SCENARIO_REGISTRY: dict[str, Callable] = {
@@ -2387,6 +2437,7 @@ SCENARIO_REGISTRY: dict[str, Callable] = {
     # ---- Plan 4 场景（主动消息系统）----
     "plan4_c_event_followup": run_plan4_c_event_followup,
     "plan4_d_emotion_care": run_plan4_d_emotion_care,
+    "plan4_a_greeting": run_plan4_a_greeting,
 }
 
 # Plan 2 场景顺序（--scenario=all 默认）
@@ -2439,6 +2490,7 @@ SCENARIO_USER_IDS = {
     # Plan 4（920-923）
     "plan4_c_event_followup": 920,
     "plan4_d_emotion_care": 921,
+    "plan4_a_greeting": 922,
 }
 
 
