@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -148,6 +149,9 @@ class ProactiveFlowE2EIT extends PostgresTestcontainerSupport {
     @Autowired
     private MemoryItemRepository memoryItemRepo;
 
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+
     @BeforeEach
     void seedFkFixtures() throws Exception {
         // relationships.user_id → users.id FK：dispatcher 走 findOrCreateRelationship 会插 relationships，
@@ -234,5 +238,34 @@ class ProactiveFlowE2EIT extends PostgresTestcontainerSupport {
                 assertThat(memoryItemRepo.findById(itemId).orElseThrow().getStatus())
                         .as("主动消息投递成功后，memory_item 应被回标 DONE")
                         .isEqualTo(MemoryItemStatus.DONE));
+    }
+
+    /**
+     * 回归测试：复现「@TransactionalEventListener(AFTER_COMMIT) 在发布时无活跃事务被静默丢弃」的生产 bug。
+     *
+     * <p>{@code MemoryItemExtractService.extract()} 故意不加 {@code @Transactional}（避免 LLM 调用
+     * 全程占用 DB 连接），每个 {@code repository.save} 走独立小事务，提交后随即 publishEvent ——
+     * 此时调用线程上无活跃事务。{@code MemoryItemScheduledListener} 默认的
+     * {@code @TransactionalEventListener(AFTER_COMMIT)} 在这种情形下 Spring 会静默不触发，导致
+     * {@code events_pending} 永远不写、主动询问永远不排期。
+     *
+     * <p>本测试通过 {@link ApplicationEventPublisher} 在非事务上下文中发布事件，断言 listener 仍能
+     * 排出 {@code events_pending} 行。{@code salientAt} 设为远期，避免 {@link ProactiveScheduler}
+     * 在断言前抢先取走改 status。
+     */
+    @Test
+    void publishing_event_without_active_transaction_should_still_schedule_events_pending() {
+        long memoryItemId = 99999L;
+        Instant salientAt = Instant.now().plusSeconds(3600);
+
+        eventPublisher.publishEvent(new MemoryItemScheduledEvent(
+                memoryItemId, USER_ID, CHARACTER_ID, "PLAN_EVENT", salientAt));
+
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+                assertThat(eventRepo.findAll())
+                        .as("无活跃事务发布事件时，listener 也应触发并写 events_pending")
+                        .anyMatch(e -> e.getUserId().equals(USER_ID)
+                                && e.getEventType() == EventType.C_EVENT_FOLLOWUP
+                                && e.getStatus() == EventStatus.SCHEDULED));
     }
 }

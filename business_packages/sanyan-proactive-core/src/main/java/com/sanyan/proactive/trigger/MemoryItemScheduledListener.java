@@ -35,8 +35,14 @@ public class MemoryItemScheduledListener {
 
     private final EventPendingRepository eventRepo;
 
+    // fallbackExecution=true：发布方 MemoryItemExtractService.extract() 故意不加 @Transactional
+    // （避免 LLM 调用全程占用 DB 连接），每个 repository.save 走独立小事务、提交后随即 publishEvent，
+    // 此时调用线程上无活跃事务。默认 @TransactionalEventListener(AFTER_COMMIT) 在无事务时会被
+    // Spring 静默丢弃 → events_pending 永远不写 → 主动询问永远不排期。memory_item 在发布前已独立
+    // 提交，不存在"事务回滚导致事件失真"的风险，启用 fallback 让 listener 在无事务时也立即触发；
+    // 未来若发布方包了事务，AFTER_COMMIT 行为不变。
     @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onMemoryItemScheduled(MemoryItemScheduledEvent event) {
         try {
             EventType type;
