@@ -2419,6 +2419,67 @@ async def run_plan4_a_greeting(token: str, db: DbHandle, user_id: int, character
         f"WS 已收到推送但 10s 内未发现 A_GREETING/SENT 行（event_id={event_id}）")
 
 
+async def run_plan4_b_recall(token: str, db: DbHandle, user_id: int, character_id: int,
+                             log: Logger) -> ScenarioResult:
+    """plan4 b 失联召回（走真实 RecallTrigger 扫描路径，不发用户消息）：
+    plant 关系（stage=0，scenes-by-stage[0].recall=true，陌生人档也召回 spec §6.1）
+    + 往 Redis 写 user:last_active 到 4h 前 → RecallTrigger（env override 后 scan-interval=5s，
+    每 5s 扫一遍有关系的 user）按离线时长命中 thresholds-hours 哪一档产生 events_pending
+    B_RECALL（scheduledAt≈NOW，dispatcher 自己领）→ 收 WS 失联召回 → 终态 B_RECALL=SENT。
+
+    与 a 不同：a 靠 greeting cron；b 靠 RecallTrigger 按 last_active 阶梯触发。
+    依赖 env override：recall.scan-interval-ms=5000、thresholds-hours=1,2,3、quiet-hours 关。
+    4h 前离线 + thresholds=[1,2,3]：resolveLevel 取命中的最高档 → escalationLevel=2（payload key
+    'escalationLevel'，Number）。stage=0 时 FrequencyGate.sceneEnabled(B_RECALL)=flags.isRecall()
+    =true 放行；去重 key proactive:recall:{uid}:{level}（cleanup 已按 uid 全清，run-twice 安全）。
+    """
+    log.info("==> [scenario] plan4_b_recall (RecallTrigger扫描→events_pending→WS推送→终态)")
+
+    scenario_name = "plan4_b_recall"
+    cleanup_plan4_user_data(db, user_id, log)
+    # stage=0：陌生人档 recall 仍开（scenes-by-stage[0].recall=true）；intimacy 任意。
+    plant_relationship_at_stage(db, user_id, character_id, stage=0, intimacy=5)
+    # 离线 4h → 命中 thresholds=[1,2,3] 最高档 escalationLevel=2（RecallTrigger.resolveLevel）
+    set_last_active_hours_ago(user_id, 4)
+
+    # 1. 等 RecallTrigger 扫到并产生 B_RECALL（无需发消息 / nudge，scheduledAt≈NOW）
+    event_id = await wait_for_events_pending(db, user_id, "B_RECALL", log, timeout_s=30)
+    if event_id is None:
+        return ScenarioResult(scenario_name, "FAIL",
+            "30s 内 events_pending 未出现 B_RECALL 行——RecallTrigger 未扫到 / 离线时长未命中 "
+            "threshold / stage 0 召回被门控拦（确认 env override 已生效、last_active 写入格式与 "
+            "LastActiveTracker 对齐、scenes-by-stage[0].recall=true）")
+
+    # 2. 软校验 payload escalationLevel（不致命）：4h 离线应命中最高档 level=2
+    expected_level = "2"
+    payload_rows = db.query(
+        f"SELECT payload->>'escalationLevel' FROM events_pending WHERE id = {event_id}")
+    if not payload_rows or payload_rows[0][0] != expected_level:
+        log.warn(f"escalationLevel 非预期（期望 {expected_level}，4h 离线应命中最高档）：{payload_rows}")
+
+    # 3. 等主动推送（独立 WS 连接，被动收取）
+    push = await collect_proactive_ws_push(token, timeout_s=60)
+    if push is None:
+        return ScenarioResult(scenario_name, "FAIL",
+            f"60s 内未收到失联召回推送，下游链路（调度→门控→生成→投递）有断点，events_pending.id={event_id}")
+
+    # 4. 终态：该 user 至少一条 B_RECALL 已 SENT
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        rows = db.query(
+            f"SELECT count(*) FROM events_pending"
+            f" WHERE user_id = {user_id} AND event_type = 'B_RECALL'"
+            f" AND status = '{EVENTS_PENDING_STATUS_SENT}'")
+        if rows and int(rows[0][0]) >= 1:
+            content = push.get("content", "")
+            return ScenarioResult(scenario_name, "PASS",
+                f"失联召回送达（event_id={event_id}）：'{content[:30]}'")
+        await asyncio.sleep(0.5)
+
+    return ScenarioResult(scenario_name, "FAIL",
+        f"WS 已收到推送但 10s 内未发现 B_RECALL/SENT 行（event_id={event_id}）")
+
+
 # ----------------------------- main runner -----------------------------
 
 SCENARIO_REGISTRY: dict[str, Callable] = {
@@ -2446,6 +2507,7 @@ SCENARIO_REGISTRY: dict[str, Callable] = {
     "plan4_c_event_followup": run_plan4_c_event_followup,
     "plan4_d_emotion_care": run_plan4_d_emotion_care,
     "plan4_a_greeting": run_plan4_a_greeting,
+    "plan4_b_recall": run_plan4_b_recall,
 }
 
 # Plan 2 场景顺序（--scenario=all 默认）
@@ -2499,6 +2561,7 @@ SCENARIO_USER_IDS = {
     "plan4_c_event_followup": 920,
     "plan4_d_emotion_care": 921,
     "plan4_a_greeting": 922,
+    "plan4_b_recall": 923,
 }
 
 
