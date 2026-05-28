@@ -2233,6 +2233,71 @@ async def run_memory_recall_rag(
     )
 
 
+# ----------------------------- Plan 4: scenario c — event_followup -----------------------------
+
+async def run_plan4_c_event_followup(token: str, db: DbHandle, user_id: int, character_id: int,
+                                     log: Logger) -> ScenarioResult:
+    """plan4 c 事件追问（全链路最关键，验本周修的 AFTER_COMMIT fallbackExecution bug）：
+    发"我后天下午有面试" → memory_item PLAN_EVENT 出现 →
+    events_pending C_EVENT_FOLLOWUP SCHEDULED 出现（★ 验 fallbackExecution fix）→
+    UPDATE scheduled_at=NOW() → 等 WS 收到主动追问 → events_pending=SENT / memory_item=DONE。
+    """
+    log.info("==> [scenario] plan4_c_event_followup (PLAN_EVENT→events_pending→WS推送→终态)")
+
+    scenario_name = "plan4_c_event_followup"
+    cleanup_plan4_user_data(db, user_id, log)
+    plant_relationship_at_stage(db, user_id, character_id, stage=2, intimacy=50)
+
+    # 1. 发用户消息触发实时抽取
+    plant_msg = "我后天下午有个面试，挺重要的"
+    replies = await chat(token, [plant_msg], log)
+    if not replies or not replies[-1].new_messages:
+        return ScenarioResult(scenario_name, "FAIL", "plant: AI 没回复，主对话链路异常")
+
+    # 2. 等 memory_item PLAN_EVENT 落库（实时抽取上游）
+    item_id = await wait_for_memory_item(db, user_id, "PLAN_EVENT", log, timeout_s=30)
+    if item_id is None:
+        return ScenarioResult(scenario_name, "FAIL",
+            "30s 内 memory_item 没出现 PLAN_EVENT 行，实时抽取上游断了（不是排期问题）")
+
+    # 3. ★ 等 events_pending C_EVENT_FOLLOWUP（验 fallbackExecution bug fix）
+    event_id = await wait_for_events_pending(db, user_id, "C_EVENT_FOLLOWUP", log, timeout_s=10)
+    if event_id is None:
+        return ScenarioResult(scenario_name, "FAIL",
+            f"memory_item(id={item_id}) 已落库但 events_pending 10s 内未出现 C_EVENT_FOLLOWUP 行——"
+            "MemoryItemScheduledListener 事件传播断了，怀疑 AFTER_COMMIT 无 fallbackExecution")
+
+    # 4. 提前 scheduled_at 让 scheduler 立即领取
+    nudge_event_scheduled_at_now(db, event_id)
+
+    # 5. 等主动推送（独立 WS 连接）
+    push = await collect_proactive_ws_push(token, timeout_s=60)
+    if push is None:
+        return ScenarioResult(scenario_name, "FAIL",
+            f"60s 内未收到主动推送，下游链路（调度→门控→生成→投递）有断点，event_id={event_id}")
+
+    # 6. 终态断言：events_pending=SENT / memory_item=DONE（DB 回写有微小延迟，10s 轮询窗口）
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        ep = db.query(f"SELECT status FROM events_pending WHERE id = {event_id}")
+        mi = db.query(f"SELECT status FROM memory_item WHERE id = {item_id}")
+        ep_ok = ep and ep[0][0] == EVENTS_PENDING_STATUS_SENT
+        mi_ok = mi and mi[0][0] == MEMORY_ITEM_STATUS_DONE
+        if ep_ok and mi_ok:
+            # collect_proactive_ws_push 直接返回内层 message dict（含 senderType/content）
+            content = push.get("content", "")
+            return ScenarioResult(scenario_name, "PASS",
+                f"主动追问送达（event_id={event_id}）：'{content[:30]}'")
+        await asyncio.sleep(0.5)
+
+    ep = db.query(f"SELECT status FROM events_pending WHERE id = {event_id}")
+    mi = db.query(f"SELECT status FROM memory_item WHERE id = {item_id}")
+    ep_s = ep[0][0] if ep else "(无行)"
+    mi_s = mi[0][0] if mi else "(无行)"
+    return ScenarioResult(scenario_name, "FAIL",
+        f"WS 已收到推送但 10s 内 DB 终态未回写（event_id={event_id} status={ep_s}, item_id={item_id} status={mi_s}）")
+
+
 # ----------------------------- main runner -----------------------------
 
 SCENARIO_REGISTRY: dict[str, Callable] = {
@@ -2256,6 +2321,8 @@ SCENARIO_REGISTRY: dict[str, Callable] = {
     "plan3_plot_first_honest_share": run_plan3_plot_first_honest_share,
     "plan3_ai_quality": run_plan3_ai_quality,
     "plan3_stage_prompt": run_plan3_stage_prompt,
+    # ---- Plan 4 场景（主动消息系统）----
+    "plan4_c_event_followup": run_plan4_c_event_followup,
 }
 
 # Plan 2 场景顺序（--scenario=all 默认）
@@ -2305,6 +2372,8 @@ SCENARIO_USER_IDS = {
     "plan3_plot_first_honest_share": 917,
     "plan3_ai_quality": 918,
     "plan3_stage_prompt": 919,
+    # Plan 4（920-923）
+    "plan4_c_event_followup": 920,
 }
 
 
