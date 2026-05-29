@@ -568,8 +568,9 @@ async def collect_proactive_ws_push(token: str, timeout_s: float = 60.0) -> Opti
     """开一条独立 WS 连接，等 timeout 内第一帧 AI 主动消息推送，返回 message dict；超时返回 None。
 
     协议与 send_one 一致：服务端主动推送复用 new_message 帧
-    {"type":"new_message","message":{"id":...,"senderType":"AI","content":...}}。
-    只认 senderType == "AI" 的帧（过滤心跳 / 其它 type）。不发任何 user 消息，纯被动收取。
+    {"type":"new_message","message":{"id":...,"senderType":"ai","content":...}}。
+    注意 senderType 实跑序列化为小写 "ai"，这里大小写不敏感匹配（过滤心跳 / 其它 type）。
+    不发任何 user 消息，纯被动收取。
     """
     url = WS_URL_TEMPLATE.format(token=token)
     start = time.monotonic()
@@ -589,7 +590,8 @@ async def collect_proactive_ws_push(token: str, timeout_s: float = 60.0) -> Opti
             if msg.get("type") != "new_message":
                 continue
             message = msg.get("message", {})
-            if message.get("senderType") == "AI":
+            # 服务端 MessageData.senderType 序列化为小写 "ai"（实跑实测），大小写不敏感匹配
+            if (message.get("senderType") or "").upper() == "AI":
                 return message
 
 
