@@ -14,9 +14,10 @@ import java.time.LocalDateTime;
 public class UserEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(nullable = false, unique = true, length = 20)
+    // 第三方登录账号无手机号 / 密码，故可空（DB V12 已 DROP NOT NULL）
+    @Column(unique = true, length = 20)
     private String phone;
-    @Column(nullable = false)
+    @Column
     private String password;
     @Column(length = 50)
     private String nickname;
