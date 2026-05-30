@@ -5,6 +5,7 @@ import com.sanyan.user.internal.SmsCodeSendService;
 import com.sanyan.user.internal.UserLoginService;
 import com.sanyan.user.internal.UserRegisterService;
 import com.sanyan.user.internal.oauth.OauthChallengeService;
+import com.sanyan.user.internal.oauth.OauthLoginService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +19,7 @@ public class AuthController {
     private final UserLoginService userLoginService;
     private final SmsCodeSendService smsCodeSendService;
     private final OauthChallengeService oauthChallengeService;
+    private final OauthLoginService oauthLoginService;
 
     @PostMapping("/sms/send")
     public BaseResp<Void> sendSms(@Valid @RequestBody SmsSendReq req) {
@@ -39,5 +41,11 @@ public class AuthController {
     @PostMapping("/oauth/challenge")
     public BaseResp<OauthChallengeData> oauthChallenge() {
         return BaseResp.success(new OauthChallengeData(oauthChallengeService.issueNonce()));
+    }
+
+    /** 第三方登录：命中身份直接登录，未绑则返回 bindTicket 走 /oauth/bind-phone。 */
+    @PostMapping("/oauth/login")
+    public BaseResp<OauthLoginData> oauthLogin(@Valid @RequestBody OauthLoginReq req) {
+        return BaseResp.success(oauthLoginService.login(req));
     }
 }

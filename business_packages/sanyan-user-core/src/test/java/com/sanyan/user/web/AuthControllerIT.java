@@ -5,10 +5,13 @@ import com.sanyan.common.error.BusinessException;
 import com.sanyan.common.test.TestApplication;
 import com.sanyan.common.web.GlobalExceptionHandler;
 import com.sanyan.user.internal.SmsCodeSendService;
+import com.sanyan.user.internal.UserEntity;
 import com.sanyan.user.internal.UserErrCode;
 import com.sanyan.user.internal.UserLoginService;
 import com.sanyan.user.internal.UserRegisterService;
 import com.sanyan.user.internal.oauth.OauthChallengeService;
+import com.sanyan.user.internal.oauth.OauthLoginService;
+import com.sanyan.user.internal.oauth.Provider;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -37,6 +40,7 @@ class AuthControllerIT {
     @MockBean private UserLoginService userLoginService;
     @MockBean private SmsCodeSendService smsCodeSendService;
     @MockBean private OauthChallengeService oauthChallengeService;
+    @MockBean private OauthLoginService oauthLoginService;
 
     @Test
     void shouldSendSmsCode() throws Exception {
@@ -140,5 +144,47 @@ class AuthControllerIT {
                 .andExpect(jsonPath("$.data.nonce").value("nonce-abc-123"));
 
         verify(oauthChallengeService).issueNonce();
+    }
+
+    @Test
+    void shouldOauthLoginWhenIdentityBound() throws Exception {
+        UserEntity user = new UserEntity();
+        user.setId(3003L);
+        user.setNickname("阿婉");
+        user.setAvatar("a.png");
+        when(oauthLoginService.login(any(OauthLoginReq.class)))
+                .thenReturn(OauthLoginData.loggedIn(user, "oauth-token"));
+
+        OauthLoginReq req = new OauthLoginReq();
+        req.setProvider(Provider.APPLE);
+        req.setCredential("identity-token");
+        req.setNonce("nonce-1");
+
+        mockMvc.perform(post("/api/auth/oauth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.needBind").value(false))
+                .andExpect(jsonPath("$.data.userId").value(3003))
+                .andExpect(jsonPath("$.data.token").value("oauth-token"));
+    }
+
+    @Test
+    void shouldReturnBindTicketWhenIdentityNotBound() throws Exception {
+        when(oauthLoginService.login(any(OauthLoginReq.class)))
+                .thenReturn(OauthLoginData.needBind("bind-ticket-xyz"));
+
+        OauthLoginReq req = new OauthLoginReq();
+        req.setProvider(Provider.WECHAT);
+        req.setCredential("wx-code");
+
+        mockMvc.perform(post("/api/auth/oauth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.needBind").value(true))
+                .andExpect(jsonPath("$.data.bindTicket").value("bind-ticket-xyz"));
     }
 }
