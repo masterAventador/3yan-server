@@ -24,6 +24,16 @@ public class KvCache {
         return redis.opsForValue().get(key);
     }
 
+    /**
+     * 原子「取出并删除」（Redis GETDEL）。用于一次性消费的值（短信验证码、nonce、bindTicket jti），
+     * 避免「get 后再 delete」非原子导致并发读到同一值都通过。
+     *
+     * @return key 的旧值；不存在返回 null。
+     */
+    public String getAndDelete(String key) {
+        return redis.opsForValue().getAndDelete(key);
+    }
+
     public void delete(String key) {
         redis.delete(key);
     }

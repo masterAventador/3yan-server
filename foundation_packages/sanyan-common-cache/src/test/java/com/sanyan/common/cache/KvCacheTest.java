@@ -67,6 +67,27 @@ class KvCacheTest {
     }
 
     @Test
+    void getAndDelete_returnsValueAndConsumesKey() {
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.getAndDelete("k")).thenReturn("v");
+        KvCache cache = new KvCache(redis);
+
+        String got = cache.getAndDelete("k");
+
+        assertThat(got).isEqualTo("v");
+        verify(ops).getAndDelete("k");
+    }
+
+    @Test
+    void getAndDelete_returnsNullWhenAbsent() {
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.getAndDelete("missing")).thenReturn(null);
+        KvCache cache = new KvCache(redis);
+
+        assertThat(cache.getAndDelete("missing")).isNull();
+    }
+
+    @Test
     void set_throwsWhenTtlIsZero() {
         KvCache cache = new KvCache(redis);
         assertThatThrownBy(() -> cache.set("k", "v", Duration.ZERO))
