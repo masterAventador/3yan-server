@@ -27,6 +27,12 @@ public class GlobalExceptionHandler {
         return BaseResp.failed(CommonErrCode.PARAM_INVALID.getCode(), msg);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public BaseResp<Void> onDataIntegrity(org.springframework.dao.DataIntegrityViolationException e) {
+        log.warn("数据完整性冲突", e);
+        return BaseResp.failed(CommonErrCode.CONFLICT.getCode(), CommonErrCode.CONFLICT.getDefaultMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public BaseResp<Void> onUnknown(Exception e) {
         log.error("unhandled exception", e);

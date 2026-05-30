@@ -27,6 +27,14 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void onDataIntegrity_returnsConflictCode() {
+        BaseResp<Void> r = handler.onDataIntegrity(
+            new org.springframework.dao.DataIntegrityViolationException("dup key"));
+        assertThat(r.isSuccess()).isFalse();
+        assertThat(r.getCode()).isEqualTo(409); // CONFLICT, not 500
+    }
+
+    @Test
     void onValidation_methodArgumentNotValid_returnsFieldErrorMessage() {
         // arrange: 构造 MethodArgumentNotValidException，使其 binding result 含一个 FieldError
         org.springframework.validation.BindingResult br = mock(org.springframework.validation.BindingResult.class);

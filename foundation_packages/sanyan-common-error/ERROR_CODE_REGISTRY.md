@@ -34,6 +34,7 @@
 | 401 | `TOKEN_INVALID` | 登录态无效 |
 | 403 | `FORBIDDEN` | 无权限 |
 | 404 | `NOT_FOUND` | 资源不存在 |
+| 409 | `CONFLICT` | 数据冲突，请重试 |
 | 410 | `PARAM_INVALID` | 参数错误 |
 | 500 | `INTERNAL_ERROR` | 服务器错误，请稍后重试 |
 
@@ -136,3 +137,4 @@
 | 2026-05-31 | 腾讯云真短信：user 域新增 1007 SMS_SEND_FAILED（短信发送失败，请稍后重试） |
 | 2026-05-31 | 验证锁定错误码分离：user 域新增 1008 SMS_VERIFY_TOO_MANY（验证失败次数过多，请重新获取验证码），verifyCode 试错超限改抛此码（与发送频繁 1006 区分） |
 | 2026-05-31 | 第三方登录：user 域新增 1009 LOGIN_PASSWORD_NOT_SET（该账号未设置密码，请用第三方登录），密码登录在比对前显式判 user.password==null 抛此码（第三方建号 password 为空，避免 BCrypt 抛异常） |
+| 2026-05-31 | 第三方登录：通用域新增 409 CONFLICT（数据冲突，请重试），GlobalExceptionHandler 将 DataIntegrityViolationException 映射为此码（替代 500），供 oauth bind insert-or-recover 并发唯一约束冲突冒泡场景 |
