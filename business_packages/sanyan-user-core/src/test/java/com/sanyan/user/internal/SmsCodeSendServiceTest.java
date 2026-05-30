@@ -44,11 +44,27 @@ class SmsCodeSendServiceTest {
     }
 
     @Test
+    void sendCode_throwsWhenDailyCapExceeded() {
+        when(kvCache.setIfAbsent(startsWith("sms:rate:"), any(), any())).thenReturn(true);
+        when(kvCache.increment(startsWith("sms:daily:"), any())).thenReturn(11L);
+        assertThatThrownBy(() -> service.sendCode("13800138000")).isInstanceOf(BusinessException.class);
+        verify(smsSender, never()).send(any(), any());
+    }
+
+    @Test
     void verifyCode_atomicSuccess() {
         when(kvCache.increment(startsWith("sms:fail:"), any())).thenReturn(1L);
         when(kvCache.getAndDelete("sms:code:13800138000")).thenReturn("123456");
         assertThat(service.verifyCode("13800138000", "123456")).isTrue();
         verify(kvCache).getAndDelete("sms:code:13800138000");
+    }
+
+    @Test
+    void verifyCode_successClearsFailCounter() {
+        when(kvCache.increment(startsWith("sms:fail:"), any())).thenReturn(1L);
+        when(kvCache.getAndDelete("sms:code:13800138000")).thenReturn("123456");
+        assertThat(service.verifyCode("13800138000", "123456")).isTrue();
+        verify(kvCache).delete(startsWith("sms:fail:"));
     }
 
     @Test
@@ -62,7 +78,9 @@ class SmsCodeSendServiceTest {
     void verifyCode_lockedAfterTooManyFailures() {
         when(kvCache.increment(startsWith("sms:fail:"), any())).thenReturn(6L);
         assertThatThrownBy(() -> service.verifyCode("13800138000", "123456"))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrCode())
+            .isEqualTo(UserErrCode.SMS_VERIFY_TOO_MANY);
         verify(kvCache, never()).getAndDelete(any());
     }
 }

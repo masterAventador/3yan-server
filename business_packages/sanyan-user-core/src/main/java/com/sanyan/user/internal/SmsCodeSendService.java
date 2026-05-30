@@ -46,7 +46,7 @@ public class SmsCodeSendService {
     public boolean verifyCode(String phone, String code) {
         long fails = kvCache.increment(FAIL_PREFIX + phone, FAIL_TTL);
         if (fails > MAX_FAIL) {
-            throw new BusinessException(UserErrCode.SMS_SEND_TOO_FREQUENT);
+            throw new BusinessException(UserErrCode.SMS_VERIFY_TOO_MANY);
         }
         String stored = kvCache.getAndDelete(CODE_PREFIX + phone);
         if (stored != null && stored.equals(code)) {

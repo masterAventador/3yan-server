@@ -13,7 +13,8 @@ public enum UserErrCode implements ErrCode {
     SMS_CODE_INVALID(1004, "验证码错误"),
     SMS_CODE_EXPIRED(1005, "验证码已过期"),
     SMS_SEND_TOO_FREQUENT(1006, "请稍后再试"),
-    SMS_SEND_FAILED(1007, "短信发送失败，请稍后重试");
+    SMS_SEND_FAILED(1007, "短信发送失败，请稍后重试"),
+    SMS_VERIFY_TOO_MANY(1008, "验证失败次数过多，请重新获取验证码");
 
     private final int code;
     private final String defaultMessage;
