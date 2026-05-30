@@ -24,6 +24,10 @@ public class UserLoginService {
                     log.warn("登录失败，用户不存在: phone={}", req.getPhone());
                     return new BusinessException(UserErrCode.USER_NOT_FOUND);
                 });
+        if (user.getPassword() == null) {
+            log.warn("登录失败，账号未设置密码（第三方建号）: phone={}", req.getPhone());
+            throw new BusinessException(UserErrCode.LOGIN_PASSWORD_NOT_SET);
+        }
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
             log.warn("登录失败，密码错误: phone={}", req.getPhone());
             throw new BusinessException(UserErrCode.WRONG_PASSWORD);

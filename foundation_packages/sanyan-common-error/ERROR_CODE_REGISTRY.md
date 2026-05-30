@@ -49,6 +49,7 @@
 | 1006 | `SMS_SEND_TOO_FREQUENT` | 请稍后再试 |
 | 1007 | `SMS_SEND_FAILED` | 短信发送失败，请稍后重试 |
 | 1008 | `SMS_VERIFY_TOO_MANY` | 验证失败次数过多，请重新获取验证码 |
+| 1009 | `LOGIN_PASSWORD_NOT_SET` | 该账号未设置密码，请用第三方登录 |
 
 ### ChatErrCode（2000-2999）
 
@@ -134,3 +135,4 @@
 | 2026-05-27 | Plan 4 Phase I final review：7002 由 PROACTIVE_EVENT_NOT_FOUND（语义偏差）改名为 PROACTIVE_EVENT_TYPE_INVALID，文案改"主动事件类型不合法"，码值不变 |
 | 2026-05-31 | 腾讯云真短信：user 域新增 1007 SMS_SEND_FAILED（短信发送失败，请稍后重试） |
 | 2026-05-31 | 验证锁定错误码分离：user 域新增 1008 SMS_VERIFY_TOO_MANY（验证失败次数过多，请重新获取验证码），verifyCode 试错超限改抛此码（与发送频繁 1006 区分） |
+| 2026-05-31 | 第三方登录：user 域新增 1009 LOGIN_PASSWORD_NOT_SET（该账号未设置密码，请用第三方登录），密码登录在比对前显式判 user.password==null 抛此码（第三方建号 password 为空，避免 BCrypt 抛异常） |
