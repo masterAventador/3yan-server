@@ -47,6 +47,7 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <tencentcloud-sms.version>3.1.1451</tencentcloud-sms.version>
     </properties>
 
     <dependencyManagement>
@@ -93,6 +94,11 @@
                 <groupId>com.eatthepath</groupId>
                 <artifactId>pushy</artifactId>
                 <version>0.15.4</version>
+            </dependency>
+            <dependency>
+                <groupId>com.tencentcloudapi</groupId>
+                <artifactId>tencentcloud-sdk-java-sms</artifactId>
+                <version>${tencentcloud-sms.version}</version>
             </dependency>
 
             <!-- Testcontainers BOM 锁版本（>=1.20 才兼容 Docker API 1.44+） -->

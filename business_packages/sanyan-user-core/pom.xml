@@ -45,6 +45,9 @@
         <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
         <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
 
+        <!-- 腾讯云短信 SDK -->
+        <dependency><groupId>com.tencentcloudapi</groupId><artifactId>tencentcloud-sdk-java-sms</artifactId></dependency>
+
         <!-- 测试 -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
