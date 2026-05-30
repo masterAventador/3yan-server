@@ -57,6 +57,18 @@ sanyan:
       template-id: ${SMS_TENCENT_TEMPLATE_ID:}
       region: ${SMS_TENCENT_REGION:ap-guangzhou}
 
+  oauth:
+    apple:
+      allowed-aud: ${OAUTH_APPLE_ALLOWED_AUD:}     # 逗号分隔的 bundleId 白名单，如 com.sanyan.app
+    wechat:
+      appid: ${OAUTH_WECHAT_APPID:}
+      secret: ${OAUTH_WECHAT_SECRET:}              # 微信 AppSecret，仅服务端用，禁止下发客户端 / 入日志
+    bind-ticket:
+      # bindTicket 独立 HMAC 密钥（≠ jwt.secret），≥32 字节。dev 给占位默认值保证本地能起 context，
+      # prod 必须用 OAUTH_BIND_TICKET_SECRET env 覆盖（BindTicketUtil 用 @Value 直接读，空/太短会启动失败）。
+      secret: ${OAUTH_BIND_TICKET_SECRET:dev-only-bind-ticket-secret-change-in-prod-min-32-bytes}
+      ttl-minutes: ${OAUTH_BIND_TICKET_TTL_MINUTES:10}
+
   intimacy:
     stages:
       strangerEnd: 100

@@ -21,6 +21,10 @@
 #           SMS_PROVIDER（prod 设 tencent）
 #           SMS_TENCENT_SECRET_ID / SMS_TENCENT_SECRET_KEY / SMS_TENCENT_SDK_APP_ID
 #           SMS_TENCENT_SIGN_NAME / SMS_TENCENT_TEMPLATE_ID（待腾讯云签名+模板过审后填）
+#     第三方登录（Apple / 微信）：
+#           OAUTH_APPLE_ALLOWED_AUD（Apple bundleId 白名单，逗号分隔）
+#           OAUTH_WECHAT_APPID / OAUTH_WECHAT_SECRET（微信开放平台，secret 仅后端）
+#           OAUTH_BIND_TICKET_SECRET（≥32 字节，独立于 JWT_SECRET）
 #     application-prod.yml 用 ${KEY} 严格语法，缺 key 启动 fail-fast。
 #
 # 用法: ./deploy.sh

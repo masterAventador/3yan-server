@@ -4,6 +4,7 @@ import com.sanyan.common.web.BaseResp;
 import com.sanyan.user.internal.SmsCodeSendService;
 import com.sanyan.user.internal.UserLoginService;
 import com.sanyan.user.internal.UserRegisterService;
+import com.sanyan.user.internal.oauth.OauthChallengeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +17,7 @@ public class AuthController {
     private final UserRegisterService userRegisterService;
     private final UserLoginService userLoginService;
     private final SmsCodeSendService smsCodeSendService;
+    private final OauthChallengeService oauthChallengeService;
 
     @PostMapping("/sms/send")
     public BaseResp<Void> sendSms(@Valid @RequestBody SmsSendReq req) {
@@ -31,5 +33,11 @@ public class AuthController {
     @PostMapping("/login")
     public BaseResp<LoginData> login(@Valid @RequestBody LoginReq req) {
         return BaseResp.success(userLoginService.login(req));
+    }
+
+    /** 下发一次性 nonce（S8 防重放），客户端 Apple 登录前调用。 */
+    @PostMapping("/oauth/challenge")
+    public BaseResp<OauthChallengeData> oauthChallenge() {
+        return BaseResp.success(new OauthChallengeData(oauthChallengeService.issueNonce()));
     }
 }

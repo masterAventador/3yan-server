@@ -39,7 +39,10 @@ import static org.assertj.core.api.Assertions.assertThat;
         // Redis 启动期是 lazy 连接的，不准备 Redis 也能完成 Bean 装配（本测试不调任何 KvCache 方法）。
         // JwtUtil 通过 @Value("${sanyan.jwt.secret}") 注入；这里给个测试占位密钥即可。
         "sanyan.jwt.secret=test-secret-for-application-context-it-only-32chars",
-        "sanyan.jwt.expiration-days=7"
+        "sanyan.jwt.expiration-days=7",
+        // BindTicketUtil（common-auth）通过 @Value 直接读 sanyan.oauth.bind-ticket.secret，
+        // 不在扫描包内给个 ≥32 字节占位密钥，否则 HMAC key 太短/缺失导致 bean 创建失败。
+        "sanyan.oauth.bind-ticket.secret=test-bind-ticket-secret-for-application-context-it-only"
 })
 class UserApplicationContextIT {
 

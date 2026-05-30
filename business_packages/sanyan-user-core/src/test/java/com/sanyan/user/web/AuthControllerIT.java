@@ -8,6 +8,7 @@ import com.sanyan.user.internal.SmsCodeSendService;
 import com.sanyan.user.internal.UserErrCode;
 import com.sanyan.user.internal.UserLoginService;
 import com.sanyan.user.internal.UserRegisterService;
+import com.sanyan.user.internal.oauth.OauthChallengeService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -35,6 +36,7 @@ class AuthControllerIT {
     @MockBean private UserRegisterService userRegisterService;
     @MockBean private UserLoginService userLoginService;
     @MockBean private SmsCodeSendService smsCodeSendService;
+    @MockBean private OauthChallengeService oauthChallengeService;
 
     @Test
     void shouldSendSmsCode() throws Exception {
@@ -125,5 +127,18 @@ class AuthControllerIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("密码错误"));
+    }
+
+    @Test
+    void shouldIssueOauthChallengeNonce() throws Exception {
+        when(oauthChallengeService.issueNonce()).thenReturn("nonce-abc-123");
+
+        mockMvc.perform(post("/api/auth/oauth/challenge")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.nonce").value("nonce-abc-123"));
+
+        verify(oauthChallengeService).issueNonce();
     }
 }

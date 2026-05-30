@@ -23,6 +23,11 @@ sanyan:
   jwt:
     secret: test-secret-key-at-least-256-bits-long-for-hmac-sha-testing
     expiration-days: 1
+  oauth:
+    # BindTicketUtil（common-auth）通过 @Value 直接读 bind-ticket.secret，必须 ≥32 字节，
+    # 否则 @SpringBootTest 起全 context 时 HMAC key 太短 / 缺失导致 bean 创建失败。
+    bind-ticket:
+      secret: test-bind-ticket-secret-at-least-256-bits-long-for-hmac-testing
   doubao:
     api-key: test
     model: test
