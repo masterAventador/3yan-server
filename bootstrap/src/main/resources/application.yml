@@ -47,6 +47,16 @@ sanyan:
     secret: ${JWT_SECRET:your-256-bit-secret-key-for-sanyan-app-change-in-production}
     expiration-days: 30
 
+  sms:
+    provider: ${SMS_PROVIDER:stub}        # dev 默认 stub；prod 在 env 设 tencent
+    tencent:
+      secret-id: ${SMS_TENCENT_SECRET_ID:}
+      secret-key: ${SMS_TENCENT_SECRET_KEY:}
+      sdk-app-id: ${SMS_TENCENT_SDK_APP_ID:}
+      sign-name: ${SMS_TENCENT_SIGN_NAME:}
+      template-id: ${SMS_TENCENT_TEMPLATE_ID:}
+      region: ${SMS_TENCENT_REGION:ap-guangzhou}
+
   intimacy:
     stages:
       strangerEnd: 100
