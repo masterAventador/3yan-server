@@ -52,6 +52,7 @@
 | 1008 | `SMS_VERIFY_TOO_MANY` | 验证失败次数过多，请重新获取验证码 |
 | 1009 | `LOGIN_PASSWORD_NOT_SET` | 该账号未设置密码，请用第三方登录 |
 | 1010 | `OAUTH_VERIFY_FAILED` | 第三方登录校验失败 |
+| 1011 | `WECHAT_UNIONID_MISSING` | 微信账号缺少 unionid，无法登录 |
 
 ### ChatErrCode（2000-2999）
 
@@ -139,3 +140,4 @@
 | 2026-05-31 | 验证锁定错误码分离：user 域新增 1008 SMS_VERIFY_TOO_MANY（验证失败次数过多，请重新获取验证码），verifyCode 试错超限改抛此码（与发送频繁 1006 区分） |
 | 2026-05-31 | 第三方登录：user 域新增 1009 LOGIN_PASSWORD_NOT_SET（该账号未设置密码，请用第三方登录），密码登录在比对前显式判 user.password==null 抛此码（第三方建号 password 为空，避免 BCrypt 抛异常） |
 | 2026-05-31 | 第三方登录：通用域新增 409 CONFLICT（数据冲突，请重试），GlobalExceptionHandler 将 DataIntegrityViolationException 映射为此码（替代 500），供 oauth bind insert-or-recover 并发唯一约束冲突冒泡场景 |
+| 2026-05-31 | 第三方登录 S2：user 域新增 1011 WECHAT_UNIONID_MISSING（微信账号缺少 unionid，无法登录），WechatCodeVerifier 断言微信返回 unionid 非空，为空抛此码（严禁 fallback openid 填 external_id） |
