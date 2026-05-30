@@ -48,6 +48,7 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <tencentcloud-sms.version>3.1.1451</tencentcloud-sms.version>
+        <nimbus-jose-jwt.version>10.3</nimbus-jose-jwt.version>
     </properties>
 
     <dependencyManagement>
@@ -99,6 +100,11 @@
                 <groupId>com.tencentcloudapi</groupId>
                 <artifactId>tencentcloud-sdk-java-sms</artifactId>
                 <version>${tencentcloud-sms.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${nimbus-jose-jwt.version}</version>
             </dependency>
 
             <!-- Testcontainers BOM 锁版本（>=1.20 才兼容 Docker API 1.44+） -->
