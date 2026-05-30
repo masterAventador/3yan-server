@@ -48,6 +48,9 @@
         <!-- 腾讯云短信 SDK -->
         <dependency><groupId>com.tencentcloudapi</groupId><artifactId>tencentcloud-sdk-java-sms</artifactId></dependency>
 
+        <!-- Apple identityToken JWKS 验签（AppleTokenVerifier）。版本由父 POM dependencyManagement 锁定 -->
+        <dependency><groupId>com.nimbusds</groupId><artifactId>nimbus-jose-jwt</artifactId></dependency>
+
         <!-- 测试 -->
         <dependency><groupId>com.sanyan</groupId><artifactId>sanyan-common-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>

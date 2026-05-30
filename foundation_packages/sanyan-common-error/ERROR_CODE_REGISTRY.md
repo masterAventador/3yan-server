@@ -51,6 +51,7 @@
 | 1007 | `SMS_SEND_FAILED` | 短信发送失败，请稍后重试 |
 | 1008 | `SMS_VERIFY_TOO_MANY` | 验证失败次数过多，请重新获取验证码 |
 | 1009 | `LOGIN_PASSWORD_NOT_SET` | 该账号未设置密码，请用第三方登录 |
+| 1010 | `OAUTH_VERIFY_FAILED` | 第三方登录校验失败 |
 
 ### ChatErrCode（2000-2999）
 
