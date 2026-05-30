@@ -17,6 +17,10 @@
 #           DOUBAO_API_KEY / DEEPSEEK_API_KEY / SILICONFLOW_API_KEY
 #           ASR_ACCESS_TOKEN / TTS_ACCESS_TOKEN
 #           COS_SECRET_ID / COS_SECRET_KEY / COS_BUCKET / COS_REGION
+#     短信（prod 真发，待腾讯云签名+模板过审后填）：
+#           SMS_PROVIDER（prod 设 tencent）
+#           SMS_TENCENT_SECRET_ID / SMS_TENCENT_SECRET_KEY / SMS_TENCENT_SDK_APP_ID
+#           SMS_TENCENT_SIGN_NAME / SMS_TENCENT_TEMPLATE_ID（待腾讯云签名+模板过审后填）
 #     application-prod.yml 用 ${KEY} 严格语法，缺 key 启动 fail-fast。
 #
 # 用法: ./deploy.sh
