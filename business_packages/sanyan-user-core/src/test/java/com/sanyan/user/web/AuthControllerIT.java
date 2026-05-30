@@ -9,6 +9,7 @@ import com.sanyan.user.internal.UserEntity;
 import com.sanyan.user.internal.UserErrCode;
 import com.sanyan.user.internal.UserLoginService;
 import com.sanyan.user.internal.UserRegisterService;
+import com.sanyan.user.internal.oauth.OauthBindService;
 import com.sanyan.user.internal.oauth.OauthChallengeService;
 import com.sanyan.user.internal.oauth.OauthLoginService;
 import com.sanyan.user.internal.oauth.Provider;
@@ -41,6 +42,7 @@ class AuthControllerIT {
     @MockBean private SmsCodeSendService smsCodeSendService;
     @MockBean private OauthChallengeService oauthChallengeService;
     @MockBean private OauthLoginService oauthLoginService;
+    @MockBean private OauthBindService oauthBindService;
 
     @Test
     void shouldSendSmsCode() throws Exception {
@@ -186,5 +188,86 @@ class AuthControllerIT {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.needBind").value(true))
                 .andExpect(jsonPath("$.data.bindTicket").value("bind-ticket-xyz"));
+    }
+
+    @Test
+    void shouldBindPhoneAndReturnToken() throws Exception {
+        UserEntity user = new UserEntity();
+        user.setId(4004L);
+        user.setNickname("小婉");
+        when(oauthBindService.bindPhone(any(OauthBindPhoneReq.class)))
+                .thenReturn(OauthLoginData.loggedIn(user, "bind-token"));
+
+        OauthBindPhoneReq req = new OauthBindPhoneReq();
+        req.setBindTicket("ticket");
+        req.setPhone("13800138000");
+        req.setCode("123456");
+
+        mockMvc.perform(post("/api/auth/oauth/bind-phone")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.needMergeAuth").value(false))
+                .andExpect(jsonPath("$.data.userId").value(4004))
+                .andExpect(jsonPath("$.data.token").value("bind-token"));
+    }
+
+    @Test
+    void shouldReturnNeedMergeAuthWhenPhoneAlreadyRegistered() throws Exception {
+        when(oauthBindService.bindPhone(any(OauthBindPhoneReq.class)))
+                .thenReturn(OauthLoginData.needMergeAuth());
+
+        OauthBindPhoneReq req = new OauthBindPhoneReq();
+        req.setBindTicket("ticket");
+        req.setPhone("13800138000");
+        req.setCode("123456");
+
+        mockMvc.perform(post("/api/auth/oauth/bind-phone")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.needMergeAuth").value(true))
+                .andExpect(jsonPath("$.data.token").doesNotExist());
+    }
+
+    @Test
+    void shouldRejectBindWithWrongMergePassword() throws Exception {
+        when(oauthBindService.bindPhone(any(OauthBindPhoneReq.class)))
+                .thenThrow(new BusinessException(UserErrCode.NEED_MERGE_AUTH));
+
+        OauthBindPhoneReq req = new OauthBindPhoneReq();
+        req.setBindTicket("ticket");
+        req.setPhone("13800138000");
+        req.setCode("123456");
+        req.setPassword("wrong-password");
+
+        mockMvc.perform(post("/api/auth/oauth/bind-phone")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(1014))
+                .andExpect(jsonPath("$.message").value("该手机号已注册，请验证账号本人或登录后绑定"));
+    }
+
+    @Test
+    void shouldRejectBindWithInvalidTicket() throws Exception {
+        when(oauthBindService.bindPhone(any(OauthBindPhoneReq.class)))
+                .thenThrow(new BusinessException(UserErrCode.BIND_TICKET_INVALID));
+
+        OauthBindPhoneReq req = new OauthBindPhoneReq();
+        req.setBindTicket("bad");
+        req.setPhone("13800138000");
+        req.setCode("123456");
+
+        mockMvc.perform(post("/api/auth/oauth/bind-phone")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(1012))
+                .andExpect(jsonPath("$.message").value("绑定会话无效或已过期"));
     }
 }

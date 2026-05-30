@@ -17,7 +17,10 @@ public enum UserErrCode implements ErrCode {
     SMS_VERIFY_TOO_MANY(1008, "验证失败次数过多，请重新获取验证码"),
     LOGIN_PASSWORD_NOT_SET(1009, "该账号未设置密码，请用第三方登录"),
     OAUTH_VERIFY_FAILED(1010, "第三方登录校验失败"),
-    WECHAT_UNIONID_MISSING(1011, "微信账号缺少 unionid，无法登录");
+    WECHAT_UNIONID_MISSING(1011, "微信账号缺少 unionid，无法登录"),
+    BIND_TICKET_INVALID(1012, "绑定会话无效或已过期"),
+    BIND_TICKET_USED(1013, "绑定会话已使用"),
+    NEED_MERGE_AUTH(1014, "该手机号已注册，请验证账号本人或登录后绑定");
 
     private final int code;
     private final String defaultMessage;

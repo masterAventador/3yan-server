@@ -4,6 +4,7 @@ import com.sanyan.common.web.BaseResp;
 import com.sanyan.user.internal.SmsCodeSendService;
 import com.sanyan.user.internal.UserLoginService;
 import com.sanyan.user.internal.UserRegisterService;
+import com.sanyan.user.internal.oauth.OauthBindService;
 import com.sanyan.user.internal.oauth.OauthChallengeService;
 import com.sanyan.user.internal.oauth.OauthLoginService;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ public class AuthController {
     private final SmsCodeSendService smsCodeSendService;
     private final OauthChallengeService oauthChallengeService;
     private final OauthLoginService oauthLoginService;
+    private final OauthBindService oauthBindService;
 
     @PostMapping("/sms/send")
     public BaseResp<Void> sendSms(@Valid @RequestBody SmsSendReq req) {
@@ -47,5 +49,11 @@ public class AuthController {
     @PostMapping("/oauth/login")
     public BaseResp<OauthLoginData> oauthLogin(@Valid @RequestBody OauthLoginReq req) {
         return BaseResp.success(oauthLoginService.login(req));
+    }
+
+    /** 第三方登录绑定手机号：带 bindTicket + 手机号 + 短信码完成绑定 / 建号，成功返回登录态。 */
+    @PostMapping("/oauth/bind-phone")
+    public BaseResp<OauthLoginData> oauthBindPhone(@Valid @RequestBody OauthBindPhoneReq req) {
+        return BaseResp.success(oauthBindService.bindPhone(req));
     }
 }

@@ -53,6 +53,9 @@
 | 1009 | `LOGIN_PASSWORD_NOT_SET` | 该账号未设置密码，请用第三方登录 |
 | 1010 | `OAUTH_VERIFY_FAILED` | 第三方登录校验失败 |
 | 1011 | `WECHAT_UNIONID_MISSING` | 微信账号缺少 unionid，无法登录 |
+| 1012 | `BIND_TICKET_INVALID` | 绑定会话无效或已过期 |
+| 1013 | `BIND_TICKET_USED` | 绑定会话已使用 |
+| 1014 | `NEED_MERGE_AUTH` | 该手机号已注册，请验证账号本人或登录后绑定 |
 
 ### ChatErrCode（2000-2999）
 
@@ -141,3 +144,4 @@
 | 2026-05-31 | 第三方登录：user 域新增 1009 LOGIN_PASSWORD_NOT_SET（该账号未设置密码，请用第三方登录），密码登录在比对前显式判 user.password==null 抛此码（第三方建号 password 为空，避免 BCrypt 抛异常） |
 | 2026-05-31 | 第三方登录：通用域新增 409 CONFLICT（数据冲突，请重试），GlobalExceptionHandler 将 DataIntegrityViolationException 映射为此码（替代 500），供 oauth bind insert-or-recover 并发唯一约束冲突冒泡场景 |
 | 2026-05-31 | 第三方登录 S2：user 域新增 1011 WECHAT_UNIONID_MISSING（微信账号缺少 unionid，无法登录），WechatCodeVerifier 断言微信返回 unionid 非空，为空抛此码（严禁 fallback openid 填 external_id） |
+| 2026-05-31 | 第三方登录绑定（Task 11）：user 域新增 1012 BIND_TICKET_INVALID（绑定会话无效或已过期，bindTicket parse 失败/provider 非法/externalId 空）、1013 BIND_TICKET_USED（绑定会话已使用，jti 一次性消费锁命中）、1014 NEED_MERGE_AUTH（该手机号已注册，OauthBindService 合并安全 S4：缺/错原密码或目标账号无密码无法验本人时抛此码，不静默合并） |
