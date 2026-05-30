@@ -47,6 +47,7 @@
 | 1004 | `SMS_CODE_INVALID` | 验证码错误 |
 | 1005 | `SMS_CODE_EXPIRED` | 验证码已过期 |
 | 1006 | `SMS_SEND_TOO_FREQUENT` | 请稍后再试 |
+| 1007 | `SMS_SEND_FAILED` | 短信发送失败，请稍后重试 |
 
 ### ChatErrCode（2000-2999）
 
@@ -130,3 +131,4 @@
 | 2026-05-27 | Plan 4：push 域新增 8001 DEVICE_TOKEN_INVALID / 8002 PUSH_SEND_FAILED；8000-8999 区间分配给 push |
 | 2026-05-27 | Plan 4 I2：7000-7999 从保留段正式分配给 proactive 域；新增 ProactiveErrCode 7001 PROACTIVE_GENERATE_FAILED / 7002 PROACTIVE_EVENT_TYPE_INVALID |
 | 2026-05-27 | Plan 4 Phase I final review：7002 由 PROACTIVE_EVENT_NOT_FOUND（语义偏差）改名为 PROACTIVE_EVENT_TYPE_INVALID，文案改"主动事件类型不合法"，码值不变 |
+| 2026-05-31 | 腾讯云真短信：user 域新增 1007 SMS_SEND_FAILED（短信发送失败，请稍后重试） |
