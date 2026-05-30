@@ -1,0 +1,6 @@
+# OauthEndToEndIT 专用 profile：把基础 application.yml 里对 RedisAutoConfiguration 的 exclude 清空，
+# 让 KvCache 能拿到真实 StringRedisTemplate 连 Testcontainer Redis（其余数据源 / Redis 端口由
+# @DynamicPropertySource 注入）。profile 文件里给定的 spring.autoconfigure.exclude 会整体覆盖基础文件的同名 key。
+spring:
+  autoconfigure:
+    exclude:

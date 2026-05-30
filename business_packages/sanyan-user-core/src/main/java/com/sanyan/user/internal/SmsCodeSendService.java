@@ -18,8 +18,8 @@ public class SmsCodeSendService {
     private final KvCache kvCache;
     private final SmsSender smsSender;
 
-    private static final String CODE_PREFIX = "sms:code:";
-    private static final String RATE_PREFIX = "sms:rate:";
+    public static final String CODE_PREFIX = "sms:code:";
+    public static final String RATE_PREFIX = "sms:rate:";
     private static final String DAILY_PREFIX = "sms:daily:";
     private static final String FAIL_PREFIX = "sms:fail:";
     private static final Duration CODE_TTL = Duration.ofMinutes(5);
