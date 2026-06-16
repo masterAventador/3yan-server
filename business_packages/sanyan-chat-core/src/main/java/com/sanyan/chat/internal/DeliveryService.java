@@ -81,7 +81,8 @@ public class DeliveryService {
     public List<Long> deliver(Long userId, Long characterId, List<String> segments) {
         List<Long> messageIds = new ArrayList<>(segments.size());
         for (String segment : segments) {
-            MessageEntity saved = messageService.saveAiMessage(userId, segment);
+            // 主动消息投递：标记 is_proactive=true（区别于对话回复 handleAiReply）
+            MessageEntity saved = messageService.saveAiMessage(userId, segment, true);
             Long messageId = saved.getId();
             messageIds.add(messageId);
             deliverOne(userId, messageId, saved, segment);

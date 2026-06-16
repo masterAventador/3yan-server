@@ -33,7 +33,7 @@ class MessageServiceSaveAiMessageTest {
             return e;
         });
 
-        MessageEntity saved = messageService.saveAiMessage(42L, "早上好呀，今天也要加油哦");
+        MessageEntity saved = messageService.saveAiMessage(42L, "早上好呀，今天也要加油哦", true);
 
         assertThat(saved.getId()).isEqualTo(777L);
         assertThat(saved.getUserId()).isEqualTo(42L);
@@ -51,8 +51,26 @@ class MessageServiceSaveAiMessageTest {
     void saveAiMessage_should_default_blank_content_to_empty_string() {
         when(messageRepository.save(any(MessageEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        MessageEntity saved = messageService.saveAiMessage(42L, null);
+        MessageEntity saved = messageService.saveAiMessage(42L, null, true);
 
         assertThat(saved.getContent()).isEmpty();
+    }
+
+    @Test
+    void saveAiMessage_with_proactive_true_should_mark_message_is_proactive() {
+        when(messageRepository.save(any(MessageEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MessageEntity saved = messageService.saveAiMessage(42L, "今天降温了，记得加衣服哦", true);
+
+        assertThat(saved.isProactive()).isTrue();
+    }
+
+    @Test
+    void saveAiMessage_with_proactive_false_should_not_mark_message_is_proactive() {
+        when(messageRepository.save(any(MessageEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MessageEntity saved = messageService.saveAiMessage(42L, "嗯嗯我在的", false);
+
+        assertThat(saved.isProactive()).isFalse();
     }
 }

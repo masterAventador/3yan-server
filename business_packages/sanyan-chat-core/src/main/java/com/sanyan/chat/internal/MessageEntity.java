@@ -20,6 +20,9 @@ public class MessageEntity {
     private String senderType; // user / ai
     @Column(columnDefinition = "TEXT")
     private String content;
+    /** true=AI 主动推送（早安/关怀等无用户触发）；false=用户消息后的对话回复。仅用于后期排查。 */
+    @Column(nullable = false)
+    private boolean isProactive;
     @CreationTimestamp
     private LocalDateTime createdAt;
 }

@@ -59,13 +59,17 @@ public class MessageService {
      * 与 {@link #saveUserMessage} 同构，仅 senderType 为 AI；独立事务便于调用方逐条拿 id。
      * <p>注意：不调 LLM、不拆气泡（那是 {@link #handleAiReply} 的职责）；
      * 调用方（DeliveryService）已把文案拆好成一条条 segment。
+     *
+     * @param proactive true 表示 AI 主动推送（早安/关怀等无用户触发），落库标记 is_proactive=true；
+     *                  对话回复路径走 {@link #handleAiReply}（is_proactive 保持 false），不调本方法。
      */
     @Transactional
-    public MessageEntity saveAiMessage(Long userId, String content) {
+    public MessageEntity saveAiMessage(Long userId, String content, boolean proactive) {
         MessageEntity aiMsg = new MessageEntity();
         aiMsg.setUserId(userId);
         aiMsg.setSenderType(SenderType.AI);
         aiMsg.setContent(content != null ? content : "");
+        aiMsg.setProactive(proactive);
         messageRepository.save(aiMsg);
         log.info("AI 消息已保存（单条）: userId={}, msgId={}", userId, aiMsg.getId());
         eventPublisher.publishEvent(new MessagePersistedEvent(

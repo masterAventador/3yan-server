@@ -26,6 +26,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -66,18 +67,19 @@ class DeliveryServiceTest {
 
     @Test
     void deliver_should_save_each_segment_and_return_message_ids() {
-        when(messageService.saveAiMessage(eq(1L), any())).thenReturn(entityWithId(10L, "a"), entityWithId(11L, "b"));
+        when(messageService.saveAiMessage(eq(1L), any(), anyBoolean())).thenReturn(entityWithId(10L, "a"), entityWithId(11L, "b"));
         when(sessionManager.getSession(1L)).thenReturn(Optional.empty()); // 离线，专注验证落库 + 返回 id
 
         List<Long> ids = deliveryService.deliver(1L, 99L, List.of("a", "b"));
 
         assertThat(ids).containsExactly(10L, 11L);
-        verify(messageService, times(2)).saveAiMessage(eq(1L), any());
+        // 主动推送路径落库必须标记 proactive=true，与对话回复区分
+        verify(messageService, times(2)).saveAiMessage(eq(1L), any(), eq(true));
     }
 
     @Test
     void deliver_online_and_acked_should_not_push_offline() throws Exception {
-        when(messageService.saveAiMessage(eq(1L), any())).thenReturn(entityWithId(10L, "hi"));
+        when(messageService.saveAiMessage(eq(1L), any(), anyBoolean())).thenReturn(entityWithId(10L, "hi"));
         when(messageService.toData(any())).thenReturn(dataOf(10L, "hi"));
         when(sessionManager.getSession(1L)).thenReturn(Optional.of(session));
         when(session.isOpen()).thenReturn(true);
@@ -98,7 +100,7 @@ class DeliveryServiceTest {
 
     @Test
     void deliver_online_but_ack_timeout_should_push_offline() {
-        when(messageService.saveAiMessage(eq(1L), any())).thenReturn(entityWithId(10L, "hi"));
+        when(messageService.saveAiMessage(eq(1L), any(), anyBoolean())).thenReturn(entityWithId(10L, "hi"));
         when(messageService.toData(any())).thenReturn(dataOf(10L, "hi"));
         when(sessionManager.getSession(1L)).thenReturn(Optional.of(session));
         when(session.isOpen()).thenReturn(true);
@@ -112,7 +114,7 @@ class DeliveryServiceTest {
 
     @Test
     void deliver_offline_should_push_directly() {
-        when(messageService.saveAiMessage(eq(1L), any())).thenReturn(entityWithId(10L, "hi"));
+        when(messageService.saveAiMessage(eq(1L), any(), anyBoolean())).thenReturn(entityWithId(10L, "hi"));
         when(sessionManager.getSession(1L)).thenReturn(Optional.empty());
         when(pushApi.pushToUser(anyLong(), any())).thenReturn(PushResult.pending("APNs 占位"));
 
@@ -124,7 +126,7 @@ class DeliveryServiceTest {
 
     @Test
     void deliver_push_failure_should_not_throw() {
-        when(messageService.saveAiMessage(eq(1L), any())).thenReturn(entityWithId(10L, "hi"));
+        when(messageService.saveAiMessage(eq(1L), any(), anyBoolean())).thenReturn(entityWithId(10L, "hi"));
         when(sessionManager.getSession(1L)).thenReturn(Optional.empty());
         when(pushApi.pushToUser(anyLong(), any())).thenThrow(new RuntimeException("APNs down"));
 
@@ -136,7 +138,7 @@ class DeliveryServiceTest {
 
     @Test
     void deliver_push_returns_failed_should_log_error_not_throw() {
-        when(messageService.saveAiMessage(eq(1L), any())).thenReturn(entityWithId(10L, "hi"));
+        when(messageService.saveAiMessage(eq(1L), any(), anyBoolean())).thenReturn(entityWithId(10L, "hi"));
         when(sessionManager.getSession(1L)).thenReturn(Optional.empty());
         // pushApi 正常返回 FAILED（非抛异常路径）→ 应记 ERROR 但不抛、正常返回 id
         when(pushApi.pushToUser(anyLong(), any())).thenReturn(PushResult.failed("APNs 凭证缺失"));
