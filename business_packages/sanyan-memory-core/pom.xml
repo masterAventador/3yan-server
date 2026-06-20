@@ -103,6 +103,14 @@
             <groupId>com.sanyan</groupId>
             <artifactId>sanyan-common-error</artifactId>
         </dependency>
+        <!--
+            P-T2：RAG 片段渲染相对时间前缀（约N周前等）走基础层 RelativeTime 纯静态工具，
+            把 MemoryFragment.occurredAt 转成"多久以前"，避免 LLM 把陈旧记忆当成"今天/刚才"。
+        -->
+        <dependency>
+            <groupId>com.sanyan</groupId>
+            <artifactId>sanyan-common-util</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

@@ -15,8 +15,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -216,6 +219,49 @@ class MemoryContextBuilderTest {
         int ragIdx = text.indexOf("【相关历史片段】");
         assertThat(profileIdx).isLessThan(summaryIdx);
         assertThat(summaryIdx).isLessThan(ragIdx);
+    }
+
+    @Test
+    @DisplayName("RAG 片段带相对时间前缀（25 天前 → 约3周前），避免 LLM 把旧事当今天")
+    void rag_fragments_should_be_prefixed_with_relative_time() {
+        when(profileRepository.findByUserIdAndCharacterId(USER_ID, CHARACTER_ID))
+                .thenReturn(Optional.empty());
+        when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
+                .thenReturn(Optional.empty());
+        // 距固定 now（2026-06-17）25 天
+        Instant occurred = Instant.parse("2026-05-23T12:00:00Z");
+        when(ragSearchService.search(eq(USER_ID), eq(CHARACTER_ID), any()))
+                .thenReturn(List.of(new MemoryFragment("上次去吃了寿司", occurred, 0.9)));
+
+        // 注入固定时钟 now=2026-06-17
+        Clock fixed = Clock.fixed(Instant.parse("2026-06-17T12:00:00Z"), ZoneId.of("Asia/Shanghai"));
+        ReflectionTestUtils.setField(builder, "clock", fixed);
+
+        MemoryContext context = builder.build(USER_ID, CHARACTER_ID, QUERY_TEXT);
+
+        assertThat(context).isNotNull();
+        assertThat(context.text())
+                .contains("约3周前")
+                .contains("上次去吃了寿司");
+    }
+
+    @Test
+    @DisplayName("RAG 片段 occurredAt 为 null → 无相对时间前缀，不出现空括号或 null 字样")
+    void rag_fragment_with_null_occurredAt_has_no_time_prefix() {
+        when(profileRepository.findByUserIdAndCharacterId(USER_ID, CHARACTER_ID))
+                .thenReturn(Optional.empty());
+        when(summaryRepository.findFirstByUserIdAndCharacterIdOrderByCreatedAtDesc(USER_ID, CHARACTER_ID))
+                .thenReturn(Optional.empty());
+        when(ragSearchService.search(eq(USER_ID), eq(CHARACTER_ID), any()))
+                .thenReturn(List.of(new MemoryFragment("没有发生时间的片段", null, 0.9)));
+
+        MemoryContext context = builder.build(USER_ID, CHARACTER_ID, QUERY_TEXT);
+
+        assertThat(context).isNotNull();
+        assertThat(context.text())
+                .contains("没有发生时间的片段")
+                .doesNotContain("（）")
+                .doesNotContain("null");
     }
 
     @Test

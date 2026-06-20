@@ -1,5 +1,6 @@
 package com.sanyan.memory.internal.orchestrator;
 
+import com.sanyan.common.util.RelativeTime;
 import com.sanyan.memory.dto.MemoryContext;
 import com.sanyan.memory.dto.MemoryFragment;
 import com.sanyan.memory.internal.profile.MemoryProfileRepository;
@@ -9,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -54,6 +57,9 @@ public class MemoryContextBuilder {
     private final MemoryProfileRepository profileRepository;
     private final MemoryRagSearchService ragSearchService;
 
+    /** 可测时钟；默认系统时区。测试经 ReflectionTestUtils 注入固定 Clock（与 FrequencyGate 同风格）。 */
+    private Clock clock = Clock.systemDefaultZone();
+
     /**
      * 组合三层长期记忆。
      *
@@ -83,9 +89,14 @@ public class MemoryContextBuilder {
         List<MemoryFragment> fragments = ragSearchService.search(userId, characterId, queryText);
         if (!fragments.isEmpty()) {
             sb.append(SECTION_RAG_TITLE).append("\n");
+            Instant now = Instant.now(clock);
             for (MemoryFragment f : fragments) {
+                // P-T2：给每条片段加相对时间前缀（如"（约3周前）"），让 LLM 知道这段记忆多久以前，
+                // 不再把陈旧记忆说成"今天/刚才"。occurredAt 为 null 时 describe 返回空串 → 不加前缀。
+                String rel = RelativeTime.describe(f.occurredAt(), now, clock.getZone());
+                String prefix = rel.isEmpty() ? "" : "（" + rel + "）";
                 // 把换行换成空格再列项，让"- " 列表始终单行，避免污染 LLM 看到的结构
-                sb.append("- ").append(f.chunkText().replace("\n", " ")).append("\n");
+                sb.append("- ").append(prefix).append(f.chunkText().replace("\n", " ")).append("\n");
             }
         }
 
