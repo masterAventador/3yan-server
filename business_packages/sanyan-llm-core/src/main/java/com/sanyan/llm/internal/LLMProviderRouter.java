@@ -70,6 +70,6 @@ public class LLMProviderRouter {
         }
 
         LLMProvider provider = matched.get(0);
-        return provider.chat(openAiMessages);
+        return provider.chat(taskType, openAiMessages);
     }
 }

@@ -98,7 +98,8 @@ public class DoubaoAdapter implements LLMProvider {
     }
 
     @Override
-    public String chat(List<Map<String, String>> chatMessages) {
+    public String chat(LlmTaskType taskType, List<Map<String, String>> chatMessages) {
+        // 豆包默认禁用（task-types 配置为空），本期不接 USER_FACING，无需按 taskType 区分解码参数。
         Map<String, Object> requestBody = Map.of(
                 "model", model,
                 "messages", chatMessages);

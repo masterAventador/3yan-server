@@ -20,11 +20,14 @@ public interface LLMProvider {
     /**
      * 调用 LLM 生成回复。
      *
+     * @param taskType     任务类型。adapter 据此决定是否附加反重复解码参数：{@code USER_FACING}
+     *                     会附加 temperature / frequency_penalty / presence_penalty 抑制复读；
+     *                     {@code BACKGROUND}（JSON 抽取 / 摘要等结构化任务）保持原样不附加，避免破坏结构化输出。
      * @param chatMessages OpenAI 兼容格式的消息列表，每条 Map 至少含 {@code "role"} 和 {@code "content"}。
      * @return LLM 返回的助手文本。
      * @throws com.sanyan.common.error.BusinessException 上游 4xx / 5xx / 网络异常等。
      */
-    String chat(List<Map<String, String>> chatMessages);
+    String chat(LlmTaskType taskType, List<Map<String, String>> chatMessages);
 
     /**
      * 当前 Provider 是否能处理给定的任务类型。Router 据此选择 Provider。

@@ -89,7 +89,7 @@ class DoubaoAdapterTest {
                 .setBody("{\"choices\":[{\"message\":{\"role\":\"assistant\","
                         + "\"content\":\"嗨，我是小婉\"}}]}"));
 
-        String reply = adapter.chat(List.of(
+        String reply = adapter.chat(LlmTaskType.BACKGROUND, List.of(
                 Map.of("role", "system", "content", "你是小婉"),
                 Map.of("role", "user", "content", "你好")));
 
@@ -116,7 +116,7 @@ class DoubaoAdapterTest {
                 .setHeader("Content-Type", "application/json")
                 .setBody("{\"error\":{\"message\":\"Invalid API key\"}}"));
 
-        assertThatThrownBy(() -> adapter.chat(
+        assertThatThrownBy(() -> adapter.chat(LlmTaskType.BACKGROUND,
                 List.of(Map.of("role", "user", "content", "hi"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
@@ -130,7 +130,7 @@ class DoubaoAdapterTest {
                 .setHeader("Content-Type", "application/json")
                 .setBody("{\"error\":{\"message\":\"Rate limit exceeded\"}}"));
 
-        assertThatThrownBy(() -> adapter.chat(
+        assertThatThrownBy(() -> adapter.chat(LlmTaskType.BACKGROUND,
                 List.of(Map.of("role", "user", "content", "hi"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
@@ -144,7 +144,7 @@ class DoubaoAdapterTest {
                 .setHeader("Content-Type", "application/json")
                 .setBody("{\"error\":{\"message\":\"Internal server error\"}}"));
 
-        assertThatThrownBy(() -> adapter.chat(
+        assertThatThrownBy(() -> adapter.chat(LlmTaskType.BACKGROUND,
                 List.of(Map.of("role", "user", "content", "hi"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
@@ -155,7 +155,7 @@ class DoubaoAdapterTest {
     void chat_shouldThrowOnNetworkError() throws IOException {
         mockServer.shutdown();
 
-        assertThatThrownBy(() -> adapter.chat(
+        assertThatThrownBy(() -> adapter.chat(LlmTaskType.BACKGROUND,
                 List.of(Map.of("role", "user", "content", "hi"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
@@ -169,7 +169,7 @@ class DoubaoAdapterTest {
                 .setHeader("Content-Type", "application/json")
                 .setBody("{\"unexpected\":\"shape\"}"));
 
-        assertThatThrownBy(() -> adapter.chat(
+        assertThatThrownBy(() -> adapter.chat(LlmTaskType.BACKGROUND,
                 List.of(Map.of("role", "user", "content", "hi"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())

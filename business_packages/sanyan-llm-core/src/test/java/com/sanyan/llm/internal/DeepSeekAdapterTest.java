@@ -86,7 +86,7 @@ class DeepSeekAdapterTest {
                 .setBody("{\"choices\":[{\"message\":{\"role\":\"assistant\","
                         + "\"content\":\"你好，我是 DeepSeek\"}}]}"));
 
-        String reply = adapter.chat(List.of(
+        String reply = adapter.chat(LlmTaskType.BACKGROUND, List.of(
                 Map.of("role", "system", "content", "你是后台摘要助手"),
                 Map.of("role", "user", "content", "总结一下今天的对话")));
 
@@ -114,7 +114,7 @@ class DeepSeekAdapterTest {
                 .setHeader("Content-Type", "application/json")
                 .setBody("{\"error\":{\"message\":\"Invalid API key\"}}"));
 
-        assertThatThrownBy(() -> adapter.chat(
+        assertThatThrownBy(() -> adapter.chat(LlmTaskType.BACKGROUND,
                 List.of(Map.of("role", "user", "content", "hi"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
@@ -128,7 +128,7 @@ class DeepSeekAdapterTest {
                 .setHeader("Content-Type", "application/json")
                 .setBody("{\"error\":{\"message\":\"Rate limit exceeded\"}}"));
 
-        assertThatThrownBy(() -> adapter.chat(
+        assertThatThrownBy(() -> adapter.chat(LlmTaskType.BACKGROUND,
                 List.of(Map.of("role", "user", "content", "hi"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
@@ -142,7 +142,7 @@ class DeepSeekAdapterTest {
                 .setHeader("Content-Type", "application/json")
                 .setBody("{\"error\":{\"message\":\"Internal server error\"}}"));
 
-        assertThatThrownBy(() -> adapter.chat(
+        assertThatThrownBy(() -> adapter.chat(LlmTaskType.BACKGROUND,
                 List.of(Map.of("role", "user", "content", "hi"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())
@@ -150,11 +150,48 @@ class DeepSeekAdapterTest {
     }
 
     @Test
+    void chat_userFacing_shouldIncludeAntiRepeatDecodingParams() throws Exception {
+        mockServer.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"嗨\"}}]}"));
+
+        adapter.chat(LlmTaskType.USER_FACING,
+                List.of(Map.of("role", "user", "content", "在吗")));
+
+        RecordedRequest request = mockServer.takeRequest(2, TimeUnit.SECONDS);
+        assertThat(request).isNotNull();
+        String body = request.getBody().readUtf8();
+        assertThat(body).contains("\"temperature\":0.9");
+        assertThat(body).contains("\"frequency_penalty\":0.5");
+        assertThat(body).contains("\"presence_penalty\":0.3");
+    }
+
+    @Test
+    void chat_background_shouldNotIncludeDecodingParams() throws Exception {
+        mockServer.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"嗨\"}}]}"));
+
+        adapter.chat(LlmTaskType.BACKGROUND,
+                List.of(Map.of("role", "user", "content", "{抽取}")));
+
+        RecordedRequest request = mockServer.takeRequest(2, TimeUnit.SECONDS);
+        assertThat(request).isNotNull();
+        String body = request.getBody().readUtf8();
+        // 断言不出现 JSON key 形式（带引号），避免 message 文本恰好含这些词导致裸子串误判
+        assertThat(body).doesNotContain("\"temperature\"");
+        assertThat(body).doesNotContain("\"frequency_penalty\"");
+        assertThat(body).doesNotContain("\"presence_penalty\"");
+    }
+
+    @Test
     void chat_shouldThrowOnReadTimeout() throws IOException {
         // 关掉 mock server 模拟连接不通——会触发 RestClient 的连接异常
         mockServer.shutdown();
 
-        assertThatThrownBy(() -> adapter.chat(
+        assertThatThrownBy(() -> adapter.chat(LlmTaskType.BACKGROUND,
                 List.of(Map.of("role", "user", "content", "hi"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrCode())

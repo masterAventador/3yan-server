@@ -38,7 +38,7 @@ class LLMProviderRouterTest {
         LLMProvider userFacing = mock(LLMProvider.class);
         when(userFacing.supports(LlmTaskType.USER_FACING)).thenReturn(true);
         when(userFacing.supports(LlmTaskType.BACKGROUND)).thenReturn(false);
-        when(userFacing.chat(any())).thenReturn("user-reply");
+        when(userFacing.chat(any(), any())).thenReturn("user-reply");
 
         LLMProvider background = mock(LLMProvider.class);
         when(background.supports(LlmTaskType.USER_FACING)).thenReturn(false);
@@ -49,8 +49,8 @@ class LLMProviderRouterTest {
         String reply = router.chat(LlmTaskType.USER_FACING, List.of(Map.of("role", "system", "content", "你是小婉")));
 
         assertThat(reply).isEqualTo("user-reply");
-        verify(background, never()).chat(any());
-        verify(userFacing, times(1)).chat(any());
+        verify(background, never()).chat(any(), any());
+        verify(userFacing, times(1)).chat(any(), any());
     }
 
     @Test
@@ -62,22 +62,22 @@ class LLMProviderRouterTest {
         LLMProvider background = mock(LLMProvider.class);
         when(background.supports(LlmTaskType.USER_FACING)).thenReturn(false);
         when(background.supports(LlmTaskType.BACKGROUND)).thenReturn(true);
-        when(background.chat(any())).thenReturn("bg-summary");
+        when(background.chat(any(), any())).thenReturn("bg-summary");
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(userFacing, background));
 
         String reply = router.chat(LlmTaskType.BACKGROUND, List.of(Map.of("role", "system", "content", "你是摘要助手")));
 
         assertThat(reply).isEqualTo("bg-summary");
-        verify(userFacing, never()).chat(any());
-        verify(background, times(1)).chat(any());
+        verify(userFacing, never()).chat(any(), any());
+        verify(background, times(1)).chat(any(), any());
     }
 
     @Test
     void chat_shouldPassMessagesThroughUnchanged() {
         LLMProvider provider = mock(LLMProvider.class);
         when(provider.supports(LlmTaskType.USER_FACING)).thenReturn(true);
-        when(provider.chat(any())).thenReturn("ok");
+        when(provider.chat(any(), any())).thenReturn("ok");
 
         LLMProviderRouter router = new LLMProviderRouter(List.of(provider));
 
@@ -87,7 +87,7 @@ class LLMProviderRouterTest {
         );
         router.chat(LlmTaskType.USER_FACING, input);
 
-        verify(provider).chat(input);
+        verify(provider).chat(LlmTaskType.USER_FACING, input);
     }
 
     @Test
@@ -130,7 +130,7 @@ class LLMProviderRouterTest {
                 .extracting(e -> ((BusinessException) e).getErrCode())
                 .isEqualTo(LlmErrCode.LLM_PROVIDER_CONFLICT);
 
-        verify(p1, never()).chat(any());
-        verify(p2, never()).chat(any());
+        verify(p1, never()).chat(any(), any());
+        verify(p2, never()).chat(any(), any());
     }
 }

@@ -38,6 +38,15 @@ public class DeepSeekAdapter implements LLMProvider {
 
     private static final String CHAT_COMPLETIONS_PATH = "/chat/completions";
 
+    /**
+     * USER_FACING 任务的反重复解码参数：
+     * 提高随机性 + 对重复 token/topic 加惩罚，抑制连续对话里的复读现象。
+     * BACKGROUND 任务（JSON 抽取 / 摘要）不附加这些参数，保持结构化输出稳定。
+     */
+    private static final double USER_FACING_TEMPERATURE = 0.9;
+    private static final double USER_FACING_FREQUENCY_PENALTY = 0.5;
+    private static final double USER_FACING_PRESENCE_PENALTY = 0.3;
+
     private final String apiKey;
     private final String model;
     private final RestClient restClient;
@@ -88,10 +97,8 @@ public class DeepSeekAdapter implements LLMProvider {
     }
 
     @Override
-    public String chat(List<Map<String, String>> chatMessages) {
-        Map<String, Object> requestBody = Map.of(
-                "model", model,
-                "messages", chatMessages);
+    public String chat(LlmTaskType taskType, List<Map<String, String>> chatMessages) {
+        Map<String, Object> requestBody = buildRequestBody(taskType, chatMessages);
 
         try {
             long start = System.currentTimeMillis();
@@ -123,6 +130,22 @@ public class DeepSeekAdapter implements LLMProvider {
             log.warn("DeepSeek API 网络异常: {}", e.getMessage());
             throw new BusinessException(LlmErrCode.LLM_UPSTREAM_UNAVAILABLE);
         }
+    }
+
+    /**
+     * 按 taskType 构造请求体：{@code USER_FACING} 附加反重复解码参数抑制复读；
+     * {@code BACKGROUND}（JSON 抽取 / 摘要）保持 model+messages 最小体，确保结构化输出稳定。
+     */
+    private Map<String, Object> buildRequestBody(LlmTaskType taskType, List<Map<String, String>> chatMessages) {
+        if (taskType == LlmTaskType.USER_FACING) {
+            return Map.of(
+                    "model", model,
+                    "messages", chatMessages,
+                    "temperature", USER_FACING_TEMPERATURE,
+                    "frequency_penalty", USER_FACING_FREQUENCY_PENALTY,
+                    "presence_penalty", USER_FACING_PRESENCE_PENALTY);
+        }
+        return Map.of("model", model, "messages", chatMessages);
     }
 
     @Override
