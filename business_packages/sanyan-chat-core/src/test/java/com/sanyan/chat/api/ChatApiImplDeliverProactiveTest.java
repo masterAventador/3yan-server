@@ -53,4 +53,12 @@ class ChatApiImplDeliverProactiveTest {
         assertThat(dtos).hasSize(1);
         assertThat(dtos.get(0).content()).isEqualTo("早安");
     }
+
+    @Test
+    void countUnansweredProactive_delegates_to_repository() {
+        when(repository.countUnansweredProactive(1L)).thenReturn(4L);
+
+        assertThat(chatApi.countUnansweredProactive(1L)).isEqualTo(4L);
+        verify(repository).countUnansweredProactive(1L);
+    }
 }

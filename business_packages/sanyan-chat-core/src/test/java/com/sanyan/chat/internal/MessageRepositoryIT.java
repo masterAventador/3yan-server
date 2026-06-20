@@ -78,4 +78,28 @@ class MessageRepositoryIT extends PostgresTestcontainerSupport {
         assertThat(recent.get(0).getContent()).isEqualTo("睡了吗"); // id 降序，最新在前
         assertThat(recent).allMatch(MessageEntity::isProactive);
     }
+
+    @Test
+    void countProactiveSinceLastUserMessage() {
+        seedUser(1L);
+        persistMessage(1L, SenderType.AI, "早安1", true);   // 用户首条消息前的主动消息也算未回应
+        persistMessage(1L, SenderType.USER, "嗨", false);    // 用户最后回话点
+        persistMessage(1L, SenderType.AI, "早安2", true);
+        persistMessage(1L, SenderType.AI, "在吗", false);     // 非主动不计
+        persistMessage(1L, SenderType.AI, "晚安2", true);
+        em.flush();
+
+        long unanswered = repository.countUnansweredProactive(1L);
+        assertThat(unanswered).isEqualTo(2); // 早安2 + 晚安2
+    }
+
+    @Test
+    void countProactive_whenNoUserMessage_countsAll() {
+        seedUser(2L);
+        persistMessage(2L, SenderType.AI, "早安", true);
+        persistMessage(2L, SenderType.AI, "晚安", true);
+        em.flush();
+
+        assertThat(repository.countUnansweredProactive(2L)).isEqualTo(2);
+    }
 }

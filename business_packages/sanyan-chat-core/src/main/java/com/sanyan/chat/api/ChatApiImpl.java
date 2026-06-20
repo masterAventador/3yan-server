@@ -60,4 +60,9 @@ public class ChatApiImpl implements ChatApi {
     public List<Long> deliverProactiveMessage(Long userId, Long characterId, List<String> segments) {
         return deliveryService.deliver(userId, characterId, segments);
     }
+
+    @Override
+    public long countUnansweredProactive(Long userId) {
+        return repository.countUnansweredProactive(userId);
+    }
 }

@@ -76,4 +76,7 @@ public interface ChatApi {
      * @return 落库的 ai message id 列表（与 segments 一一对应、顺序一致）
      */
     List<Long> deliverProactiveMessage(Long userId, Long characterId, List<String> segments);
+
+    /** 该用户自最后一条消息以来未回应的主动推送条数。供主动推送互动退避降频。 */
+    long countUnansweredProactive(Long userId);
 }

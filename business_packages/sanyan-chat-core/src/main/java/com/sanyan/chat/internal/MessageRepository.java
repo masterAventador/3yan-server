@@ -2,6 +2,8 @@ package com.sanyan.chat.internal;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -38,4 +40,18 @@ public interface MessageRepository extends JpaRepository<MessageEntity, Long> {
      * 同义的早晚安/想你/熬夜话题。条数上限由 {@code pageable} 控制。
      */
     List<MessageEntity> findByUserIdAndIsProactiveTrueOrderByIdDesc(Long userId, Pageable pageable);
+
+    /**
+     * 统计某用户"自最后一条 user 消息之后"的 AI 主动消息条数（未回应主动消息数）。
+     * 若该用户从无 user 消息，COALESCE 兜底为 0，等于统计其全部主动消息。
+     * 供主动推送互动退避：连续不回应则停早晚安。
+     */
+    @Query("""
+            select count(m) from MessageEntity m
+            where m.userId = :userId and m.isProactive = true
+              and m.id > coalesce(
+                  (select max(u.id) from MessageEntity u
+                    where u.userId = :userId and u.senderType = 'user'), 0)
+            """)
+    long countUnansweredProactive(@Param("userId") Long userId);
 }
