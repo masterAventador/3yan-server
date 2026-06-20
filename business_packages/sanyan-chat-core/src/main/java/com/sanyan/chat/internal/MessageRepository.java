@@ -30,4 +30,12 @@ public interface MessageRepository extends JpaRepository<MessageEntity, Long> {
      * 按参数数量区分。
      */
     List<MessageEntity> findByUserIdAndIdGreaterThanOrderByIdAsc(Long userId, Long sinceMessageId);
+
+    /**
+     * P-T5：取某用户最近 N 条 AI 主动推送消息（is_proactive=true），按 id 降序（最新在前）。
+     *
+     * <p>供主动推送生成时做"反重复"——把最近推过的内容喂回 prompt，让 LLM 别复读
+     * 同义的早晚安/想你/熬夜话题。条数上限由 {@code pageable} 控制。
+     */
+    List<MessageEntity> findByUserIdAndIsProactiveTrueOrderByIdDesc(Long userId, Pageable pageable);
 }

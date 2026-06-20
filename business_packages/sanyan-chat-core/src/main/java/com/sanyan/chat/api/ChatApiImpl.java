@@ -40,6 +40,12 @@ public class ChatApiImpl implements ChatApi {
     }
 
     @Override
+    public List<MessageDto> listRecentProactive(Long userId, int limit) {
+        return MessageDtoMapper.toDtos(
+                repository.findByUserIdAndIsProactiveTrueOrderByIdDesc(userId, PageRequest.of(0, limit)));
+    }
+
+    @Override
     public long countSinceMessageId(Long userId, Long sinceMessageId) {
         return repository.countByUserIdAndIdGreaterThan(userId, sinceMessageId);
     }

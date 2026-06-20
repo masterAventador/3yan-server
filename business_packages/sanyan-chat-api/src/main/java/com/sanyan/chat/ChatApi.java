@@ -41,6 +41,16 @@ public interface ChatApi {
     List<MessageDto> listRecentByUser(Long userId, int limit);
 
     /**
+     * 查某用户最近 N 条 AI 主动推送消息（is_proactive=true），按 id 降序（最新在前）。
+     *
+     * <p>对应 {@code MessageRepository#findByUserIdAndIsProactiveTrueOrderByIdDesc(userId, PageRequest.of(0, limit))}。
+     * 供主动推送生成时做"反重复"——把最近推过的内容喂回 prompt，让 LLM 别复读同义的早晚安/想你话题。
+     *
+     * @param limit 上限条数（必须 &gt; 0）
+     */
+    List<MessageDto> listRecentProactive(Long userId, int limit);
+
+    /**
      * 统计某用户自指定 messageId 之后的消息条数（不含 sinceMessageId 本身）。
      *
      * <p>对应 {@code MessageRepository#countByUserIdAndIdGreaterThan}。
