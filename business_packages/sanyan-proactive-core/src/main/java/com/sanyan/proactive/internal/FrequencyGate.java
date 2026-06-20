@@ -1,5 +1,6 @@
 package com.sanyan.proactive.internal;
 
+import com.sanyan.chat.ChatApi;
 import com.sanyan.common.cache.KvCache;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,11 +29,16 @@ public class FrequencyGate {
 
     private final KvCache kvCache;
     private final ProactiveProperties props;
+    private final ChatApi chatApi;
 
     /** 可测时钟；默认系统时区。测试经 ReflectionTestUtils 注入固定 Clock。 */
     private Clock clock = Clock.systemDefaultZone();
 
     public boolean allow(Long userId, Long characterId, EventType type, int currentStage) {
+        if (type == EventType.A_GREETING && backoffActive(userId)) {
+            log.info("门控拒绝（互动退避：连续未回应，暂停早晚安）: userId={}", userId);
+            return false;
+        }
         if (isQuietHours()) {
             log.debug("门控拒绝（免打扰时段）: userId={}, type={}", userId, type);
             return false;
@@ -46,6 +52,23 @@ public class FrequencyGate {
             return false;
         }
         return true;
+    }
+
+    /**
+     * 互动退避：自用户最后回话以来未回应的主动消息达到阈值时，掐早晚安（仅 A_GREETING 关心）。
+     * 阈值配 0 关闭退避；查询失败按降级处理，fail-open 放行（退避只是降频优化，不应阻断正常门控）。
+     */
+    private boolean backoffActive(Long userId) {
+        int threshold = props.getUnansweredGreetingBackoffThreshold();
+        if (threshold <= 0) {
+            return false;   // 配 0 关闭退避
+        }
+        try {
+            return chatApi.countUnansweredProactive(userId) >= threshold;
+        } catch (Exception e) {
+            log.warn("互动退避查询失败，跳过退避关: userId={}, err={}", userId, e.getMessage());
+            return false;
+        }
     }
 
     public void recordSent(Long userId) {

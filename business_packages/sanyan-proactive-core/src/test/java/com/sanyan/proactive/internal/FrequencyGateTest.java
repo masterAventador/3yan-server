@@ -1,5 +1,6 @@
 package com.sanyan.proactive.internal;
 
+import com.sanyan.chat.ChatApi;
 import com.sanyan.common.cache.KvCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import static org.mockito.Mockito.when;
 class FrequencyGateTest {
 
     @Mock KvCache kvCache;
+    @Mock ChatApi chatApi;
 
     ProactiveProperties props;
     FrequencyGate gate;
@@ -54,7 +56,7 @@ class FrequencyGateTest {
         scenes.put(0, s0);
         props.setScenesByStage(scenes);
 
-        gate = new FrequencyGate(kvCache, props);
+        gate = new FrequencyGate(kvCache, props, chatApi);
         ReflectionTestUtils.setField(gate, "clock", dayClock());
     }
 
@@ -97,5 +99,39 @@ class FrequencyGateTest {
     void recordSent_should_increment_daily_counter_with_36h_ttl() {
         gate.recordSent(1L);
         verify(kvCache).increment(anyString(), eq(Duration.ofHours(36)));
+    }
+
+    @Test
+    void allow_should_block_greeting_when_unanswered_exceeds_threshold() {
+        // 阈值默认 3；造 4 条未回应。前三关（非免打扰 + stage2 场景开 + 未达上限）均放行，唯独退避拦截。
+        when(chatApi.countUnansweredProactive(1L)).thenReturn(4L);
+
+        assertThat(gate.allow(1L, 99L, EventType.A_GREETING, 2)).isFalse();
+    }
+
+    @Test
+    void allow_should_still_permit_recall_when_unanswered_exceeds_threshold() {
+        // 召回不受退避影响：B_RECALL 根本不查 chatApi，连续未回应也照常放行
+        when(kvCache.get(anyString())).thenReturn("1"); // 未达每日上限
+
+        assertThat(gate.allow(1L, 99L, EventType.B_RECALL, 2)).isTrue();
+    }
+
+    @Test
+    void allow_should_permit_greeting_when_unanswered_below_threshold() {
+        when(chatApi.countUnansweredProactive(1L)).thenReturn(2L);
+        when(kvCache.get(anyString())).thenReturn("1"); // 未达每日上限
+
+        assertThat(gate.allow(1L, 99L, EventType.A_GREETING, 2)).isTrue();
+    }
+
+    @Test
+    void allow_should_permit_greeting_when_backoff_query_fails() {
+        // 退避查询抛异常 → fail-open 放行（best-effort 降频优化，不应阻断正常门控）。
+        // 钉住降级方向：若有人把 catch 改成异常时拦截，chat DB 抖动会误杀所有早晚安。
+        when(chatApi.countUnansweredProactive(1L)).thenThrow(new RuntimeException("chat db down"));
+        when(kvCache.get(anyString())).thenReturn("1"); // 未达每日上限
+
+        assertThat(gate.allow(1L, 99L, EventType.A_GREETING, 2)).isTrue();
     }
 }

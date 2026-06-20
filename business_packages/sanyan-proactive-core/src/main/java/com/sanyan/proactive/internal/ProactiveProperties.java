@@ -36,6 +36,8 @@ public class ProactiveProperties {
     private List<Integer> dailyCapByStage = new ArrayList<>(List.of(2, 3, 4, 5, 6));
     /** 每 stage 允许的场景开关；key = stage。 */
     private Map<Integer, SceneFlags> scenesByStage = new HashMap<>();
+    /** 互动退避：自用户最后回话以来未回应的主动消息达到此数，停发 A_GREETING（放行 B_RECALL）。0 关闭退避。 */
+    private int unansweredGreetingBackoffThreshold = 3;
 
     @Data
     public static class Greeting {
