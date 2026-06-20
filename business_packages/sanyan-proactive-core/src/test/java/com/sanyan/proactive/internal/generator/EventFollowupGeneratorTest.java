@@ -32,7 +32,7 @@ class EventFollowupGeneratorTest {
 
     @Mock LlmApi llmApi;
     @Mock MemoryApi memoryApi;
-    ProactivePromptBuilder promptBuilder = new ProactivePromptBuilder();
+    ProactivePromptBuilder promptBuilder = new ProactivePromptBuilder(java.time.Clock.systemDefaultZone());
 
     private EventFollowupGenerator generator() {
         return new EventFollowupGenerator(llmApi, memoryApi, promptBuilder);

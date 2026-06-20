@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -397,58 +396,8 @@ class AiServiceTest {
                 .contains("不要模糊化");
     }
 
-    // ---------- I5: toSpokenChineseTime —— LLM 时刻幻觉防御 ----------
-
-    @Test
-    void toSpokenChineseTime_midnight() {
-        assertThat(AiService.toSpokenChineseTime(LocalDateTime.of(2026, 5, 25, 0, 0)))
-                .isEqualTo("凌晨十二点整");
-    }
-
-    @Test
-    void toSpokenChineseTime_earlyMorningWithHalfHour() {
-        assertThat(AiService.toSpokenChineseTime(LocalDateTime.of(2026, 5, 25, 1, 30)))
-                .isEqualTo("凌晨一点半");
-    }
-
-    @Test
-    void toSpokenChineseTime_morningOnTheHour() {
-        assertThat(AiService.toSpokenChineseTime(LocalDateTime.of(2026, 5, 25, 6, 0)))
-                .isEqualTo("上午六点整");
-    }
-
-    @Test
-    void toSpokenChineseTime_noon() {
-        assertThat(AiService.toSpokenChineseTime(LocalDateTime.of(2026, 5, 25, 12, 0)))
-                .isEqualTo("中午十二点整");
-    }
-
-    @Test
-    void toSpokenChineseTime_noonHalfHour() {
-        // hour == 12 走"中午"分支
-        assertThat(AiService.toSpokenChineseTime(LocalDateTime.of(2026, 5, 25, 12, 30)))
-                .isEqualTo("中午十二点半");
-    }
-
-    @Test
-    void toSpokenChineseTime_afternoonWithSingleDigitMinute() {
-        // 14:05 → "下午两点零五分"（个位数分钟带"零"前缀）
-        assertThat(AiService.toSpokenChineseTime(LocalDateTime.of(2026, 5, 25, 14, 5)))
-                .isEqualTo("下午两点零五分");
-    }
-
-    @Test
-    void toSpokenChineseTime_eveningOnTheHour() {
-        assertThat(AiService.toSpokenChineseTime(LocalDateTime.of(2026, 5, 25, 18, 0)))
-                .isEqualTo("晚上六点整");
-    }
-
-    @Test
-    void toSpokenChineseTime_eveningWithDoubleDigitMinute() {
-        // 23:45 → "晚上十一点四十五分"
-        assertThat(AiService.toSpokenChineseTime(LocalDateTime.of(2026, 5, 25, 23, 45)))
-                .isEqualTo("晚上十一点四十五分");
-    }
+    // 注：中文口语时刻逻辑（toSpokenChineseTime）已下沉到 foundation_packages/sanyan-common-util
+    // 的 SpokenChineseTime，原 toSpokenChineseTime_* 用例已迁移到 SpokenChineseTimeTest。
 
     @Test
     void productionSystemPromptResource_containsRelationshipBoundaries() throws IOException {

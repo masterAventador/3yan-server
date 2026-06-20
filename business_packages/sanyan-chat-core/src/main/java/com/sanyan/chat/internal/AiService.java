@@ -3,6 +3,7 @@ package com.sanyan.chat.internal;
 import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.AiCharacterDto;
 import com.sanyan.chat.SenderType;
+import com.sanyan.common.util.SpokenChineseTime;
 import com.sanyan.llm.LlmApi;
 import com.sanyan.llm.LlmTaskType;
 import com.sanyan.llm.dto.ChatMessage;
@@ -21,10 +22,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -159,63 +158,11 @@ public class AiService {
     }
 
     public String assembleSystemPrompt(String characterPrompt, String time) {
-        return characterPrompt + "\n\n[当前时间] " + time + "\n\n" + TIME_AWARENESS_GUIDE;
+        return characterPrompt + "\n\n" + SpokenChineseTime.CURRENT_TIME_PREFIX + time + "\n\n" + TIME_AWARENESS_GUIDE;
     }
 
     private String formatCurrentTime() {
-        LocalDateTime now = LocalDateTime.now();
-        String formatted = now.format(DateTimeFormatter.ofPattern("yyyy年M月d日 E HH:mm", Locale.CHINESE));
-        return formatted + "（" + toSpokenChineseTime(now) + "）";
-    }
-
-    /**
-     * 把 LocalDateTime 转换成中文口语时间描述，强化 LLM 对当前时间精度的感知。
-     * <p>例：01:30 → "凌晨一点半"，14:05 → "下午两点零五分"。
-     * <p>I5：实测豆包 / DeepSeek 在凌晨场景容易把 01:30 说成"两点多"，
-     * 把口语版本拼到「当前时间」括号里减少 LLM 数字→自然语言时间的幻觉。
-     */
-    static String toSpokenChineseTime(LocalDateTime time) {
-        int hour = time.getHour();
-        int minute = time.getMinute();
-        String period;
-        int hour12;
-        if (hour == 0) { period = "凌晨"; hour12 = 12; }
-        else if (hour < 6) { period = "凌晨"; hour12 = hour; }
-        else if (hour < 12) { period = "上午"; hour12 = hour; }
-        else if (hour == 12) { period = "中午"; hour12 = 12; }
-        else if (hour < 18) { period = "下午"; hour12 = hour - 12; }
-        else { period = "晚上"; hour12 = hour - 12; }
-
-        // 中文口语：2 点习惯说"两点"而非"二点"（分钟里的 2 仍说"二"）
-        String hourStr = (hour12 == 2 ? "两" : chineseNumber(hour12)) + "点";
-        String minuteStr;
-        if (minute == 0) {
-            minuteStr = "整";
-        } else if (minute == 30) {
-            minuteStr = "半";
-        } else if (minute < 10) {
-            minuteStr = "零" + chineseNumber(minute) + "分";
-        } else {
-            minuteStr = chineseDoubleDigitNumber(minute) + "分";
-        }
-        return period + hourStr + minuteStr;
-    }
-
-    private static final String[] DIGITS = {"零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二"};
-
-    private static String chineseNumber(int n) {
-        if (n >= 0 && n <= 12) return DIGITS[n];
-        return String.valueOf(n);  // 兜底（hour12 取值 1-12，minute 个位 0-9，不应该走到这里）
-    }
-
-    private static String chineseDoubleDigitNumber(int n) {
-        // 10-59 用于分钟（"十" / "十一" / ... / "五十九"）
-        if (n < 10) return DIGITS[n];
-        if (n == 10) return "十";
-        if (n < 20) return "十" + DIGITS[n - 10];
-        int tens = n / 10;
-        int ones = n % 10;
-        return DIGITS[tens] + "十" + (ones == 0 ? "" : DIGITS[ones]);
+        return SpokenChineseTime.label(LocalDateTime.now());
     }
 
     /**

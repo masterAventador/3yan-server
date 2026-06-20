@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ProactivePromptBuilderTest {
 
-    private final ProactivePromptBuilder builder = new ProactivePromptBuilder();
+    private final ProactivePromptBuilder builder = new ProactivePromptBuilder(java.time.Clock.systemDefaultZone());
 
     private GenerateContext ctx(String stageSegment, MemoryContext mem, Map<String, Object> payload) {
         RelationshipDto rel = new RelationshipDto(1L, 1L, 250, 1, "朋友", 300, 0.5);
@@ -52,5 +52,19 @@ class ProactivePromptBuilderTest {
         assertThat(system).doesNotContain("当前关系阶段");
         // 不应出现记忆前缀
         assertThat(system).doesNotContain("她记得");
+    }
+
+    @Test
+    void build_should_inject_current_time_into_system() {
+        // 固定时钟：2026-06-17 22:30 (UTC+8)，周三晚上
+        java.time.Clock fixed = java.time.Clock.fixed(
+                java.time.Instant.parse("2026-06-17T14:30:00Z"), java.time.ZoneId.of("Asia/Shanghai"));
+        ProactivePromptBuilder b = new ProactivePromptBuilder(fixed);
+
+        List<ChatMessage> messages = b.build(ctx("", null, Map.of()), "说句话。");
+        String system = messages.get(0).content();
+        assertThat(system).contains("[当前时间]");
+        assertThat(system).contains("2026年6月17日");
+        assertThat(system).contains("晚上十点半");
     }
 }

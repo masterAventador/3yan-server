@@ -25,7 +25,7 @@ import static org.mockito.Mockito.when;
 class RecallGeneratorTest {
 
     @Mock LlmApi llmApi;
-    ProactivePromptBuilder promptBuilder = new ProactivePromptBuilder();
+    ProactivePromptBuilder promptBuilder = new ProactivePromptBuilder(java.time.Clock.systemDefaultZone());
 
     private RecallGenerator generator() {
         return new RecallGenerator(llmApi, promptBuilder);

@@ -33,7 +33,7 @@ class EmotionCareGeneratorTest {
 
     @Mock LlmApi llmApi;
     @Mock MemoryApi memoryApi;
-    ProactivePromptBuilder promptBuilder = new ProactivePromptBuilder();
+    ProactivePromptBuilder promptBuilder = new ProactivePromptBuilder(java.time.Clock.systemDefaultZone());
 
     private EmotionCareGenerator generator() {
         return new EmotionCareGenerator(llmApi, memoryApi, promptBuilder);

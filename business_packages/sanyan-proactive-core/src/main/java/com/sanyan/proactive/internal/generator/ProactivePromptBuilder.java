@@ -1,8 +1,11 @@
 package com.sanyan.proactive.internal.generator;
 
+import com.sanyan.common.util.SpokenChineseTime;
 import com.sanyan.llm.dto.ChatMessage;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +19,7 @@ import java.util.List;
  *   <li>user: 场景指令（caller 拼好的"现在请你……"，由各 Generator 传入）</li>
  * </ol>
  *
- * <p>无实例字段，注册成 Bean 仅为让各 Generator 走 DI 注入便于测试。
+ * <p>注入 {@link Clock}（全局 ClockConfig 提供）以便单测固定时间，断言 system 段的"当前时间"锚点。
  */
 @Component
 public class ProactivePromptBuilder {
@@ -33,6 +36,12 @@ public class ProactivePromptBuilder {
 
     static final String MEMORY_PREFIX = "她记得关于你的事：\n";
 
+    private final Clock clock;
+
+    public ProactivePromptBuilder(Clock clock) {
+        this.clock = clock;
+    }
+
     /**
      * @param ctx              生成上下文
      * @param sceneInstruction 场景指令（user 段），由各 Generator 按场景拼好传入
@@ -40,6 +49,8 @@ public class ProactivePromptBuilder {
      */
     public List<ChatMessage> build(GenerateContext ctx, String sceneInstruction) {
         StringBuilder system = new StringBuilder(PERSONA_BASE);
+        system.append("\n\n").append(SpokenChineseTime.CURRENT_TIME_PREFIX)
+              .append(SpokenChineseTime.label(LocalDateTime.now(clock)));
 
         if (ctx.stagePromptSegment() != null && !ctx.stagePromptSegment().isBlank()) {
             system.append("\n\n").append(ctx.stagePromptSegment());

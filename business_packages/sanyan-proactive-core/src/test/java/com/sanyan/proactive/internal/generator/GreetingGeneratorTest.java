@@ -25,7 +25,7 @@ import static org.mockito.Mockito.when;
 class GreetingGeneratorTest {
 
     @Mock LlmApi llmApi;
-    ProactivePromptBuilder promptBuilder = new ProactivePromptBuilder();
+    ProactivePromptBuilder promptBuilder = new ProactivePromptBuilder(java.time.Clock.systemDefaultZone());
 
     private GreetingGenerator generator() {
         return new GreetingGenerator(llmApi, promptBuilder);
