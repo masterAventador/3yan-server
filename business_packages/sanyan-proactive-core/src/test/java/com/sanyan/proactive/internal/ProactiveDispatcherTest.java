@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.RelationshipDto;
 import com.sanyan.chat.ChatApi;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.dto.MemoryContext;
 import com.sanyan.proactive.internal.fixtures.EventPendingTestFixtures;
@@ -11,14 +12,17 @@ import com.sanyan.proactive.internal.generator.GenerateContext;
 import com.sanyan.proactive.internal.generator.ProactiveGenerator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -70,6 +74,7 @@ class ProactiveDispatcherTest {
         when(memoryApi.getRelevantContext(eq(1L), eq(99L), anyString())).thenReturn(new MemoryContext("记忆片段"));
         when(greetingGenerator.supportsType()).thenReturn(EventType.A_GREETING);
         when(greetingGenerator.generate(any(GenerateContext.class))).thenReturn(List.of("早安宝", "今天也要开心"));
+        when(chatApi.listRecentProactive(eq(1L), anyInt())).thenReturn(List.of());
 
         EventPendingEntity event = EventPendingTestFixtures.scheduled(
                 1L, 99L, EventType.A_GREETING, Instant.now());
@@ -93,6 +98,7 @@ class ProactiveDispatcherTest {
         when(memoryApi.getRelevantContext(eq(1L), eq(99L), anyString())).thenReturn(new MemoryContext("记忆片段"));
         when(greetingGenerator.supportsType()).thenReturn(EventType.A_GREETING);
         when(greetingGenerator.generate(any(GenerateContext.class))).thenReturn(List.of("早安宝"));
+        when(chatApi.listRecentProactive(eq(1L), anyInt())).thenReturn(List.of());
         // 消息已投出，recordSent（Redis）抛异常 —— best-effort，不得把 SENT 覆盖回 SCHEDULED 触发重投
         org.mockito.Mockito.doThrow(new RuntimeException("redis down")).when(frequencyGate).recordSent(1L);
 
@@ -117,6 +123,7 @@ class ProactiveDispatcherTest {
         when(frequencyGate.allow(1L, 99L, EventType.C_EVENT_FOLLOWUP, 2)).thenReturn(true);
         when(characterApi.getStagePromptSegment(1L, 99L)).thenReturn("");
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), anyString())).thenReturn(null);
+        when(chatApi.listRecentProactive(eq(1L), anyInt())).thenReturn(List.of());
         // 消息已投出，markMemoryItemDone 抛异常 —— best-effort，不得覆盖 SENT
         org.mockito.Mockito.doThrow(new RuntimeException("mark fail")).when(memoryApi).markMemoryItemDone(555L);
 
@@ -142,6 +149,7 @@ class ProactiveDispatcherTest {
         when(frequencyGate.allow(1L, 99L, EventType.C_EVENT_FOLLOWUP, 2)).thenReturn(true);
         when(characterApi.getStagePromptSegment(1L, 99L)).thenReturn("");
         when(memoryApi.getRelevantContext(anyLong(), anyLong(), anyString())).thenReturn(null);
+        when(chatApi.listRecentProactive(eq(1L), anyInt())).thenReturn(List.of());
 
         ProactiveDispatcher dispatcher = new ProactiveDispatcher(
                 characterApi, memoryApi, chatApi, frequencyGate, List.of(followup), new ObjectMapper(), repo);
@@ -154,6 +162,56 @@ class ProactiveDispatcherTest {
         assertThat(event.getStatus()).isEqualTo(EventStatus.SENT);
         verify(repo).save(event);
         verify(memoryApi).markMemoryItemDone(555L);
+    }
+
+    @Test
+    void deliver_should_feed_recent_proactive_into_context() {
+        when(characterApi.findOrCreateRelationship(1L, 99L)).thenReturn(relAtStage(2));
+        when(frequencyGate.allow(1L, 99L, EventType.A_GREETING, 2)).thenReturn(true);
+        when(characterApi.getStagePromptSegment(1L, 99L)).thenReturn("当前关系阶段：暧昧。");
+        when(memoryApi.getRelevantContext(eq(1L), eq(99L), anyString())).thenReturn(new MemoryContext("记忆片段"));
+        when(greetingGenerator.supportsType()).thenReturn(EventType.A_GREETING);
+        when(greetingGenerator.generate(any(GenerateContext.class))).thenReturn(List.of("再发一句"));
+        when(chatApi.listRecentProactive(eq(1L), anyInt()))
+                .thenReturn(List.of(new MessageDto(9L, 1L, "ai", "早安呀", LocalDateTime.now())));
+
+        EventPendingEntity event = EventPendingTestFixtures.scheduled(
+                1L, 99L, EventType.A_GREETING, Instant.now());
+
+        newDispatcher().dispatch(event);
+
+        ArgumentCaptor<GenerateContext> cap = ArgumentCaptor.forClass(GenerateContext.class);
+        verify(greetingGenerator).generate(cap.capture());
+        assertThat(cap.getValue().recentProactiveMessages()).containsExactly("早安呀");
+    }
+
+    @Test
+    void deliver_should_still_send_when_listRecentProactive_throws() {
+        when(characterApi.findOrCreateRelationship(1L, 99L)).thenReturn(relAtStage(2));
+        when(frequencyGate.allow(1L, 99L, EventType.A_GREETING, 2)).thenReturn(true);
+        when(characterApi.getStagePromptSegment(1L, 99L)).thenReturn("当前关系阶段：暧昧。");
+        when(memoryApi.getRelevantContext(eq(1L), eq(99L), anyString())).thenReturn(new MemoryContext("记忆片段"));
+        when(greetingGenerator.supportsType()).thenReturn(EventType.A_GREETING);
+        when(greetingGenerator.generate(any(GenerateContext.class))).thenReturn(List.of("早安宝"));
+        // 反重复查询（跨模块 DB 查询）抛异常 —— 只是锦上添花，应降级为"不加反重复段、照常发"
+        when(chatApi.listRecentProactive(eq(1L), anyInt())).thenThrow(new RuntimeException("db down"));
+
+        EventPendingEntity event = EventPendingTestFixtures.scheduled(
+                1L, 99L, EventType.A_GREETING, Instant.now());
+        event.setFailCount(0);
+
+        newDispatcher().dispatch(event);
+
+        // 降级而非打断：仍生成、仍投递、终态 SENT、不退避
+        assertThat(event.getStatus()).isEqualTo(EventStatus.SENT);
+        assertThat(event.getFailCount()).isEqualTo(0);
+        verify(chatApi).deliverProactiveMessage(1L, 99L, List.of("早安宝"));
+        verify(repo).save(event);
+
+        // 降级证据：ctx.recentProactiveMessages() 为空 list
+        ArgumentCaptor<GenerateContext> cap = ArgumentCaptor.forClass(GenerateContext.class);
+        verify(greetingGenerator).generate(cap.capture());
+        assertThat(cap.getValue().recentProactiveMessages()).isEmpty();
     }
 
     @Test

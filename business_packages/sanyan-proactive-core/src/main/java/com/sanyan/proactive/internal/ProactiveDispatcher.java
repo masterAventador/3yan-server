@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sanyan.character.CharacterApi;
 import com.sanyan.character.dto.RelationshipDto;
 import com.sanyan.chat.ChatApi;
+import com.sanyan.chat.dto.MessageDto;
 import com.sanyan.common.error.BusinessException;
 import com.sanyan.memory.MemoryApi;
 import com.sanyan.memory.dto.MemoryContext;
@@ -41,6 +42,9 @@ public class ProactiveDispatcher {
 
     /** 失败重试上限：超过则标 FAILED。 */
     static final int MAX_FAIL = 3;
+
+    /** 反重复：喂回 prompt 的"最近已主动发过"消息条数上限。 */
+    static final int RECENT_PROACTIVE_LIMIT = 5;
 
     private final CharacterApi characterApi;
     private final MemoryApi memoryApi;
@@ -109,8 +113,19 @@ public class ProactiveDispatcher {
         String stagePromptSegment = characterApi.getStagePromptSegment(userId, characterId);
         MemoryContext memoryContext = memoryApi.getRelevantContext(userId, characterId, "");
 
+        // 反重复查询是"锦上添花"：跨模块 DB 查询失败时降级为空 list（不加反重复段、照常发），
+        // 绝不能让它冒泡到 dispatch 的 catch 触发退避重排 / 标 FAILED，导致主动消息发不出去。
+        List<String> recentProactive;
+        try {
+            recentProactive = chatApi.listRecentProactive(userId, RECENT_PROACTIVE_LIMIT)
+                    .stream().map(MessageDto::content).toList();
+        } catch (Exception e) {
+            log.warn("查最近主动消息失败，本次不做反重复（降级）: userId={}, err={}", userId, e.getMessage());
+            recentProactive = List.of();
+        }
+
         GenerateContext ctx = new GenerateContext(
-                userId, characterId, relationship, stagePromptSegment, memoryContext, payload);
+                userId, characterId, relationship, stagePromptSegment, memoryContext, payload, recentProactive);
         List<String> segments = generator.generate(ctx);
 
         chatApi.deliverProactiveMessage(userId, characterId, segments);

@@ -16,7 +16,7 @@ class ProactivePromptBuilderTest {
 
     private GenerateContext ctx(String stageSegment, MemoryContext mem, Map<String, Object> payload) {
         RelationshipDto rel = new RelationshipDto(1L, 1L, 250, 1, "朋友", 300, 0.5);
-        return new GenerateContext(1L, 1L, rel, stageSegment, mem, payload);
+        return new GenerateContext(1L, 1L, rel, stageSegment, mem, payload, List.of());
     }
 
     @Test
@@ -66,6 +66,41 @@ class ProactivePromptBuilderTest {
         assertThat(system).contains("[当前时间]");
         assertThat(system).contains("2026年6月17日");
         assertThat(system).contains("晚上十点半");
+    }
+
+    @Test
+    void build_should_inject_recent_proactive_and_antirepeat_when_present() {
+        GenerateContext c = new GenerateContext(1L, 1L,
+                new RelationshipDto(1L, 1L, 250, 1, "朋友", 300, 0.5),
+                "", null, Map.of(),
+                List.of("早安呀", "睡了吗笨蛋"));   // 新字段：最近推过的
+        List<ChatMessage> messages = builder.build(c, "再发一句。");
+        String system = messages.get(0).content();
+        assertThat(system).contains("最近你已经主动发过");
+        assertThat(system).contains("早安呀");
+        assertThat(system).contains("睡了吗笨蛋");
+        assertThat(system).contains("不要重复");
+    }
+
+    @Test
+    void build_should_skip_null_or_blank_recent_proactive_elements() {
+        // MessageEntity.content 列允许 null，list 可能含 null / 空白；不应 NPE，应跳过这些元素
+        GenerateContext c = new GenerateContext(1L, 1L,
+                new RelationshipDto(1L, 1L, 250, 1, "朋友", 300, 0.5),
+                "", null, Map.of(),
+                java.util.Arrays.asList("早安呀", null, "  "));
+        String system = builder.build(c, "再发一句。").get(0).content();
+        assertThat(system).contains("早安呀");
+        assertThat(system).doesNotContain("null");
+    }
+
+    @Test
+    void build_should_skip_antirepeat_when_recent_empty() {
+        GenerateContext c = new GenerateContext(1L, 1L,
+                new RelationshipDto(1L, 1L, 250, 1, "朋友", 300, 0.5),
+                "", null, Map.of(), List.of());
+        String system = builder.build(c, "说句话。").get(0).content();
+        assertThat(system).doesNotContain("最近你已经主动发过");
     }
 
     @Test

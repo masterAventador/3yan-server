@@ -38,6 +38,10 @@ public class ProactivePromptBuilder {
 
     static final String MEMORY_PREFIX = "她记得关于你的事：\n";
 
+    /** 反重复段前缀：把最近主动推过的内容喂回，明确指令别复读同义话题/句式。 */
+    static final String RECENT_PROACTIVE_PREFIX =
+            "最近你已经主动发过这些（不要重复其中的话题和句式，换个角度或换件事说）：\n";
+
     private final Clock clock;
 
     public ProactivePromptBuilder(Clock clock) {
@@ -59,6 +63,16 @@ public class ProactivePromptBuilder {
         }
         if (ctx.memoryContext() != null && !ctx.memoryContext().isEmpty()) {
             system.append("\n\n").append(MEMORY_PREFIX).append(ctx.memoryContext().text());
+        }
+
+        List<String> recent = ctx.recentProactiveMessages();
+        if (recent != null && !recent.isEmpty()) {
+            system.append("\n\n").append(RECENT_PROACTIVE_PREFIX);
+            for (String m : recent) {
+                // MessageEntity.content 列允许 null，list 可能含 null / 空白，跳过避免 NPE 和空行
+                if (m == null || m.isBlank()) continue;
+                system.append("- ").append(m.replace("\n", " ")).append("\n");
+            }
         }
 
         List<ChatMessage> messages = new ArrayList<>();

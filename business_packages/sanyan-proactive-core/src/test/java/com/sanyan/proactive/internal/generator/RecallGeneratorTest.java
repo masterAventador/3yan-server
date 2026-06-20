@@ -34,7 +34,7 @@ class RecallGeneratorTest {
     private GenerateContext ctx(int level) {
         RelationshipDto rel = new RelationshipDto(1L, 1L, 250, 1, "朋友", 300, 0.5);
         return new GenerateContext(1L, 1L, rel, "", MemoryContext.EMPTY,
-                Map.of("escalationLevel", level));
+                Map.of("escalationLevel", level), List.of());
     }
 
     @Test

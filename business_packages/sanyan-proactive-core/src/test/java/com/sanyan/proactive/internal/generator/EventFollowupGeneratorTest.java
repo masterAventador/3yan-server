@@ -41,7 +41,7 @@ class EventFollowupGeneratorTest {
     private GenerateContext ctx(long itemId) {
         RelationshipDto rel = new RelationshipDto(1L, 1L, 250, 1, "朋友", 300, 0.5);
         return new GenerateContext(1L, 1L, rel, "", MemoryContext.EMPTY,
-                Map.of("memoryItemId", itemId));
+                Map.of("memoryItemId", itemId), List.of());
     }
 
     @Test

@@ -35,7 +35,7 @@ class GreetingGeneratorTest {
         RelationshipDto rel = new RelationshipDto(1L, 1L, 250, 1, "朋友", 300, 0.5);
         return new GenerateContext(1L, 1L, rel,
                 "当前关系阶段：朋友。称呼用户用：你。语调：自然。",
-                MemoryContext.EMPTY, Map.of("timeOfDay", timeOfDay));
+                MemoryContext.EMPTY, Map.of("timeOfDay", timeOfDay), List.of());
     }
 
     @Test
