@@ -67,4 +67,13 @@ class ProactivePromptBuilderTest {
         assertThat(system).contains("2026年6月17日");
         assertThat(system).contains("晚上十点半");
     }
+
+    @Test
+    void persona_should_constrain_nickname_frequency() {
+        List<ChatMessage> messages = builder.build(ctx("", null, Map.of()), "说句话。");
+        String system = messages.get(0).content();
+        // 约束关键词：大多数消息不要以称呼开头
+        assertThat(system).contains("称呼");
+        assertThat(system).contains("不要每");
+    }
 }
