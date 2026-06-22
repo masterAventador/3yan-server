@@ -40,6 +40,27 @@ class MemoryItemExtractServiceTest {
         return new MemoryItemExtractService(llmApi, repository, events, clock);
     }
 
+    private MemoryItemExtractService serviceWithClock(Clock fixed) {
+        return new MemoryItemExtractService(llmApi, repository, events, fixed);
+    }
+
+    @Test
+    void extract_should_inject_current_date_into_prompt() {
+        // 固定时钟 2026-06-22（周一）
+        Clock fixed = Clock.fixed(Instant.parse("2026-06-22T01:00:00Z"), ZoneId.of("Asia/Shanghai"));
+        when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(any(), any(), any()))
+                .thenReturn(List.of());
+        when(llmApi.chat(eq(LlmTaskType.BACKGROUND), anyList())).thenReturn("{\"items\":[]}");
+
+        serviceWithClock(fixed).extract(1L, 1L, "周三有个面试好紧张", 100L);
+
+        ArgumentCaptor<List<ChatMessage>> cap = ArgumentCaptor.forClass(List.class);
+        verify(llmApi).chat(eq(LlmTaskType.BACKGROUND), cap.capture());
+        String prompt = cap.getValue().stream().map(ChatMessage::content).reduce("", (a, b) -> a + "\n" + b);
+        assertThat(prompt).contains("2026年6月22日");   // 当前日期注入
+        assertThat(prompt).contains("周一");             // 周几，帮 LLM 推"周三"
+    }
+
     @Test
     void extract_should_use_background_task_type_and_feed_existing_pending_items() {
         when(repository.findTop20ByUserIdAndCharacterIdAndStatusOrderByIdDesc(7L, 1L, MemoryItemStatus.PENDING))

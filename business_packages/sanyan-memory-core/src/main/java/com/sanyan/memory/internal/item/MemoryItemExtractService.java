@@ -14,8 +14,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Plan 4：结构化记忆「实时抽取」核心服务（spec §4.2 / §4.3）。
@@ -74,6 +76,10 @@ public class MemoryItemExtractService {
             {"items":[{"action":"NEW|UPDATE|SKIP","kind":"PLAN_EVENT|EMOTION|PROMISE","content":"...","dateHint":"YYYY-MM-DD 或 null","targetId":数字或 null}]}
             没有可抽取的内容时输出 {"items":[]}。
             """;
+
+    /** 抽取 prompt 里注入的"今天日期"格式：到"日 + 周几"即可（抽取不需要时刻）。 */
+    private static final DateTimeFormatter PROMPT_DATE_FMT =
+            DateTimeFormatter.ofPattern("yyyy年M月d日 E", Locale.CHINESE);
 
     private final LlmApi llmApi;
     private final MemoryItemRepository repository;
@@ -191,8 +197,11 @@ public class MemoryItemExtractService {
         }
     }
 
-    private static String buildUserPrompt(String latestUserMessage, List<MemoryItemEntity> existing) {
+    private String buildUserPrompt(String latestUserMessage, List<MemoryItemEntity> existing) {
+        String today = LocalDate.now(clock).format(PROMPT_DATE_FMT);
         StringBuilder sb = new StringBuilder();
+        sb.append("【今天的日期】\n").append(today)
+                .append("（请据此把\"周三\"\"后天\"\"下周一\"等相对说法换算成具体的 ISO 日期填进 dateHint）\n\n");
         sb.append("【用户最新的一句话】\n").append(latestUserMessage == null ? "" : latestUserMessage).append("\n\n");
         sb.append("【当前已记录的待处理条目】\n");
         if (existing.isEmpty()) {
